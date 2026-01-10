@@ -49,6 +49,12 @@ etl:
     - "uniqueClicks"
     - "conversions"
     - "revenue"
+    - "cost"
+
+  # 不拉取 spend 的媒体（这些媒体有其他 API 安排）
+  exclude_spend_media:
+    - "Mintegral"
+    - "Hastraffic"
 
 # 日志配置
 logging:

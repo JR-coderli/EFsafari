@@ -13,7 +13,9 @@
       "Bash(netstat:*)",
       "Bash(taskkill:*)",
       "Skill(git_push)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "WebSearch"
     ]
   }
 }

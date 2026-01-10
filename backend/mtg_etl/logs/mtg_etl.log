@@ -893,3 +893,82 @@ clickhouse_connect.driver.exceptions.DatabaseError: Received ClickHouse exceptio
 2026-01-11 01:25:24 [INFO] [MTG_ETL] ETL Job Completed for report_date: 2026-01-09
 2026-01-11 01:25:24 [INFO] [MTG_ETL] Total rows inserted: 5601
 2026-01-11 01:25:24 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:50 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:50 [INFO] [MTG_ETL] MTG ETL Job Started for report_date: 2026-01-09
+2026-01-11 01:43:50 [INFO] [MTG_ETL] Total accounts: 3
+2026-01-11 01:43:50 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:50 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-11 01:43:50 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-11 01:43:50 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:50 [INFO] [MTG_ETL] Processing account: Account1
+2026-01-11 01:43:50 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:50 [INFO] [MTG_ETL] [Account1] Step 1: Extracting data from MTG API...
+2026-01-11 01:43:50 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-11 01:43:51 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-11 01:43:51 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-11 01:43:51 [INFO] [MTG_ETL] Downloading report data...
+2026-01-11 01:43:52 [INFO] [MTG_ETL] Downloaded 878732 bytes of data
+2026-01-11 01:43:52 [INFO] [MTG_ETL] Parsed 3830 data rows from TSV
+2026-01-11 01:43:52 [INFO] [MTG_ETL] [Account1] Extracted 3830 raw rows from API
+2026-01-11 01:43:52 [INFO] [MTG_ETL] [Account1] Step 2: Transforming data...
+2026-01-11 01:43:52 [INFO] [MTG_ETL] [Account1] Transformed 3830 rows
+2026-01-11 01:43:52 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-11 01:43:53 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-11 01:43:53 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-11 01:43:53 [INFO] [MTG_ETL] Downloading report data...
+2026-01-11 01:43:54 [INFO] [MTG_ETL] Downloaded 878732 bytes of data
+2026-01-11 01:43:54 [INFO] [MTG_ETL] Parsed 3830 data rows from TSV
+2026-01-11 01:43:54 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:54 [INFO] [MTG_ETL] Processing account: Account2
+2026-01-11 01:43:54 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:54 [INFO] [MTG_ETL] [Account2] Step 1: Extracting data from MTG API...
+2026-01-11 01:43:54 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-11 01:43:55 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-11 01:43:55 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-11 01:43:55 [INFO] [MTG_ETL] Downloading report data...
+2026-01-11 01:43:55 [INFO] [MTG_ETL] Downloaded 390496 bytes of data
+2026-01-11 01:43:55 [INFO] [MTG_ETL] Parsed 1705 data rows from TSV
+2026-01-11 01:43:55 [INFO] [MTG_ETL] [Account2] Extracted 1705 raw rows from API
+2026-01-11 01:43:55 [INFO] [MTG_ETL] [Account2] Step 2: Transforming data...
+2026-01-11 01:43:55 [INFO] [MTG_ETL] [Account2] Transformed 1705 rows
+2026-01-11 01:43:55 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-11 01:43:56 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-11 01:43:56 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-11 01:43:56 [INFO] [MTG_ETL] Downloading report data...
+2026-01-11 01:43:57 [INFO] [MTG_ETL] Downloaded 390496 bytes of data
+2026-01-11 01:43:57 [INFO] [MTG_ETL] Parsed 1705 data rows from TSV
+2026-01-11 01:43:57 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:57 [INFO] [MTG_ETL] Processing account: Account3
+2026-01-11 01:43:57 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:57 [INFO] [MTG_ETL] [Account3] Step 1: Extracting data from MTG API...
+2026-01-11 01:43:57 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-11 01:43:58 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-11 01:43:58 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-11 01:43:58 [INFO] [MTG_ETL] Downloading report data...
+2026-01-11 01:43:58 [INFO] [MTG_ETL] Downloaded 10276 bytes of data
+2026-01-11 01:43:58 [INFO] [MTG_ETL] Parsed 66 data rows from TSV
+2026-01-11 01:43:58 [INFO] [MTG_ETL] [Account3] Extracted 66 raw rows from API
+2026-01-11 01:43:58 [INFO] [MTG_ETL] [Account3] Step 2: Transforming data...
+2026-01-11 01:43:58 [INFO] [MTG_ETL] [Account3] Transformed 66 rows
+2026-01-11 01:43:58 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Downloading report data...
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Downloaded 10276 bytes of data
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Parsed 66 data rows from TSV
+2026-01-11 01:43:59 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Extraction Summary:
+2026-01-11 01:43:59 [INFO] [MTG_ETL]   Accounts succeeded: 3/3
+2026-01-11 01:43:59 [INFO] [MTG_ETL]   Accounts failed: 0/3
+2026-01-11 01:43:59 [INFO] [MTG_ETL]   Total rows: 5601
+2026-01-11 01:43:59 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Step 3: Deleting existing data...
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Resetting MTG fields for 2026-01-09 (CampaignIDs: 146 accounts)
+2026-01-11 01:43:59 [INFO] [MTG_ETL] MTG fields reset successfully
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Step 4: Loading data into ClickHouse...
+2026-01-11 01:43:59 [INFO] [MTG_ETL] Updating 5601 rows in ad_platform.dwd_marketing_report_daily
+2026-01-11 01:50:03 [INFO] [MTG_ETL] Data updated successfully: 5601 rows affected
+2026-01-11 01:50:03 [INFO] [MTG_ETL] ============================================================
+2026-01-11 01:50:03 [INFO] [MTG_ETL] ETL Job Completed for report_date: 2026-01-09
+2026-01-11 01:50:03 [INFO] [MTG_ETL] Total rows inserted: 5601
+2026-01-11 01:50:03 [INFO] [MTG_ETL] ============================================================

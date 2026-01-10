@@ -40,7 +40,8 @@ class ClickflareETL:
         "impressions": "uniqueVisits",
         "clicks": "uniqueClicks",
         "conversions": "conversions",
-        "revenue": "revenue"
+        "revenue": "revenue",
+        "spend": "cost"
     }
 
     def __init__(self, config_path: str = "config.yaml"):
@@ -70,6 +71,7 @@ class ClickflareETL:
         self.max_pages = self.config["etl"]["max_pages"]
         self.group_by = self.config["etl"]["group_by"]
         self.metrics = self.config["etl"]["metrics"]
+        self.exclude_spend_media = self.config["etl"].get("exclude_spend_media", [])
 
         self.ch_client = None
         self.api_client = None
@@ -178,11 +180,19 @@ class ClickflareETL:
             clicks = self._safe_int(raw_row.get("uniqueClicks"))
             conversions = self._safe_int(raw_row.get("conversions"))
             revenue = self._safe_float(raw_row.get("revenue"))
+            cost = self._safe_float(raw_row.get("cost"))
+
+            # Check if this media should have spend excluded
+            media_name = traffic_source_name if traffic_source_name else self.media_source
+            should_exclude_spend = any(
+                excluded.lower() in media_name.lower()
+                for excluded in self.exclude_spend_media
+            )
 
             transformed = {
                 "reportDate": date_obj,
                 "dataSource": "Clickflare",  # 数据来源标识
-                "Media": traffic_source_name if traffic_source_name else self.media_source,
+                "Media": media_name,
                 "MediaID": traffic_source_id if traffic_source_id else "",
                 "offer": offer_name if offer_name else "",
                 "offerID": offer_id if offer_id else "",
@@ -200,7 +210,7 @@ class ClickflareETL:
                 "conversions": conversions,
                 "revenue": revenue,
                 # Media metrics
-                "spend": revenue,  # Use revenue as spend (tracker perspective)
+                "spend": 0.0 if should_exclude_spend else cost,  # Use cost from API, exclude for specific media
                 "m_imp": impressions,
                 "m_clicks": clicks,
                 "m_conv": conversions
