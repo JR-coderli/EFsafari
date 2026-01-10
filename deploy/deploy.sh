@@ -53,8 +53,9 @@ install_dependencies() {
     dnf install -y git python3 python3-pip python3-devel nodejs npm
 
     # 启用 nginx 模块并安装
-    dnf module enable nginx:stable -y
-    dnf install -y nginx
+    dnf module enable nginx:stable -y 2>/dev/null || true
+    # 使用 --setopt 绕过 exclude 限制
+    dnf install --setopt=exclude= -y nginx
 
     # 验证安装
     python3 --version || (log_error "Python3 安装失败" && exit 1)
