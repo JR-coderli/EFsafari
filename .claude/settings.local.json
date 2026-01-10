@@ -11,7 +11,9 @@
       "Bash(npm install:*)",
       "Bash(timeout:*)",
       "Bash(netstat:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Skill(git_push)",
+      "Bash(git add:*)"
     ]
   }
 }

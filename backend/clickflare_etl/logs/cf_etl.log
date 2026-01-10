@@ -176,3 +176,128 @@
 2026-01-10 21:46:59 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-09
 2026-01-10 21:46:59 [INFO] [CF_ETL] Rows inserted: 10572
 2026-01-10 21:46:59 [INFO] [CF_ETL] ============================================================
+2026-01-11 00:40:26 [INFO] [CF_ETL] ============================================================
+2026-01-11 00:40:26 [INFO] [CF_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-11 00:40:26 [INFO] [CF_ETL] ============================================================
+2026-01-11 00:40:26 [INFO] [CF_ETL] Step 1: Connecting to ClickHouse...
+2026-01-11 00:40:26 [INFO] [CF_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-11 00:40:26 [INFO] [CF_ETL] ClickHouse connection initialized
+2026-01-11 00:40:26 [INFO] [CF_ETL] Step 2: Initializing API client...
+2026-01-11 00:40:26 [INFO] [CF_ETL] Clickflare API client initialized
+2026-01-11 00:40:26 [INFO] [CF_ETL] Step 3: Extracting data from Clickflare API...
+2026-01-11 00:40:26 [INFO] [CF_ETL] Extracting data for 2026-01-09
+2026-01-11 00:40:56 [INFO] [CF_ETL] Extracted 10572 raw rows from API
+2026-01-11 00:40:56 [INFO] [CF_ETL] Step 4: Transforming data...
+2026-01-11 00:40:56 [INFO] [CF_ETL] Transforming data...
+2026-01-11 00:40:56 [INFO] [CF_ETL] Transformed 10572 rows
+2026-01-11 00:40:56 [INFO] [CF_ETL] Step 5: Deleting existing data...
+2026-01-11 00:40:56 [INFO] [CF_ETL] Deleting existing data for 2026-01-09, Media=Clickflare
+2026-01-11 00:40:56 [INFO] [CF_ETL] Existing data deleted successfully
+2026-01-11 00:40:56 [INFO] [CF_ETL] Step 6: Loading data into ClickHouse...
+2026-01-11 00:40:56 [INFO] [CF_ETL] Inserting 10572 rows into ad_platform.dwd_marketing_report_daily
+2026-01-11 00:40:56 [INFO] [CF_ETL] First row data: {'reportDate': datetime.date(2026, 1, 9), 'dataSource': 'Clickflare', 'Media': 'Tiktok', 'MediaID': '6901c6250aa75f0012a81904', 'offer': '#bigbang-(24990)-CPL-Edeka DE-*PO3€*【TT-50leads】', 'offerID': '694916f798d6c300121a45cd', 'advertiser': 'Bigbangads', 'advertiserID': '6949113fdbfd9c00122465e4', 'Campaign': 'TikTok', 'CampaignID': 'TikTok', 'Adset': 'SOI_TK_CID3af2_TT_BC54_AC05_EDK_260109_EDK01', 'AdsetID': '1853827846298690', 'Ads': '11233008', 'AdsID': '11233008', 'impressions': 1, 'clicks': 1, 'conversions': 0, 'revenue': 0.0, 'spend': 0.0, 'm_imp': 1, 'm_clicks': 1, 'm_conv': 0}
+2026-01-11 00:40:56 [INFO] [CF_ETL] Data inserted successfully
+2026-01-11 00:40:56 [INFO] [CF_ETL] ============================================================
+2026-01-11 00:40:56 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-09
+2026-01-11 00:40:56 [INFO] [CF_ETL] Rows inserted: 10572
+2026-01-11 00:40:56 [INFO] [CF_ETL] ============================================================
+2026-01-11 00:55:48 [INFO] [CF_ETL] ============================================================
+2026-01-11 00:55:48 [INFO] [CF_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-11 00:55:48 [INFO] [CF_ETL] ============================================================
+2026-01-11 00:55:48 [INFO] [CF_ETL] Step 1: Connecting to ClickHouse...
+2026-01-11 00:55:48 [INFO] [CF_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-11 00:56:19 [INFO] [CF_ETL] ClickHouse connection initialized
+2026-01-11 00:56:19 [INFO] [CF_ETL] Step 2: Initializing API client...
+2026-01-11 00:56:19 [INFO] [CF_ETL] Clickflare API client initialized
+2026-01-11 00:56:19 [INFO] [CF_ETL] Step 3: Extracting data from Clickflare API...
+2026-01-11 00:56:19 [INFO] [CF_ETL] Extracting data for 2026-01-09
+2026-01-11 00:56:49 [INFO] [CF_ETL] Extracted 10572 raw rows from API
+2026-01-11 00:56:49 [INFO] [CF_ETL] Step 4: Transforming data...
+2026-01-11 00:56:49 [INFO] [CF_ETL] Transforming data...
+2026-01-11 00:56:49 [INFO] [CF_ETL] Transformed 10572 rows
+2026-01-11 00:56:49 [INFO] [CF_ETL] Step 5: Deleting existing data...
+2026-01-11 00:56:49 [INFO] [CF_ETL] Deleting existing data for 2026-01-09, Media=Clickflare
+2026-01-11 00:56:49 [INFO] [CF_ETL] Existing data deleted successfully
+2026-01-11 00:56:49 [INFO] [CF_ETL] Step 6: Loading data into ClickHouse...
+2026-01-11 00:56:49 [INFO] [CF_ETL] Inserting 10572 rows into ad_platform.dwd_marketing_report_daily
+2026-01-11 00:56:49 [INFO] [CF_ETL] First row data: {'reportDate': datetime.date(2026, 1, 9), 'dataSource': 'Clickflare', 'Media': 'Tiktok', 'MediaID': '6901c6250aa75f0012a81904', 'offer': '#bigbang-(24990)-CPL-Edeka DE-*PO3€*【TT-50leads】', 'offerID': '694916f798d6c300121a45cd', 'advertiser': 'Bigbangads', 'advertiserID': '6949113fdbfd9c00122465e4', 'Campaign': 'TikTok', 'CampaignID': 'TikTok', 'Adset': 'SOI_TK_CID3af2_TT_BC54_AC05_EDK_260109_EDK01', 'AdsetID': '1853827846298690', 'Ads': '11233008', 'AdsID': '11233008', 'impressions': 1, 'clicks': 1, 'conversions': 0, 'revenue': 0.0, 'spend': 0.0, 'm_imp': 1, 'm_clicks': 1, 'm_conv': 0}
+2026-01-11 00:56:50 [INFO] [CF_ETL] Data inserted successfully
+2026-01-11 00:56:50 [INFO] [CF_ETL] ============================================================
+2026-01-11 00:56:50 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-09
+2026-01-11 00:56:50 [INFO] [CF_ETL] Rows inserted: 10572
+2026-01-11 00:56:50 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:07:11 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:07:11 [INFO] [CF_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-11 01:07:11 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:07:11 [INFO] [CF_ETL] Step 1: Connecting to ClickHouse...
+2026-01-11 01:07:11 [INFO] [CF_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-11 01:07:11 [INFO] [CF_ETL] ClickHouse connection initialized
+2026-01-11 01:07:11 [INFO] [CF_ETL] Step 2: Initializing API client...
+2026-01-11 01:07:11 [INFO] [CF_ETL] Clickflare API client initialized
+2026-01-11 01:07:11 [INFO] [CF_ETL] Step 3: Extracting data from Clickflare API...
+2026-01-11 01:07:11 [INFO] [CF_ETL] Extracting data for 2026-01-09
+2026-01-11 01:07:42 [INFO] [CF_ETL] Extracted 10572 raw rows from API
+2026-01-11 01:07:42 [INFO] [CF_ETL] Step 4: Transforming data...
+2026-01-11 01:07:42 [INFO] [CF_ETL] Transforming data...
+2026-01-11 01:07:42 [INFO] [CF_ETL] Transformed 10572 rows
+2026-01-11 01:07:42 [INFO] [CF_ETL] Step 5: Deleting existing data...
+2026-01-11 01:07:42 [INFO] [CF_ETL] Deleting existing data for 2026-01-09, Media=Clickflare
+2026-01-11 01:07:42 [INFO] [CF_ETL] Existing data deleted successfully
+2026-01-11 01:07:42 [INFO] [CF_ETL] Step 6: Loading data into ClickHouse...
+2026-01-11 01:07:42 [INFO] [CF_ETL] Inserting 10572 rows into ad_platform.dwd_marketing_report_daily
+2026-01-11 01:07:42 [INFO] [CF_ETL] First row data: {'reportDate': datetime.date(2026, 1, 9), 'dataSource': 'Clickflare', 'Media': 'Tiktok', 'MediaID': '6901c6250aa75f0012a81904', 'offer': '#bigbang-(24990)-CPL-Edeka DE-*PO3€*【TT-50leads】', 'offerID': '694916f798d6c300121a45cd', 'advertiser': 'Bigbangads', 'advertiserID': '6949113fdbfd9c00122465e4', 'Campaign': 'TikTok', 'CampaignID': 'TikTok', 'Adset': 'SOI_TK_CID3af2_TT_BC54_AC05_EDK_260109_EDK01', 'AdsetID': '1853827846298690', 'Ads': '11233008', 'AdsID': '11233008', 'impressions': 1, 'clicks': 1, 'conversions': 0, 'revenue': 0.0, 'spend': 0.0, 'm_imp': 1, 'm_clicks': 1, 'm_conv': 0}
+2026-01-11 01:07:42 [INFO] [CF_ETL] Data inserted successfully
+2026-01-11 01:07:42 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:07:42 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-09
+2026-01-11 01:07:42 [INFO] [CF_ETL] Rows inserted: 10572
+2026-01-11 01:07:42 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:08:57 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:08:57 [INFO] [CF_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-11 01:08:57 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:08:57 [INFO] [CF_ETL] Step 1: Connecting to ClickHouse...
+2026-01-11 01:08:57 [INFO] [CF_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-11 01:08:58 [INFO] [CF_ETL] ClickHouse connection initialized
+2026-01-11 01:08:58 [INFO] [CF_ETL] Step 2: Initializing API client...
+2026-01-11 01:08:58 [INFO] [CF_ETL] Clickflare API client initialized
+2026-01-11 01:08:58 [INFO] [CF_ETL] Step 3: Extracting data from Clickflare API...
+2026-01-11 01:08:58 [INFO] [CF_ETL] Extracting data for 2026-01-09
+2026-01-11 01:09:26 [INFO] [CF_ETL] Extracted 10572 raw rows from API
+2026-01-11 01:09:26 [INFO] [CF_ETL] Step 4: Transforming data...
+2026-01-11 01:09:26 [INFO] [CF_ETL] Transforming data...
+2026-01-11 01:09:26 [INFO] [CF_ETL] Transformed 10572 rows
+2026-01-11 01:09:26 [INFO] [CF_ETL] Step 5: Deleting existing data...
+2026-01-11 01:09:26 [INFO] [CF_ETL] Deleting existing data for 2026-01-09, Media=Clickflare
+2026-01-11 01:09:26 [INFO] [CF_ETL] Existing data deleted successfully
+2026-01-11 01:09:26 [INFO] [CF_ETL] Step 6: Loading data into ClickHouse...
+2026-01-11 01:09:26 [INFO] [CF_ETL] Inserting 10572 rows into ad_platform.dwd_marketing_report_daily
+2026-01-11 01:09:26 [INFO] [CF_ETL] First row data: {'reportDate': datetime.date(2026, 1, 9), 'dataSource': 'Clickflare', 'Media': 'Tiktok', 'MediaID': '6901c6250aa75f0012a81904', 'offer': '#bigbang-(24990)-CPL-Edeka DE-*PO3€*【TT-50leads】', 'offerID': '694916f798d6c300121a45cd', 'advertiser': 'Bigbangads', 'advertiserID': '6949113fdbfd9c00122465e4', 'Campaign': 'TikTok', 'CampaignID': 'TikTok', 'Adset': 'SOI_TK_CID3af2_TT_BC54_AC05_EDK_260109_EDK01', 'AdsetID': '1853827846298690', 'Ads': '11233008', 'AdsID': '11233008', 'impressions': 1, 'clicks': 1, 'conversions': 0, 'revenue': 0.0, 'spend': 0.0, 'm_imp': 1, 'm_clicks': 1, 'm_conv': 0}
+2026-01-11 01:09:26 [INFO] [CF_ETL] Data inserted successfully
+2026-01-11 01:09:26 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:09:26 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-09
+2026-01-11 01:09:26 [INFO] [CF_ETL] Rows inserted: 10572
+2026-01-11 01:09:26 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:16:53 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:16:53 [INFO] [CF_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-11 01:16:53 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:16:53 [INFO] [CF_ETL] Step 1: Connecting to ClickHouse...
+2026-01-11 01:16:53 [INFO] [CF_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-11 01:16:54 [INFO] [CF_ETL] ClickHouse connection initialized
+2026-01-11 01:16:54 [INFO] [CF_ETL] Step 2: Initializing API client...
+2026-01-11 01:16:54 [INFO] [CF_ETL] Clickflare API client initialized
+2026-01-11 01:16:54 [INFO] [CF_ETL] Step 3: Extracting data from Clickflare API...
+2026-01-11 01:16:54 [INFO] [CF_ETL] Extracting data for 2026-01-09
+2026-01-11 01:17:24 [INFO] [CF_ETL] Extracted 10572 raw rows from API
+2026-01-11 01:17:24 [INFO] [CF_ETL] Step 4: Transforming data...
+2026-01-11 01:17:24 [INFO] [CF_ETL] Transforming data...
+2026-01-11 01:17:24 [INFO] [CF_ETL] Transformed 10572 rows
+2026-01-11 01:17:24 [INFO] [CF_ETL] Step 5: Deleting existing data...
+2026-01-11 01:17:24 [INFO] [CF_ETL] Deleting existing data for 2026-01-09, Media=Clickflare
+2026-01-11 01:17:24 [INFO] [CF_ETL] Existing data deleted successfully
+2026-01-11 01:17:24 [INFO] [CF_ETL] Step 6: Loading data into ClickHouse...
+2026-01-11 01:17:24 [INFO] [CF_ETL] Inserting 10572 rows into ad_platform.dwd_marketing_report_daily
+2026-01-11 01:17:24 [INFO] [CF_ETL] First row data: {'reportDate': datetime.date(2026, 1, 9), 'dataSource': 'Clickflare', 'Media': 'Tiktok', 'MediaID': '6901c6250aa75f0012a81904', 'offer': '#bigbang-(24990)-CPL-Edeka DE-*PO3€*【TT-50leads】', 'offerID': '694916f798d6c300121a45cd', 'advertiser': 'Bigbangads', 'advertiserID': '6949113fdbfd9c00122465e4', 'Campaign': 'TikTok', 'CampaignID': 'TikTok', 'Adset': 'SOI_TK_CID3af2_TT_BC54_AC05_EDK_260109_EDK01', 'AdsetID': '1853827846298690', 'Ads': '11233008', 'AdsID': '11233008', 'impressions': 1, 'clicks': 1, 'conversions': 0, 'revenue': 0.0, 'spend': 0.0, 'm_imp': 1, 'm_clicks': 1, 'm_conv': 0}
+2026-01-11 01:17:24 [INFO] [CF_ETL] Data inserted successfully
+2026-01-11 01:17:24 [INFO] [CF_ETL] ============================================================
+2026-01-11 01:17:24 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-09
+2026-01-11 01:17:24 [INFO] [CF_ETL] Rows inserted: 10572
+2026-01-11 01:17:24 [INFO] [CF_ETL] ============================================================

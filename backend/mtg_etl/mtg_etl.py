@@ -195,49 +195,43 @@ class MTGETL:
 
     def delete_existing_data(self, report_date: str, campaign_ids: List[str] = None) -> bool:
         """
-        Delete existing data for the report date (idempotent operation)
-        Since Media is empty, we delete by CampaignID list from the accounts
+        Reset MTG metrics to 0 before updating (idempotent operation).
+        Since MTG data supplements Clickflare, we reset MTG fields to 0 first,
+        then add new values in insert_data().
 
         Args:
-            report_date: Report date to delete
-            campaign_ids: List of CampaignIDs to delete (if None, delete by date only - use with caution)
+            report_date: Report date to reset
+            campaign_ids: List of CampaignIDs to reset (if None, reset all for this date)
 
         Returns:
             bool: Operation success status
         """
         try:
             if campaign_ids:
-                # Delete by CampaignID list (safer, only affects these accounts)
+                # Reset MTG fields for specific CampaignIDs
                 campaign_ids_str = ",".join([f"'{cid}'" for cid in campaign_ids])
-                delete_sql = f"""
-                    ALTER TABLE {self.ch_database}.{self.ch_table}
-                    DELETE
-                    WHERE reportDate = '{report_date}'
-                    AND CampaignID IN ({campaign_ids_str})
-                """
-                self.logger.info(f"Deleting existing data for {report_date} (CampaignIDs: {len(campaign_ids)} accounts)")
+                reset_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE spend = 0, m_imp = 0, m_clicks = 0, m_conv = 0 WHERE reportDate = '{report_date}' AND CampaignID IN ({campaign_ids_str})"
+                self.logger.info(f"Resetting MTG fields for {report_date} (CampaignIDs: {len(campaign_ids)} accounts)")
             else:
-                # Delete by date only (will affect ALL data for this date - use with caution!)
-                delete_sql = f"""
-                    ALTER TABLE {self.ch_database}.{self.ch_table}
-                    DELETE
-                    WHERE reportDate = '{report_date}'
-                """
-                self.logger.warning(f"Deleting ALL data for {report_date} (affects all media!)")
+                # Reset MTG fields for all data on this date
+                reset_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE spend = 0, m_imp = 0, m_clicks = 0, m_conv = 0 WHERE reportDate = '{report_date}'"
+                self.logger.warning(f"Resetting MTG fields for ALL data on {report_date}")
 
-            self.logger.debug(f"SQL: {delete_sql}")
+            self.logger.debug(f"SQL: {reset_sql}")
 
-            self.ch_client.command(delete_sql)
-            self.logger.info("Existing data deleted successfully")
+            self.ch_client.command(reset_sql)
+            self.logger.info("MTG fields reset successfully")
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to delete existing data: {str(e)}")
+            self.logger.error(f"Failed to reset existing data: {str(e)}")
             return False
 
     def insert_data(self, data: List[Dict]) -> bool:
         """
-        Insert transformed data into ClickHouse
+        Update/UPSERT data into ClickHouse.
+        MTG data only supplements existing Clickflare data - it updates spend/metric fields
+        instead of inserting separate duplicate rows.
 
         Args:
             data: List of transformed rows
@@ -246,35 +240,40 @@ class MTGETL:
             bool: Operation success status
         """
         if not data:
-            self.logger.warning("No data to insert")
+            self.logger.warning("No data to update")
             return True
 
         try:
-            self.logger.info(f"Inserting {len(data)} rows into {self.ch_database}.{self.ch_table}")
+            self.logger.info(f"Updating {len(data)} rows in {self.ch_database}.{self.ch_table}")
 
             # Log first row for debugging
             self.logger.debug(f"First row data: {data[0]}")
 
-            # Column names in our data (must match ClickHouse table columns)
-            columns = ['reportDate', 'dataSource', 'Media', 'MediaID', 'Campaign', 'CampaignID', 'Adset', 'AdsetID', 'Ads', 'AdsID', 'spend', 'm_imp', 'm_clicks', 'm_conv']
-
-            # Convert dict to list of lists with explicit column order
-            rows = []
+            # For each row, try to UPDATE existing Clickflare data
+            updated_count = 0
             for row in data:
-                rows.append([row[col] for col in columns])
+                report_date = row['reportDate']
+                campaign_id = row['CampaignID']
+                adset_id = row.get('AdsetID', '')
+                ads_id = row.get('AdsID', '')
 
-            # Insert with explicit column names
-            self.ch_client.insert(
-                table=f"{self.ch_database}.{self.ch_table}",
-                column_names=columns,
-                data=rows
-            )
+                # Build UPDATE SQL to match and update existing rows (single line)
+                update_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE spend = spend + {row['spend']}, m_imp = m_imp + {row['m_imp']}, m_clicks = m_clicks + {row['m_clicks']}, m_conv = m_conv + {row['m_conv']} WHERE reportDate = '{report_date}' AND CampaignID = '{campaign_id}'"
 
-            self.logger.info("Data inserted successfully")
+                # Add more specific filters if available
+                if adset_id and adset_id != '0':
+                    update_sql += f" AND AdsetID = '{adset_id}'"
+                if ads_id and ads_id != '0':
+                    update_sql += f" AND AdsID = '{ads_id}'"
+
+                result = self.ch_client.command(update_sql)
+                updated_count += 1
+
+            self.logger.info(f"Data updated successfully: {updated_count} rows affected")
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to insert data: {str(e)}")
+            self.logger.error(f"Failed to update data: {str(e)}")
             import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
