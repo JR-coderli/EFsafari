@@ -50,12 +50,17 @@ check_root() {
 install_dependencies() {
     log_info "安装系统依赖..."
 
-    dnf install -y git python3 python3-pip python3-devel nodejs npm nginx
+    dnf install -y git python3 python3-pip python3-devel nodejs npm
+
+    # 启用 nginx 模块并安装
+    dnf module enable nginx:stable -y
+    dnf install -y nginx
 
     # 验证安装
     python3 --version || (log_error "Python3 安装失败" && exit 1)
     node --version || (log_error "Node.js 安装失败" && exit 1)
     npm --version || (log_error "npm 安装失败" && exit 1)
+    nginx -v 2>/dev/null || (log_error "nginx 安装失败" && exit 1)
 
     log_info "系统依赖安装完成"
 }
