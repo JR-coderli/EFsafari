@@ -10,10 +10,9 @@ from api.auth import (
     create_access_token,
     get_current_user,
     require_admin,
-    get_all_users,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from api.models.user import LoginRequest, LoginResponse, User
+from api.users.models import LoginRequest, LoginResponse, User, UserRole
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -30,20 +29,25 @@ async def login(login_data: LoginRequest):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Create access token
+    # Create access token with role
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username, "user_id": user.id},
+        data={
+            "sub": user.username,
+            "user_id": user.id,
+            "role": user.role.value
+        },
         expires_delta=access_token_expires
     )
 
-    # Return user without password (as dict to avoid serialization issues)
+    # Return user without password
     user_response = {
         "id": user.id,
         "name": user.name,
         "username": user.username,
         "email": user.email,
-        "allowed_keywords": user.allowed_keywords,
+        "role": user.role.value,
+        "keywords": user.keywords,
         "created_at": user.created_at.isoformat(),
         "updated_at": user.updated_at.isoformat() if user.updated_at else None
     }

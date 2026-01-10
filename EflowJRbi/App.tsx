@@ -59,37 +59,201 @@ const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number
   return <span className={baseClasses}>{Math.floor(displayValue).toLocaleString()}</span>;
 };
 
-const DatePicker: React.FC<{ onRangeChange: (range: string) => void }> = ({ onRangeChange }) => {
+// Date utilities
+const formatDate = (date: Date) => {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+};
+
+const formatRange = (start: Date, end: Date) => {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  if (start.toDateString() === end.toDateString()) {
+    return `${months[start.getMonth()]} ${start.getDate()}, ${start.getFullYear()}`;
+  }
+  if (start.getFullYear() === end.getFullYear()) {
+    if (start.getMonth() === end.getMonth()) {
+      return `${months[start.getMonth()]} ${start.getDate()} - ${end.getDate()}, ${start.getFullYear()}`;
+    }
+    return `${months[start.getMonth()]} ${start.getDate()} - ${months[end.getMonth()]} ${end.getDate()}, ${start.getFullYear()}`;
+  }
+  return `${months[start.getMonth()]} ${start.getDate()}, ${start.getFullYear()} - ${months[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
+};
+
+const getRangeInfo = (range: string, customStart?: Date, customEnd?: Date) => {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const fourteenDaysAgo = new Date(today);
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+
+  switch (range) {
+    case 'Today':
+      return { label: 'Today', dateString: formatDate(today), start: today, end: today };
+    case 'Yesterday':
+      return { label: 'Yesterday', dateString: formatDate(yesterday), start: yesterday, end: yesterday };
+    case 'Last 7 Days':
+      return { label: 'Last 7 Days', dateString: formatRange(sevenDaysAgo, today), start: sevenDaysAgo, end: today };
+    case 'Last 14 Days':
+      return { label: 'Last 14 Days', dateString: formatRange(fourteenDaysAgo, today), start: fourteenDaysAgo, end: today };
+    case 'Last 30 Days':
+      return { label: 'Last 30 Days', dateString: formatRange(thirtyDaysAgo, today), start: thirtyDaysAgo, end: today };
+    case 'Custom':
+      if (customStart && customEnd) {
+        return { label: 'Custom', dateString: formatRange(customStart, customEnd), start: customStart, end: customEnd };
+      }
+      return { label: 'Custom', dateString: 'Select dates...', start: today, end: today };
+    default:
+      return { label: 'Yesterday', dateString: formatDate(yesterday), start: yesterday, end: yesterday };
+  }
+};
+
+const DatePicker: React.FC<{ onRangeChange: (range: string, start?: Date, end?: Date) => void; currentDisplay: string; currentRange: string }> = ({ onRangeChange, currentDisplay, currentRange }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedRange, setSelectedRange] = useState('2026 Data');
-  const [dateString, setDateString] = useState('2026');
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarStart, setCalendarStart] = useState<Date | null>(null);
+  const [calendarEnd, setCalendarEnd] = useState<Date | null>(null);
+  const [selectingEnd, setSelectingEnd] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const dropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const clickOutside = (e: MouseEvent) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setIsOpen(false); };
+    const clickOutside = (e: MouseEvent) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) { setIsOpen(false); setShowCalendar(false); } };
     document.addEventListener('mousedown', clickOutside);
     return () => document.removeEventListener('mousedown', clickOutside);
   }, []);
-  const handleSelect = (r: string) => {
-    setSelectedRange(r);
-    if (r === 'Today') setDateString('Jan 9, 2026');
-    else if (r === 'Yesterday') setDateString('Jan 8, 2026');
-    else if (r === 'Last 7 Days') setDateString('Jan 3 - Jan 9, 2026');
-    else if (r === '2026 Data') setDateString('2026');
+
+  const handleQuickSelect = (r: string) => {
+    const info = getRangeInfo(r);
+    onRangeChange(r, info.start, info.end);
     setIsOpen(false);
-    onRangeChange(r);
   };
+
+  const handleCustomRange = () => {
+    setShowCalendar(true);
+    setSelectingEnd(false);
+    setCalendarStart(null);
+    setCalendarEnd(null);
+    setCurrentMonth(new Date());
+  };
+
+  const handleDateClick = (date: Date) => {
+    if (!selectingEnd) {
+      // First click: select start date
+      setCalendarStart(date);
+      setCalendarEnd(date);
+      setSelectingEnd(true);
+    } else {
+      // Second click: select end date and apply
+      const start = calendarStart || date;
+      const end = date;
+      setCalendarStart(start);
+      setCalendarEnd(end);
+      setSelectingEnd(false);
+      onRangeChange('Custom', start, end);
+      setShowCalendar(false);
+      setIsOpen(false);
+    }
+  };
+
+  const renderCalendar = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    const days: Date[] = [];
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + i);
+      days.push(d);
+    }
+
+    // Helper functions for date comparison
+    const isStart = (d: Date) => calendarStart && d.toDateString() === calendarStart.toDateString();
+    const isEnd = (d: Date) => calendarEnd && d.toDateString() === calendarEnd.toDateString();
+    const isInRange = (d: Date) => {
+      if (!calendarStart || !calendarEnd) return false;
+      const date = d.getTime();
+      return date >= calendarStart.getTime() && date <= calendarEnd.getTime();
+    };
+    const isCurrentMonth = (d: Date) => d.getMonth() === month;
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dayNames = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+    // Format date for status display
+    const formatStatusDate = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+
+    return (
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-4">
+          <button type="button" onClick={() => setCurrentMonth(new Date(year, month - 1))} className="p-1 hover:bg-slate-100 rounded"><i className="fas fa-chevron-left text-xs text-slate-500"></i></button>
+          <span className="text-xs font-bold text-slate-700">{monthNames[month]} {year}</span>
+          <button type="button" onClick={() => setCurrentMonth(new Date(year, month + 1))} className="p-1 hover:bg-slate-100 rounded"><i className="fas fa-chevron-right text-xs text-slate-500"></i></button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {dayNames.map(d => <div key={d} className="text-center text-[10px] font-bold text-slate-400 py-1">{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((d, i) => {
+            const start = isStart(d);
+            const end = isEnd(d);
+            const inRange = isInRange(d);
+            const current = isCurrentMonth(d);
+            let cellClass = "h-7 w-7 flex items-center justify-center text-[10px] rounded cursor-pointer transition-colors ";
+            if (start) cellClass += "bg-indigo-600 text-white ";
+            else if (end) cellClass += "bg-indigo-600 text-white ";
+            else if (inRange) cellClass += "bg-indigo-100 text-indigo-700 ";
+            else if (!current) cellClass += "text-slate-300 ";
+            else cellClass += "text-slate-600 hover:bg-slate-100 ";
+            return <button type="button" key={i} onClick={() => handleDateClick(d)} className={cellClass}>{d.getDate()}</button>;
+          })}
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-[10px] text-slate-500">
+            {selectingEnd
+              ? (calendarStart ? `From: ${formatStatusDate(calendarStart)} → To: ?` : 'Select start date')
+              : (calendarStart && calendarEnd
+                  ? `${formatStatusDate(calendarStart)} - ${formatStatusDate(calendarEnd)}`
+                  : 'Select start date')
+            }
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95">
         <i className="far fa-calendar text-indigo-500"></i>
-        <span>{selectedRange}: {dateString}</span>
+        <span>{currentDisplay}</span>
         <i className={`fas fa-chevron-down text-[10px] text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
       </button>
       {isOpen && (
-        <div className="absolute top-full mt-2 left-0 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[100] p-2">
-           {['2026 Data', 'Today', 'Yesterday', 'Last 7 Days', 'Last 14 Days', 'Last 30 Days'].map(r => (
-             <button key={r} onClick={() => handleSelect(r)} className="w-full text-left px-3 py-2 text-[11px] font-bold text-slate-600 hover:bg-indigo-50 rounded-xl">{r}</button>
-           ))}
+        <div className="absolute top-full mt-2 left-0 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[100] overflow-hidden">
+          {!showCalendar ? (
+            <div className="p-2 w-48">
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Quick Select</div>
+              {['Today', 'Yesterday', 'Last 7 Days', 'Last 14 Days', 'Last 30 Days'].map(r => (
+                <button key={r} onClick={() => handleQuickSelect(r)} className={`w-full text-left px-3 py-2 text-[11px] font-bold rounded-xl ${currentRange === r ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-indigo-50'}`}>
+                  {r}
+                </button>
+              ))}
+              <div className="border-t border-slate-100 mt-2 pt-2">
+                <button onClick={handleCustomRange} className="w-full text-left px-3 py-2 text-[11px] font-bold text-indigo-600 hover:bg-indigo-50 rounded-xl flex items-center gap-2">
+                  <i className="far fa-calendar-alt"></i> Custom Range...
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="w-72">{renderCalendar()}</div>
+          )}
         </div>
       )}
     </div>
@@ -180,8 +344,15 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [activeFilters, setActiveFilters] = useState<Filter[]>([]);
   const [expandedDailyRows, setExpandedDailyRows] = useState<Set<string>>(new Set());
   const [expandedDimRows, setExpandedDimRows] = useState<Set<string>>(new Set());
-  const [selectedRange, setSelectedRange] = useState('2026 Data');
+  const [selectedRange, setSelectedRange] = useState('Yesterday');
+  const [customDateStart, setCustomDateStart] = useState<Date | undefined>(undefined);
+  const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(undefined);
   const [quickFilterText, setQuickFilterText] = useState('');
+
+  // Computed display string for the date picker
+  const dateDisplayString = useMemo(() => {
+    return getRangeInfo(selectedRange, customDateStart, customDateEnd).dateString;
+  }, [selectedRange, customDateStart, customDateEnd]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showColumnEditor, setShowColumnEditor] = useState(false);
   const [showViewList, setShowViewList] = useState(false);
@@ -254,7 +425,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         );
       } else {
         // Use real API
-        rawData = await apiLoadRootData(activeDims, activeFilters, selectedRange);
+        rawData = await apiLoadRootData(activeDims, activeFilters, selectedRange, customDateStart, customDateEnd);
       }
 
       // Permission filtering based on adset (sub_campaign_name) keywords
@@ -288,7 +459,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     } finally {
       setLoading(false);
     }
-  }, [activeDims, activeFilters, selectedRange, currentUser, useMock]);
+  }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentUser, useMock]);
 
   useEffect(() => { if (currentPage === 'performance') loadRootData(); }, [loadRootData, currentPage]);
 
@@ -413,7 +584,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         } else {
           // Use real API
           try {
-            children = await loadChildData(activeDims, rowFilters, selectedRange, row.id);
+            children = await loadChildData(activeDims, rowFilters, selectedRange, row.id, customDateStart, customDateEnd);
           } catch (err) {
             console.error('Error loading child data:', err);
             children = [];
@@ -467,7 +638,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
             // Load daily data
             if (!row.dailyData || row.dailyData.length === 0) {
-              apiLoadDailyData(rowFilters, selectedRange, 7).then(dailyData => {
+              apiLoadDailyData(rowFilters, selectedRange, 7, customDateStart, customDateEnd).then(dailyData => {
                 setData(prev => {
                   const update = (rows: AdRow[]): AdRow[] =>
                     rows.map(r =>
@@ -604,7 +775,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors"><i className="fas fa-bars"></i></button>
             <h2 className="font-extrabold text-slate-800 tracking-tight ml-2 uppercase italic text-sm">{currentPage === 'performance' ? 'Analytics Data' : 'Permissions'}</h2>
-            {currentPage === 'performance' && <DatePicker onRangeChange={setSelectedRange} />}
+            {currentPage === 'performance' && <DatePicker onRangeChange={(range, start, end) => { setSelectedRange(range); setCustomDateStart(start); setCustomDateEnd(end); }} currentDisplay={dateDisplayString} currentRange={selectedRange} />}
             {/* Data source indicator */}
             {currentPage === 'performance' && (
               <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold ${useMock ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>

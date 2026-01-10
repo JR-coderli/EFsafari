@@ -13,7 +13,7 @@ import json
 
 from api.routers.dashboard import router as dashboard_router
 from api.routers.auth import router as auth_router
-from api.routers.users import router as users_router
+from api.users.router import router as users_router
 
 
 # Custom JSON encoder for datetime

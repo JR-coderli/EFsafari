@@ -7,13 +7,26 @@ import dashboardApi from './client';
 
 /**
  * Convert date range string to actual dates
+ * For custom ranges, pass start/end dates directly
+ * Uses LOCAL date format (not UTC) to match database dates
  */
-function getDateRange(range: string): { start: string; end: string } {
+function getDateRange(range: string, customStart?: Date, customEnd?: Date): { start: string; end: string } {
+  // Format date as YYYY-MM-DD using LOCAL time (not UTC)
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // If custom dates are provided, use them
+  if (range === 'Custom' && customStart && customEnd) {
+    return { start: formatDate(customStart), end: formatDate(customEnd) };
+  }
+
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-
-  const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
   switch (range) {
     case 'Today':
@@ -32,9 +45,6 @@ function getDateRange(range: string): { start: string; end: string } {
       const thirtyDaysAgo = new Date(today);
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
       return { start: formatDate(thirtyDaysAgo), end: formatDate(today) };
-    case '2026 Data':
-      // Special range for 2026 test data
-      return { start: '2026-01-01', end: '2026-12-31' };
     default:
       return { start: formatDate(yesterday), end: formatDate(today) };
   }
@@ -56,9 +66,11 @@ function buildApiFilters(activeFilters: Array<{ dimension: Dimension; value: str
 export async function loadRootData(
   activeDims: Dimension[],
   activeFilters: Array<{ dimension: Dimension; value: string }>,
-  selectedRange: string
+  selectedRange: string,
+  customStart?: Date,
+  customEnd?: Date
 ): Promise<AdRow[]> {
-  const { start, end } = getDateRange(selectedRange);
+  const { start, end } = getDateRange(selectedRange, customStart, customEnd);
 
   // Get the primary dimension for current level
   const currentLevel = activeFilters.length;
@@ -95,9 +107,11 @@ export async function loadChildData(
   activeDims: Dimension[],
   activeFilters: Array<{ dimension: Dimension; value: string }>,
   selectedRange: string,
-  rowId: string
+  rowId: string,
+  customStart?: Date,
+  customEnd?: Date
 ): Promise<AdRow[]> {
-  const { start, end } = getDateRange(selectedRange);
+  const { start, end } = getDateRange(selectedRange, customStart, customEnd);
 
   // Get the next dimension (currentLevel is the index of next dimension to query)
   const currentLevel = activeFilters.length;
@@ -133,9 +147,11 @@ export async function loadChildData(
 export async function loadDailyData(
   activeFilters: Array<{ dimension: Dimension; value: string }>,
   selectedRange: string,
-  limit: number = 7
+  limit: number = 7,
+  customStart?: Date,
+  customEnd?: Date
 ): Promise<DailyBreakdown[]> {
-  const { start, end } = getDateRange(selectedRange);
+  const { start, end } = getDateRange(selectedRange, customStart, customEnd);
 
   try {
     const dailyData = await dashboardApi.getDailyData({

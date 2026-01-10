@@ -1,11 +1,18 @@
 """
 Dashboard API router for data panel queries.
+
+Includes role-based data filtering:
+- admin: sees all data
+- ops: filtered by Adset keywords
+- business: filtered by offer keywords
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
 import logging
 
 from api.database import get_db, format_row_for_frontend, format_daily_row
+from api.auth import get_current_user
+from api.users.models import UserRole
 from api.models.schemas import (
     DIMENSION_COLUMN_MAP,
     DataQueryRequest,
@@ -28,13 +35,50 @@ def _build_group_by_clause(dimensions: List[DimensionType]) -> str:
     return ", ".join(columns)
 
 
-def _build_where_clause(start_date: str, end_date: str, filters: List[dict]) -> str:
+def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Optional[str]:
+    """Build permission filter SQL based on user role and keywords.
+
+    Args:
+        user_role: User role (admin, ops, business)
+        user_keywords: User's keywords list
+
+    Returns:
+        SQL WHERE clause fragment, or None if no filtering needed
+    """
+    # Admin or empty keywords = no restriction
+    if user_role == UserRole.ADMIN or not user_keywords:
+        return None
+
+    # Build keyword filter based on role
+    if user_role == UserRole.OPS:
+        # Filter by Adset column
+        keyword_conditions = [f"lower(Adset) LIKE lower('%{k}%')" for k in user_keywords]
+        return f"({' OR '.join(keyword_conditions)})"
+    elif user_role == UserRole.BUSINESS:
+        # Filter by offer column
+        keyword_conditions = [f"lower(offer) LIKE lower('%{k}%')" for k in user_keywords]
+        return f"({' OR '.join(keyword_conditions)})"
+
+    return None
+
+
+def _build_where_clause(start_date: str, end_date: str, filters: List[dict], permission_filter: Optional[str] = None) -> str:
     """Build WHERE clause for query.
+
+    Args:
+        start_date: Start date string
+        end_date: End date string
+        filters: List of filter dicts with dimension and value
+        permission_filter: Optional permission filter SQL
 
     Returns:
         str: where_clause_sql
     """
     conditions = [f"reportDate >= '{start_date}' AND reportDate <= '{end_date}'"]
+
+    # Add permission filter if present
+    if permission_filter:
+        conditions.append(permission_filter)
 
     for f in filters:
         dim = f.get("dimension")
@@ -81,18 +125,30 @@ async def health_check():
 
 
 @router.get("/platforms", response_model=PlatformsResponse)
-async def get_platforms():
+async def get_platforms(current_user: dict = Depends(get_current_user)):
     """Get list of available platforms (Media sources)."""
     db = get_db()
     try:
         client = db.connect()
-        query = f"""
+
+        # Build permission filter
+        user_role = current_user.get("role")
+        user_keywords = current_user.get("keywords", [])
+        permission_filter = _build_permission_filter(user_role, user_keywords)
+
+        base_query = f"""
             SELECT DISTINCT Media as name
             FROM {db.database}.{db.table}
             WHERE Media != '' AND length(Media) > 0
-            ORDER BY Media
         """
-        result = client.query(query)
+
+        # Add permission filter if present
+        if permission_filter:
+            base_query += f" AND {permission_filter}"
+
+        base_query += " ORDER BY Media"
+
+        result = client.query(base_query)
         platforms = [PlatformInfo(name=row[0]) for row in result.named_results()]
 
         return PlatformsResponse(platforms=platforms)
@@ -108,9 +164,10 @@ async def get_aggregated_data(
     end_date: str = Query(..., description="End date YYYY-MM-DD"),
     group_by: str = Query(..., description="Comma-separated dimensions"),
     filters: Optional[str] = Query(None, description="JSON encoded filters"),
-    limit: int = Query(1000, description="Max results")
+    limit: int = Query(1000, description="Max results"),
+    current_user: dict = Depends(get_current_user)
 ):
-    """Get aggregated data for the dashboard.
+    """Get aggregated data for the dashboard with role-based filtering.
 
     Query parameters:
     - start_date: Start date in YYYY-MM-DD format
@@ -120,6 +177,7 @@ async def get_aggregated_data(
     - limit: Maximum number of results
 
     Returns aggregated data grouped by the specified dimensions.
+    Data is filtered based on user role and keywords.
     """
     import json
 
@@ -145,14 +203,18 @@ async def get_aggregated_data(
         primary_dim = dimensions[0]
         primary_column = DIMENSION_COLUMN_MAP.get(primary_dim, primary_dim)
 
-        # Build WHERE clause
-        where_clause = _build_where_clause(start_date, end_date, filter_list)
+        # Build permission filter based on user role
+        user_role = current_user.get("role")
+        user_keywords = current_user.get("keywords", [])
+        permission_filter = _build_permission_filter(user_role, user_keywords)
+
+        # Build WHERE clause with permission filter
+        where_clause = _build_where_clause(start_date, end_date, filter_list, permission_filter)
 
         # Build GROUP BY - use the primary dimension for top-level aggregation
         group_clause = primary_column
 
         # Build SELECT with aggregations
-        # Use aliases to avoid column name conflicts
         query = f"""
             SELECT
                 {primary_column} as group_{primary_dim},
@@ -207,9 +269,10 @@ async def get_daily_breakdown(
     start_date: str = Query(..., description="Start date YYYY-MM-DD"),
     end_date: str = Query(..., description="End date YYYY-MM-DD"),
     filters: str = Query(..., description="JSON encoded filters for the row"),
-    limit: int = Query(100, description="Max daily records")
+    limit: int = Query(100, description="Max daily records"),
+    current_user: dict = Depends(get_current_user)
 ):
-    """Get daily breakdown data for a specific data row.
+    """Get daily breakdown data for a specific data row with role-based filtering.
 
     Query parameters:
     - start_date: Start date in YYYY-MM-DD format
@@ -234,8 +297,13 @@ async def get_daily_breakdown(
     try:
         client = db.connect()
 
-        # Build WHERE clause
-        where_clause = _build_where_clause(start_date, end_date, filter_list)
+        # Build permission filter based on user role
+        user_role = current_user.get("role")
+        user_keywords = current_user.get("keywords", [])
+        permission_filter = _build_permission_filter(user_role, user_keywords)
+
+        # Build WHERE clause with permission filter
+        where_clause = _build_where_clause(start_date, end_date, filter_list, permission_filter)
 
         query = f"""
             SELECT
@@ -306,9 +374,10 @@ async def get_available_metrics():
 async def get_aggregate_summary(
     start_date: str = Query(..., description="Start date YYYY-MM-DD"),
     end_date: str = Query(..., description="End date YYYY-MM-DD"),
-    filters: Optional[str] = Query(None, description="JSON encoded filters")
+    filters: Optional[str] = Query(None, description="JSON encoded filters"),
+    current_user: dict = Depends(get_current_user)
 ):
-    """Get summary metrics (aggregated across all data matching filters).
+    """Get summary metrics (aggregated across all data matching filters) with role-based filtering.
 
     Useful for showing total stats at the top of the dashboard.
     """
@@ -325,7 +394,13 @@ async def get_aggregate_summary(
     try:
         client = db.connect()
 
-        where_clause = _build_where_clause(start_date, end_date, filter_list)
+        # Build permission filter based on user role
+        user_role = current_user.get("role")
+        user_keywords = current_user.get("keywords", [])
+        permission_filter = _build_permission_filter(user_role, user_keywords)
+
+        # Build WHERE clause with permission filter
+        where_clause = _build_where_clause(start_date, end_date, filter_list, permission_filter)
 
         query = f"""
             SELECT

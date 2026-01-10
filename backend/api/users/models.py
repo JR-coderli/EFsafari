@@ -4,6 +4,14 @@ User models for authentication and authorization.
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
 from datetime import datetime
+from enum import Enum
+
+
+class UserRole(str, Enum):
+    """User role enumeration."""
+    ADMIN = "admin"      # Full access to all data
+    OPS = "ops"          # Delivery role - keywords filter Adset
+    BUSINESS = "business"  # Business role - keywords filter offer
 
 
 class UserBase(BaseModel):
@@ -11,7 +19,8 @@ class UserBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
-    allowed_keywords: List[str] = Field(default_factory=list)
+    role: UserRole = Field(default=UserRole.OPS)
+    keywords: List[str] = Field(default_factory=list, description="Keywords for filtering data. Empty means no restriction.")
 
 
 class UserCreate(UserBase):
@@ -24,7 +33,8 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     password: Optional[str] = None
-    allowed_keywords: Optional[List[str]] = None
+    role: Optional[UserRole] = None
+    keywords: Optional[List[str]] = None
 
 
 class UserInDB(UserBase):
@@ -64,3 +74,4 @@ class TokenData(BaseModel):
     """Token payload data."""
     username: Optional[str] = None
     user_id: Optional[str] = None
+    role: Optional[UserRole] = None
