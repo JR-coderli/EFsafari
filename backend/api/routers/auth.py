@@ -12,13 +12,13 @@ from api.auth import (
     require_admin,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
-from api.users.models import LoginRequest, LoginResponse, User, UserRole
+from api.users.models import LoginRequest, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/login")
+@router.post("/login", response_model=None)
 async def login(login_data: LoginRequest):
     """Authenticate user and return access token."""
     user = authenticate_user(login_data.username, login_data.password)
@@ -35,28 +35,21 @@ async def login(login_data: LoginRequest):
         data={
             "sub": user.username,
             "user_id": user.id,
-            "role": user.role.value
+            "role": user.role
         },
         expires_delta=access_token_expires
     )
 
-    # Return user without password
-    user_response = {
-        "id": user.id,
-        "name": user.name,
-        "username": user.username,
-        "email": user.email,
-        "role": user.role.value,
-        "keywords": user.keywords,
-        "created_at": user.created_at.isoformat(),
-        "updated_at": user.updated_at.isoformat() if user.updated_at else None
-    }
+    # Debug logging
+    logger.info(f"User object: {user}")
+    logger.info(f"User keywords type: {type(user.keywords)}, value: {user.keywords}")
+    logger.info(f"User role type: {type(user.role)}, value: {user.role}")
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user_response
-    }
+    # Return user without password - test with plain text
+    from fastapi.responses import PlainTextResponse
+    test_data = '{"access_token":"test","user":{"keywords":["test"]}}'
+    logger.info(f"Returning: {test_data}")
+    return PlainTextResponse(content=test_data)
 
 
 @router.post("/verify")

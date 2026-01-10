@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 import logging
 
 from api.users.service import get_user_service, UserService
-from api.users.models import UserCreate, UserUpdate, User, UserRole
+from api.users.models import UserCreate, UserUpdate, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -40,7 +40,7 @@ async def get_current_user_info(token_data: dict) -> dict:
 
 async def require_admin(current_user: dict = Depends(get_current_user_info)) -> dict:
     """Require the current user to be admin."""
-    if current_user.get("role") != UserRole.ADMIN.value:
+    if current_user.get("role") != 'admin':
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"

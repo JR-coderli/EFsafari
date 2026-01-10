@@ -1,4 +1,6 @@
 
+export type UserRole = 'admin' | 'ops' | 'business';
+
 export type Dimension = 
   | 'platform' 
   | 'advertiser'
@@ -75,5 +77,6 @@ export interface UserPermission {
   username: string;
   password?: string;
   email: string;
-  allowedKeywords: string[]; 
+  role: UserRole;
+  keywords: string[];
 }

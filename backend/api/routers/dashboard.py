@@ -12,7 +12,6 @@ import logging
 
 from api.database import get_db, format_row_for_frontend, format_daily_row
 from api.auth import get_current_user
-from api.users.models import UserRole
 from api.models.schemas import (
     DIMENSION_COLUMN_MAP,
     DataQueryRequest,
@@ -46,15 +45,15 @@ def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Option
         SQL WHERE clause fragment, or None if no filtering needed
     """
     # Admin or empty keywords = no restriction
-    if user_role == UserRole.ADMIN or not user_keywords:
+    if user_role == 'admin' or not user_keywords:
         return None
 
     # Build keyword filter based on role
-    if user_role == UserRole.OPS:
+    if user_role == 'ops':
         # Filter by Adset column
         keyword_conditions = [f"lower(Adset) LIKE lower('%{k}%')" for k in user_keywords]
         return f"({' OR '.join(keyword_conditions)})"
-    elif user_role == UserRole.BUSINESS:
+    elif user_role == 'business':
         # Filter by offer column
         keyword_conditions = [f"lower(offer) LIKE lower('%{k}%')" for k in user_keywords]
         return f"({' OR '.join(keyword_conditions)})"

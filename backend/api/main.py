@@ -50,8 +50,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="AdData Dashboard API",
     description="API for fetching marketing performance data from ClickHouse",
-    version="1.0.0",
-    default_response_class=CustomJSONResponse
+    version="1.0.0"
 )
 
 # Configure CORS
@@ -67,6 +66,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Debug middleware to log responses
+@app.middleware("http")
+async def debug_middleware(request, call_next):
+    response = await call_next(request)
+    logger.info(f"Response status: {response.status_code}")
+    body = response.body
+    if hasattr(response, 'body'):
+        try:
+            logger.info(f"Response body: {body[:500]}")
+        except:
+            pass
+    return response
 
 # Include routers
 app.include_router(dashboard_router)

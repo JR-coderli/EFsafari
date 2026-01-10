@@ -15,7 +15,8 @@ interface LoginResponse {
     name: string;
     username: string;
     email: string;
-    allowed_keywords: string[];
+    role: string;
+    keywords: string[];
     created_at: string;
     updated_at: string | null;
   };
@@ -26,7 +27,8 @@ interface ApiUser {
   name: string;
   username: string;
   email: string;
-  allowed_keywords: string[];
+  role: string;
+  keywords: string[];
   created_at: string;
   updated_at: string | null;
 }
@@ -37,7 +39,8 @@ interface User {
   username: string;
   password?: string;
   email: string;
-  allowedKeywords: string[];
+  role: string;
+  keywords: string[];
 }
 
 // Convert API user to frontend User
@@ -47,7 +50,8 @@ function toFrontendUser(apiUser: ApiUser): User {
     name: apiUser.name,
     username: apiUser.username,
     email: apiUser.email,
-    allowedKeywords: apiUser.allowed_keywords,
+    role: apiUser.role,
+    keywords: apiUser.keywords,
   };
 }
 
@@ -211,7 +215,8 @@ export const usersApi = {
     username: string;
     email: string;
     password: string;
-    allowedKeywords: string[];
+    role: string;
+    keywords: string[];
   }): Promise<User> {
     const token = tokenManager.getToken();
     const response = await fetch('/api/users', {
@@ -225,7 +230,8 @@ export const usersApi = {
         username: user.username,
         email: user.email,
         password: user.password,
-        allowed_keywords: user.allowedKeywords,
+        role: user.role,
+        keywords: user.keywords,
       }),
     });
 
@@ -247,7 +253,8 @@ export const usersApi = {
       name?: string;
       email?: string;
       password?: string;
-      allowedKeywords?: string[];
+      role?: string;
+      keywords?: string[];
     }
   ): Promise<User> {
     const token = tokenManager.getToken();
@@ -256,7 +263,8 @@ export const usersApi = {
     if (updates.name !== undefined) body.name = updates.name;
     if (updates.email !== undefined) body.email = updates.email;
     if (updates.password !== undefined) body.password = updates.password;
-    if (updates.allowedKeywords !== undefined) body.allowed_keywords = updates.allowedKeywords;
+    if (updates.role !== undefined) body.role = updates.role;
+    if (updates.keywords !== undefined) body.keywords = updates.keywords;
 
     const response = await fetch(`/api/users/${userId}`, {
       method: 'PUT',

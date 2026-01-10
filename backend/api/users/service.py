@@ -10,7 +10,7 @@ import secrets
 import logging
 
 from api.database import get_db
-from api.users.models import User, UserInDB, UserCreate, UserRole, UserUpdate
+from api.users.models import User, UserInDB, UserCreate, UserUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class UserService:
             username="admin",
             email="admin@addata.ai",
             password_hash=hash_password("password"),
-            role=UserRole.ADMIN,
+            role='admin',
             keywords=[],
             created_at=datetime.now(),
             updated_at=None
@@ -88,22 +88,35 @@ class UserService:
         logger.info("Default admin user created (admin/password)")
 
     def _insert_user(self, user: UserInDB):
-        """Insert a user into the database."""
+        """Insert a user into the database using SQL INSERT."""
         table_name = self._get_table_name()
         client = self.db.connect()
-        # Use column-oriented format for ClickHouse insert
-        data = {
-            'id': [user.id],
-            'name': [user.name],
-            'username': [user.username],
-            'password_hash': [user.password_hash],
-            'email': [user.email],
-            'role': [user.role.value if isinstance(user.role, UserRole) else user.role],
-            'keywords': [user.keywords],
-            'created_at': [user.created_at],
-            'updated_at': [user.updated_at],
-        }
-        client.insert(table_name, data, column_oriented=True)
+
+        # Format keywords as array string
+        keywords_str = str(user.keywords)
+
+        # Format datetime
+        created_at_str = user.created_at.strftime('%Y-%m-%d %H:%M:%S') if user.created_at else 'now()'
+        updated_at_str = user.updated_at.strftime('%Y-%m-%d %H:%M:%S') if user.updated_at else 'NULL'
+
+        # Role is now a string literal
+        role_value = user.role if isinstance(user.role, str) else str(user.role)
+
+        insert_sql = f"""
+            INSERT INTO {table_name} (id, name, username, password_hash, email, role, keywords, created_at, updated_at)
+            VALUES (
+                '{user.id}',
+                '{user.name.replace("'", "''")}',
+                '{user.username}',
+                '{user.password_hash}',
+                '{user.email}',
+                '{role_value}',
+                {keywords_str},
+                '{created_at_str}',
+                {updated_at_str}
+            )
+        """
+        client.command(insert_sql)
 
     def get_user_by_username(self, username: str) -> Optional[UserInDB]:
         """Get a user by username."""
@@ -117,7 +130,7 @@ class UserService:
                 username=row["username"],
                 password_hash=row["password_hash"],
                 email=row["email"],
-                role=UserRole(row["role"]),
+                role=row["role"],
                 keywords=list(row["keywords"]) if row["keywords"] else [],
                 created_at=row["created_at"],
                 updated_at=row.get("updated_at")
@@ -136,7 +149,7 @@ class UserService:
                 username=row["username"],
                 password_hash=row["password_hash"],
                 email=row["email"],
-                role=UserRole(row["role"]),
+                role=row["role"],
                 keywords=list(row["keywords"]) if row["keywords"] else [],
                 created_at=row["created_at"],
                 updated_at=row.get("updated_at")
@@ -215,7 +228,7 @@ class UserService:
         if "password" in updates:
             update_fields.append(f"password_hash = '{hash_password(updates['password'])}'")
         if "role" in updates:
-            role_value = updates["role"].value if isinstance(updates["role"], UserRole) else updates["role"]
+            role_value = updates["role"] if isinstance(updates["role"], str) else str(updates["role"])
             update_fields.append(f"role = '{role_value}'")
         if "keywords" in updates:
             keywords_arr = updates["keywords"]
@@ -280,7 +293,7 @@ class UserService:
         Returns:
             SQL WHERE clause fragment, or None for admin (no restriction)
         """
-        if user.role == UserRole.ADMIN:
+        if user.role == 'admin':
             return None
 
         # Empty keywords means no restriction
@@ -288,11 +301,11 @@ class UserService:
             return None
 
         # Build keyword filter based on role
-        if user.role == UserRole.OPS:
+        if user.role == 'ops':
             # Filter by Adset column
             keyword_conditions = [f"lower(Adset) LIKE lower('%{k}%')" for k in user.keywords]
             return f"({' OR '.join(keyword_conditions)})"
-        elif user.role == UserRole.BUSINESS:
+        elif user.role == 'business':
             # Filter by offer column
             keyword_conditions = [f"lower(offer) LIKE lower('%{k}%')" for k in user.keywords]
             return f"({' OR '.join(keyword_conditions)})"
@@ -301,7 +314,7 @@ class UserService:
 
     def can_access_all_data(self, user: User) -> bool:
         """Check if user can access all data without filtering."""
-        if user.role == UserRole.ADMIN:
+        if user.role == 'admin':
             return True
         if not user.keywords:
             return True

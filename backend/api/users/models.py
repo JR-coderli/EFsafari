@@ -1,25 +1,22 @@
 """
 User models for authentication and authorization.
 """
-from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional, Literal
 from datetime import datetime
-from enum import Enum
 
 
-class UserRole(str, Enum):
-    """User role enumeration."""
-    ADMIN = "admin"      # Full access to all data
-    OPS = "ops"          # Delivery role - keywords filter Adset
-    BUSINESS = "business"  # Business role - keywords filter offer
+# Role type as string literal
+UserRole = Literal['admin', 'ops', 'business']
 
 
 class UserBase(BaseModel):
     """Base user fields."""
+    model_config = {"populate_by_name": True}
     name: str = Field(..., min_length=1, max_length=100)
     username: str = Field(..., min_length=3, max_length=50)
-    email: EmailStr
-    role: UserRole = Field(default=UserRole.OPS)
+    email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')
+    role: UserRole = 'ops'
     keywords: List[str] = Field(default_factory=list, description="Keywords for filtering data. Empty means no restriction.")
 
 
@@ -31,7 +28,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     """User update schema."""
     name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     password: Optional[str] = None
     role: Optional[UserRole] = None
     keywords: Optional[List[str]] = None

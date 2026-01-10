@@ -15,7 +15,9 @@
       "Skill(git_push)",
       "Bash(git add:*)",
       "Bash(git push:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(find:*)",
+      "Bash(wmic:*)"
     ]
   }
 }

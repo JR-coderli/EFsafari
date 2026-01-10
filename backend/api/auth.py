@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from api.users.service import get_user_service, UserService
-from api.users.models import User, UserInDB, TokenData, UserRole
+from api.users.models import User, UserInDB, TokenData
 
 # JWT Configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "addata-secret-key-change-in-production")
@@ -49,7 +49,7 @@ def decode_token(token: str) -> TokenData:
                 detail="Invalid token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        return TokenData(username=username, user_id=user_id, role=UserRole(role) if role else None)
+        return TokenData(username=username, user_id=user_id, role=role)
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -86,7 +86,7 @@ async def get_current_user(
         "name": user.name,
         "username": user.username,
         "email": user.email,
-        "role": user.role.value,
+        "role": user.role,
         "keywords": user.keywords,
         "created_at": user.created_at.isoformat(),
         "updated_at": user.updated_at.isoformat() if user.updated_at else None
@@ -96,7 +96,7 @@ async def get_current_user(
 # Dependency for requiring admin user
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     """Require the current user to be admin."""
-    if current_user.get("role") != UserRole.ADMIN.value:
+    if current_user.get("role") != 'admin':
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
