@@ -5,7 +5,6 @@ This module handles user management, authentication, and permission-based data f
 """
 from .models import UserRole, UserBase, UserCreate, UserUpdate, UserInDB, User, LoginRequest, LoginResponse, TokenData
 from .service import UserService, get_user_service
-from .router import router
 
 __all__ = [
     "UserRole",
@@ -19,5 +18,4 @@ __all__ = [
     "TokenData",
     "UserService",
     "get_user_service",
-    "router",
 ]

@@ -12,7 +12,6 @@ UserRole = Literal['admin', 'ops', 'business']
 
 class UserBase(BaseModel):
     """Base user fields."""
-    model_config = {"populate_by_name": True}
     name: str = Field(..., min_length=1, max_length=100)
     username: str = Field(..., min_length=3, max_length=50)
     email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')

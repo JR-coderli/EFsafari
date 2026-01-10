@@ -7,6 +7,7 @@ Uses ClickHouse-backed user service.
 from datetime import datetime, timedelta
 from typing import Optional
 import os
+import logging
 
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
@@ -14,6 +15,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from api.users.service import get_user_service, UserService
 from api.users.models import User, UserInDB, TokenData
+
+logger = logging.getLogger(__name__)
 
 # JWT Configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "addata-secret-key-change-in-production")
@@ -60,8 +63,11 @@ def decode_token(token: str) -> TokenData:
 
 def authenticate_user(username: str, password: str) -> Optional[UserInDB]:
     """Authenticate a user with username and password."""
+
     service = get_user_service()
-    return service.authenticate(username, password)
+    user = service.authenticate(username, password)
+    # User authenticated successfully
+    return user
 
 
 # Dependency for getting current user from token

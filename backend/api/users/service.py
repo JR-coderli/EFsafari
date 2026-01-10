@@ -89,6 +89,7 @@ class UserService:
 
     def _insert_user(self, user: UserInDB):
         """Insert a user into the database using SQL INSERT."""
+        print(f"DEBUG _insert_user called with user.username={user.username}, user.keywords={user.keywords}")
         table_name = self._get_table_name()
         client = self.db.connect()
 
@@ -120,21 +121,27 @@ class UserService:
 
     def get_user_by_username(self, username: str) -> Optional[UserInDB]:
         """Get a user by username."""
+        print(f"DEBUG: get_user_by_username called with username={username}")
         table_name = self._get_table_name()
         client = self.db.connect()
         result = client.query(f"SELECT * FROM {table_name} WHERE username = '{username}' LIMIT 1")
         for row in result.named_results():
-            return UserInDB(
+            keywords = list(row["keywords"]) if row["keywords"] else []
+            print(f"DEBUG get_user_by_username: keywords = {keywords}, type = {type(keywords)}")
+            user = UserInDB(
                 id=row["id"],
                 name=row["name"],
                 username=row["username"],
                 password_hash=row["password_hash"],
                 email=row["email"],
                 role=row["role"],
-                keywords=list(row["keywords"]) if row["keywords"] else [],
+                keywords=keywords,
                 created_at=row["created_at"],
                 updated_at=row.get("updated_at")
             )
+            print(f"DEBUG get_user_by_username: user.keywords = {user.keywords}")
+            return user
+        print(f"DEBUG: get_user_by_username: no user found")
         return None
 
     def get_user_by_id(self, user_id: str) -> Optional[UserInDB]:

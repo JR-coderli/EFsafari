@@ -6,39 +6,13 @@ import logging
 
 from api.users.service import get_user_service, UserService
 from api.users.models import UserCreate, UserUpdate, User
+from api.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-async def get_current_user_info(token_data: dict) -> dict:
-    """Get current user from token data (injected by auth middleware)."""
-    service = get_user_service()
-    user_id = token_data.get("user_id")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    user = service.get_user_by_id(user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
-        )
-    return {
-        "id": user.id,
-        "name": user.name,
-        "username": user.username,
-        "email": user.email,
-        "role": user.role.value,
-        "keywords": user.keywords,
-        "created_at": user.created_at.isoformat(),
-        "updated_at": user.updated_at.isoformat() if user.updated_at else None
-    }
-
-
-async def require_admin(current_user: dict = Depends(get_current_user_info)) -> dict:
+async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     """Require the current user to be admin."""
     if current_user.get("role") != 'admin':
         raise HTTPException(
@@ -49,7 +23,7 @@ async def require_admin(current_user: dict = Depends(get_current_user_info)) -> 
 
 
 @router.get("/me")
-async def get_current_user_endpoint(current_user: dict = Depends(get_current_user_info)):
+async def get_current_user_endpoint(current_user: dict = Depends(get_current_user)):
     """Get current user info."""
     return current_user
 
@@ -80,7 +54,7 @@ async def create_new_user(
             "name": new_user.name,
             "username": new_user.username,
             "email": new_user.email,
-            "role": new_user.role.value,
+            "role": new_user.role,
             "keywords": new_user.keywords,
             "created_at": new_user.created_at.isoformat(),
             "updated_at": None
@@ -125,7 +99,7 @@ async def update_user_info(
             "name": updated_user.name,
             "username": updated_user.username,
             "email": updated_user.email,
-            "role": updated_user.role.value,
+            "role": updated_user.role,
             "keywords": updated_user.keywords,
             "created_at": updated_user.created_at.isoformat(),
             "updated_at": updated_user.updated_at.isoformat() if updated_user.updated_at else None

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=None)
+@router.post("/login")
 async def login(login_data: LoginRequest):
     """Authenticate user and return access token."""
     user = authenticate_user(login_data.username, login_data.password)
@@ -28,28 +28,30 @@ async def login(login_data: LoginRequest):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    # Create access token with role
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={
-            "sub": user.username,
-            "user_id": user.id,
-            "role": user.role
-        },
-        expires_delta=access_token_expires
-    )
-
-    # Debug logging
-    logger.info(f"User object: {user}")
-    logger.info(f"User keywords type: {type(user.keywords)}, value: {user.keywords}")
-    logger.info(f"User role type: {type(user.role)}, value: {user.role}")
-
-    # Return user without password - test with plain text
-    from fastapi.responses import PlainTextResponse
-    test_data = '{"access_token":"test","user":{"keywords":["test"]}}'
-    logger.info(f"Returning: {test_data}")
-    return PlainTextResponse(content=test_data)
+    
+    access_token = create_access_token({
+        "sub": user.username,
+        "user_id": user.id,
+        "role": user.role
+    })
+    
+    import json
+    response_data = {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "keywords": user.keywords,
+            "created_at": user.created_at.isoformat(),
+            "updated_at": user.updated_at.isoformat() if user.updated_at else None
+        }
+    }
+    print(f"DEBUG RESPONSE: {json.dumps(response_data)}")
+    return response_data
 
 
 @router.post("/verify")

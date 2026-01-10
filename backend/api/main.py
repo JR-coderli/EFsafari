@@ -50,40 +50,44 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="AdData Dashboard API",
     description="API for fetching marketing performance data from ClickHouse",
-    version="1.0.0"
+    version="1.0.0",
+    response_model_by_alias=False
 )
 
 # Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:3000",  # Alternative port
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Debug middleware to log responses
-@app.middleware("http")
-async def debug_middleware(request, call_next):
-    response = await call_next(request)
-    logger.info(f"Response status: {response.status_code}")
-    body = response.body
-    if hasattr(response, 'body'):
-        try:
-            logger.info(f"Response body: {body[:500]}")
-        except:
-            pass
-    return response
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=[
+#         "http://localhost:5173",  # Vite dev server
+#         "http://localhost:3000",  # Alternative port
+#         "http://127.0.0.1:5173",
+#         "http://127.0.0.1:3000",
+#     ],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 # Include routers
+logger.info(f"Including routers: dashboard={dashboard_router}, auth={auth_router}, users={users_router}")
+logger.info(f"Auth router prefix: {auth_router.prefix}")
+logger.info(f"Auth router routes: {[r.path for r in auth_router.routes]}")
 app.include_router(dashboard_router)
 app.include_router(auth_router)
 app.include_router(users_router)
+
+
+@app.get("/test")
+async def test_endpoint():
+    """Test endpoint."""
+    return {"test": "data", "keywords": ["test1", "test2"]}
+
+
+@app.get("/api/test2")
+async def test_endpoint2():
+    """Test endpoint 2."""
+    print("@@@@@ TEST2 called")
+    return {"test2": "data2", "mykeywords": ["a", "b"]}
 
 
 @app.get("/")
