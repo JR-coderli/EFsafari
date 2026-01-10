@@ -1,0 +1,59 @@
+# Clickflare API 配置
+api:
+  base_url: "https://public-api.clickflare.io"
+  endpoint: "/api/report"
+  api_key: "406561a67ff45389757647c936537da98f6c89a11776566dbe6efc8241c357f9.da59c8abbd8fbf4af7c3a5c72612d871a30273fa"
+  timezone: "UTC"
+
+# 重试配置
+retry:
+  max_attempts: 3
+  backoff_factor: 2
+  retry_status_codes: [500, 502, 503, 504]
+
+# ClickHouse 配置
+clickhouse:
+  host: "43.160.248.9"
+  port: 8123
+  database: "ad_platform"
+  table: "dwd_marketing_report_daily"
+  username: "default"
+  password: "admin123"
+  secure: false
+
+# ETL 配置
+etl:
+  media_source: "Clickflare"
+  batch_size: 10000
+  date_offset_days: 1  # 1 = 昨天, 0 = 今天
+  page_size: 1000
+  max_pages: 100
+
+  # API 分组维度
+  group_by:
+    - "date"
+    - "trafficSourceID"
+    - "offerID"
+    - "affiliateNetworkID"
+    - "trackingField1"
+    - "trackingField2"
+    - "trackingField5"
+    - "trackingField6"
+
+  # API 指标（所有字段都不带 cm_ 前缀）
+  metrics:
+    - "trafficSourceName"
+    - "offerName"
+    - "affiliateNetworkName"
+    - "uniqueVisits"
+    - "uniqueClicks"
+    - "conversions"
+    - "revenue"
+
+# 日志配置
+logging:
+  level: "INFO"
+  log_dir: "logs"
+  log_file: "cf_etl.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5

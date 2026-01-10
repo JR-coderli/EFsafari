@@ -1,0 +1,479 @@
+2026-01-10 18:56:19 [INFO] [MTG_ETL] ============================================================
+2026-01-10 18:56:19 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-08
+2026-01-10 18:56:19 [INFO] [MTG_ETL] ============================================================
+2026-01-10 18:56:19 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 19:01:13 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:01:13 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-08
+2026-01-10 19:01:13 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:01:13 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 19:01:44 [INFO] [MTG_ETL] ClickHouse connection established successfully
+2026-01-10 19:01:44 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 19:01:44 [INFO] [MTG_ETL] Initiating report: 2026-01-08 to 2026-01-08
+2026-01-10 19:01:46 [INFO] [MTG_ETL] Response code: 10000, message: error
+2026-01-10 19:01:46 [ERROR] [MTG_ETL] Unexpected response code: 10000, message: error
+2026-01-10 19:01:46 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:01:46 [ERROR] [MTG_ETL] ETL Job FAILED for report_date: 2026-01-08
+2026-01-10 19:01:46 [ERROR] [MTG_ETL] Error: API extraction failed: []
+2026-01-10 19:01:46 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:03:24 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:03:24 [INFO] [MTG_ETL] ETL Job Started for report_date: 2025-01-09
+2026-01-10 19:03:24 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:03:24 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 19:03:55 [INFO] [MTG_ETL] ClickHouse connection established successfully
+2026-01-10 19:03:55 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 19:03:55 [INFO] [MTG_ETL] Initiating report: 2025-01-09 to 2025-01-09
+2026-01-10 19:03:55 [INFO] [MTG_ETL] Response code: 10000, message: error
+2026-01-10 19:03:55 [ERROR] [MTG_ETL] Unexpected response code: 10000, message: error
+2026-01-10 19:03:55 [ERROR] [MTG_ETL] Full response: {'code': 10000, 'data': {'access-key': 'access-key should not be be empty.'}, 'msg': 'error'}
+2026-01-10 19:03:55 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:03:55 [ERROR] [MTG_ETL] ETL Job FAILED for report_date: 2025-01-09
+2026-01-10 19:03:55 [ERROR] [MTG_ETL] Error: API extraction failed: []
+2026-01-10 19:03:55 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:49:18 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:49:18 [INFO] [MTG_ETL] ETL Job Started for report_date: 2025-01-09
+2026-01-10 19:49:18 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:49:18 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 19:49:48 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 19:49:48 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 19:49:48 [INFO] [MTG_ETL] Initiating report: 2025-01-09 to 2025-01-09
+2026-01-10 19:49:50 [INFO] [MTG_ETL] Response code: 10000, message: error
+2026-01-10 19:49:50 [ERROR] [MTG_ETL] Unexpected response code: 10000, message: error
+2026-01-10 19:49:50 [ERROR] [MTG_ETL] Full response: {'code': 10000, 'data': {'access-key': 'access-key should not be be empty.'}, 'msg': 'error'}
+2026-01-10 19:49:50 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:49:50 [ERROR] [MTG_ETL] ETL Job FAILED for report_date: 2025-01-09
+2026-01-10 19:49:50 [ERROR] [MTG_ETL] Error: API extraction failed: []
+2026-01-10 19:49:50 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:50:05 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:50:05 [INFO] [MTG_ETL] ETL Job Started for report_date: 2025-01-09
+2026-01-10 19:50:05 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:50:05 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 19:50:06 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 19:50:06 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 19:50:06 [INFO] [MTG_ETL] Initiating report: 2025-01-09 to 2025-01-09
+2026-01-10 19:50:09 [INFO] [MTG_ETL] Response code: 400, message: Validation fails (Token Error)
+2026-01-10 19:50:09 [ERROR] [MTG_ETL] Unexpected response code: 400, message: Validation fails (Token Error)
+2026-01-10 19:50:09 [ERROR] [MTG_ETL] Full response: {'code': 400, 'msg': 'Validation fails (Token Error)'}
+2026-01-10 19:50:09 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:50:09 [ERROR] [MTG_ETL] ETL Job FAILED for report_date: 2025-01-09
+2026-01-10 19:50:09 [ERROR] [MTG_ETL] Error: API extraction failed: []
+2026-01-10 19:50:09 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:50:57 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:50:57 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-10 19:50:57 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:50:57 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 19:51:32 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:51:32 [INFO] [MTG_ETL] ETL Job Started for report_date: 2025-01-09
+2026-01-10 19:51:32 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:51:32 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 19:52:03 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 19:52:03 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 19:52:03 [INFO] [MTG_ETL] Initiating report: 2025-01-09 to 2025-01-09
+2026-01-10 19:52:03 [INFO] [MTG_ETL] Response code: 201, message: Successful reception
+2026-01-10 19:52:03 [INFO] [MTG_ETL] Report is being generated, polling required...
+2026-01-10 19:52:04 [INFO] [MTG_ETL] Polling... attempt 1/20, hours available: 0
+2026-01-10 19:52:19 [INFO] [MTG_ETL] Polling... attempt 2/20, hours available: 0
+2026-01-10 19:52:34 [INFO] [MTG_ETL] Polling... attempt 3/20, hours available: 0
+2026-01-10 19:52:50 [INFO] [MTG_ETL] Polling... attempt 4/20, hours available: 0
+2026-01-10 19:53:05 [INFO] [MTG_ETL] Report generation complete (attempt 5)
+2026-01-10 19:53:05 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 19:53:05 [INFO] [MTG_ETL] Downloaded 138 bytes of data
+2026-01-10 19:53:05 [WARNING] [MTG_ETL] No data rows found in TSV content
+2026-01-10 19:53:05 [WARNING] [MTG_ETL] No data returned from API for 2025-01-09
+2026-01-10 19:53:05 [INFO] [MTG_ETL] Deleting existing data for 2025-01-09
+2026-01-10 19:53:06 [INFO] [MTG_ETL] Existing data deleted successfully
+2026-01-10 19:53:06 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:53:06 [INFO] [MTG_ETL] ETL Job Completed for report_date: 2025-01-09
+2026-01-10 19:53:06 [INFO] [MTG_ETL] Rows inserted: 0
+2026-01-10 19:53:06 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:55:21 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:55:21 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-10 19:55:21 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:55:21 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 19:55:51 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 19:55:51 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 19:55:51 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 19:55:51 [DEBUG] [MTG_ETL] Request params: {'start_time': '2026-01-09', 'end_time': '2026-01-09', 'type': 1, 'timezone': '+8', 'dimension_option': 'Offer,Campaign,Creative', 'time_granularity': 'daily'}
+2026-01-10 19:55:53 [INFO] [MTG_ETL] Response code: 201, message: Successful reception
+2026-01-10 19:55:53 [INFO] [MTG_ETL] Report is being generated, polling required...
+2026-01-10 19:55:53 [INFO] [MTG_ETL] Polling... attempt 1/20, hours available: 0
+2026-01-10 19:56:12 [INFO] [MTG_ETL] Polling... attempt 2/20, hours available: 0
+2026-01-10 19:56:28 [INFO] [MTG_ETL] Report generation complete (attempt 3)
+2026-01-10 19:56:28 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Downloaded 869593 bytes of data
+2026-01-10 19:56:29 [DEBUG] [MTG_ETL] Raw TSV content (first 500 chars): Date	Offer Id	Offer Uuid	Offer Name	Campaign Id	Creative Id	Creative Name	Currency	Impression	Click	Conversion	Ecpm	Cpc	Ctr	Cvr	Ivr	Spend
+20260109	356954	ss_01_F_GiftBox_IOS	01_F_GiftBox_IOS	115115	2185785976	msbox_10_5	USD	1	0	0	0.00000	0.00000	0.00000	0.00000	0.00000	0.00000
+20260109	474858	ss_SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	156225	2231615250	0107ipad_offer-ipad-SP-1280-720-0107-LJD-21_offer-ipad-TP-720-1280-0107-LJD-06	USD	1	1	0	
+2026-01-10 19:56:29 [DEBUG] [MTG_ETL] TSV headers: ['Date', 'Offer Id', 'Offer Uuid', 'Offer Name', 'Campaign Id', 'Creative Id', 'Creative Name', 'Currency', 'Impression', 'Click', 'Conversion', 'Ecpm', 'Cpc', 'Ctr', 'Cvr', 'Ivr', 'Spend']
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Parsed 3796 data rows from TSV
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Extracted 3796 raw rows from API
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Step 2: Transforming data...
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Transformed 3796 rows
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Step 3: Deleting existing data...
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Deleting existing data for 2026-01-09
+2026-01-10 19:56:29 [DEBUG] [MTG_ETL] SQL: 
+                ALTER TABLE ad_platform.dwd_marketing_report_daily
+                DELETE
+                WHERE Media = 'MTG'
+                AND reportDate = '2026-01-09'
+            
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Existing data deleted successfully
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Step 4: Loading data into ClickHouse...
+2026-01-10 19:56:29 [INFO] [MTG_ETL] Inserting 3796 rows into ad_platform.dwd_marketing_report_daily
+2026-01-10 19:56:29 [ERROR] [MTG_ETL] Failed to insert data: Client.insert() got an unexpected keyword argument 'columns'
+2026-01-10 19:56:29 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:56:29 [ERROR] [MTG_ETL] ETL Job FAILED for report_date: 2026-01-09
+2026-01-10 19:56:29 [ERROR] [MTG_ETL] Error: Data insertion failed
+2026-01-10 19:56:29 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:57:36 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:57:36 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-10 19:57:36 [INFO] [MTG_ETL] ============================================================
+2026-01-10 19:57:36 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 19:58:07 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 19:58:07 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 19:58:07 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 19:58:07 [DEBUG] [MTG_ETL] Request params: {'start_time': '2026-01-09', 'end_time': '2026-01-09', 'type': 1, 'timezone': '+8', 'dimension_option': 'Offer,Campaign,Creative', 'time_granularity': 'daily'}
+2026-01-10 19:58:08 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 19:58:08 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 19:58:08 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Downloaded 869593 bytes of data
+2026-01-10 19:58:09 [DEBUG] [MTG_ETL] Raw TSV content (first 500 chars): Date	Offer Id	Offer Uuid	Offer Name	Campaign Id	Creative Id	Creative Name	Currency	Impression	Click	Conversion	Ecpm	Cpc	Ctr	Cvr	Ivr	Spend
+20260109	356954	ss_01_F_GiftBox_IOS	01_F_GiftBox_IOS	115115	2185785976	msbox_10_5	USD	1	0	0	0.00000	0.00000	0.00000	0.00000	0.00000	0.00000
+20260109	474858	ss_SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	156225	2231615250	0107ipad_offer-ipad-SP-1280-720-0107-LJD-21_offer-ipad-TP-720-1280-0107-LJD-06	USD	1	1	0	
+2026-01-10 19:58:09 [DEBUG] [MTG_ETL] TSV headers: ['Date', 'Offer Id', 'Offer Uuid', 'Offer Name', 'Campaign Id', 'Creative Id', 'Creative Name', 'Currency', 'Impression', 'Click', 'Conversion', 'Ecpm', 'Cpc', 'Ctr', 'Cvr', 'Ivr', 'Spend']
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Parsed 3796 data rows from TSV
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Extracted 3796 raw rows from API
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Step 2: Transforming data...
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Transformed 3796 rows
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Step 3: Deleting existing data...
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Deleting existing data for 2026-01-09
+2026-01-10 19:58:09 [DEBUG] [MTG_ETL] SQL: 
+                ALTER TABLE ad_platform.dwd_marketing_report_daily
+                DELETE
+                WHERE Media = 'MTG'
+                AND reportDate = '2026-01-09'
+            
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Existing data deleted successfully
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Step 4: Loading data into ClickHouse...
+2026-01-10 19:58:09 [INFO] [MTG_ETL] Inserting 3796 rows into ad_platform.dwd_marketing_report_daily
+2026-01-10 19:58:09 [ERROR] [MTG_ETL] Failed to insert data: object of type 'int' has no len()
+2026-01-10 19:58:09 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 19:58:09 [ERROR] [MTG_ETL] ETL Job FAILED for report_date: 2026-01-09
+2026-01-10 19:58:09 [ERROR] [MTG_ETL] Error: Data insertion failed
+2026-01-10 19:58:09 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 20:00:01 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:00:01 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-10 20:00:01 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:00:01 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 20:00:02 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 20:00:02 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 20:00:02 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:00:02 [DEBUG] [MTG_ETL] Request params: {'start_time': '2026-01-09', 'end_time': '2026-01-09', 'type': 1, 'timezone': '+8', 'dimension_option': 'Offer,Campaign,Creative', 'time_granularity': 'daily'}
+2026-01-10 20:00:03 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:00:03 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:00:03 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Downloaded 869593 bytes of data
+2026-01-10 20:00:04 [DEBUG] [MTG_ETL] Raw TSV content (first 500 chars): Date	Offer Id	Offer Uuid	Offer Name	Campaign Id	Creative Id	Creative Name	Currency	Impression	Click	Conversion	Ecpm	Cpc	Ctr	Cvr	Ivr	Spend
+20260109	356954	ss_01_F_GiftBox_IOS	01_F_GiftBox_IOS	115115	2185785976	msbox_10_5	USD	1	0	0	0.00000	0.00000	0.00000	0.00000	0.00000	0.00000
+20260109	474858	ss_SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	156225	2231615250	0107ipad_offer-ipad-SP-1280-720-0107-LJD-21_offer-ipad-TP-720-1280-0107-LJD-06	USD	1	1	0	
+2026-01-10 20:00:04 [DEBUG] [MTG_ETL] TSV headers: ['Date', 'Offer Id', 'Offer Uuid', 'Offer Name', 'Campaign Id', 'Creative Id', 'Creative Name', 'Currency', 'Impression', 'Click', 'Conversion', 'Ecpm', 'Cpc', 'Ctr', 'Cvr', 'Ivr', 'Spend']
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Parsed 3796 data rows from TSV
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Extracted 3796 raw rows from API
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Step 2: Transforming data...
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Transformed 3796 rows
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Step 3: Deleting existing data...
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Deleting existing data for 2026-01-09
+2026-01-10 20:00:04 [DEBUG] [MTG_ETL] SQL: 
+                ALTER TABLE ad_platform.dwd_marketing_report_daily
+                DELETE
+                WHERE Media = 'MTG'
+                AND reportDate = '2026-01-09'
+            
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Existing data deleted successfully
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Step 4: Loading data into ClickHouse...
+2026-01-10 20:00:04 [INFO] [MTG_ETL] Inserting 3796 rows into ad_platform.dwd_marketing_report_daily
+2026-01-10 20:00:04 [ERROR] [MTG_ETL] Failed to insert data: unsupported operand type(s) for -: 'str' and 'datetime.date'
+2026-01-10 20:00:04 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 20:00:04 [ERROR] [MTG_ETL] ETL Job FAILED for report_date: 2026-01-09
+2026-01-10 20:00:04 [ERROR] [MTG_ETL] Error: Data insertion failed
+2026-01-10 20:00:04 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 20:01:11 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:01:11 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-10 20:01:11 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:01:11 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 20:01:42 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 20:01:42 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 20:01:42 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:01:42 [DEBUG] [MTG_ETL] Request params: {'start_time': '2026-01-09', 'end_time': '2026-01-09', 'type': 1, 'timezone': '+8', 'dimension_option': 'Offer,Campaign,Creative', 'time_granularity': 'daily'}
+2026-01-10 20:01:43 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:01:43 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:01:43 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Downloaded 869593 bytes of data
+2026-01-10 20:01:44 [DEBUG] [MTG_ETL] Raw TSV content (first 500 chars): Date	Offer Id	Offer Uuid	Offer Name	Campaign Id	Creative Id	Creative Name	Currency	Impression	Click	Conversion	Ecpm	Cpc	Ctr	Cvr	Ivr	Spend
+20260109	356954	ss_01_F_GiftBox_IOS	01_F_GiftBox_IOS	115115	2185785976	msbox_10_5	USD	1	0	0	0.00000	0.00000	0.00000	0.00000	0.00000	0.00000
+20260109	474858	ss_SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	156225	2231615250	0107ipad_offer-ipad-SP-1280-720-0107-LJD-21_offer-ipad-TP-720-1280-0107-LJD-06	USD	1	1	0	
+2026-01-10 20:01:44 [DEBUG] [MTG_ETL] TSV headers: ['Date', 'Offer Id', 'Offer Uuid', 'Offer Name', 'Campaign Id', 'Creative Id', 'Creative Name', 'Currency', 'Impression', 'Click', 'Conversion', 'Ecpm', 'Cpc', 'Ctr', 'Cvr', 'Ivr', 'Spend']
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Parsed 3796 data rows from TSV
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Extracted 3796 raw rows from API
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Step 2: Transforming data...
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Transformed 3796 rows
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Step 3: Deleting existing data...
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Deleting existing data for 2026-01-09
+2026-01-10 20:01:44 [DEBUG] [MTG_ETL] SQL: 
+                ALTER TABLE ad_platform.dwd_marketing_report_daily
+                DELETE
+                WHERE Media = 'MTG'
+                AND reportDate = '2026-01-09'
+            
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Existing data deleted successfully
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Step 4: Loading data into ClickHouse...
+2026-01-10 20:01:44 [INFO] [MTG_ETL] Inserting 3796 rows into ad_platform.dwd_marketing_report_daily
+2026-01-10 20:01:44 [DEBUG] [MTG_ETL] First row data: {'reportDate': '2026-01-09', 'Media': 'MTG', 'Campaign': '', 'CampaignID': '115115', 'Adset': '01_F_GiftBox_IOS', 'AdsetID': '356954', 'Ads': 'msbox_10_5', 'AdsID': '2185785976', 'spend': 0.0, 'm_imp': 1, 'm_clicks': 0, 'm_conv': 0}
+2026-01-10 20:01:44 [ERROR] [MTG_ETL] Failed to insert data: Insert data column count does not match column names
+2026-01-10 20:01:44 [ERROR] [MTG_ETL] Traceback: Traceback (most recent call last):
+  File "E:\code\bicode\backend\mtg_etl\mtg_etl.py", line 244, in insert_data
+    self.ch_client.insert(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        table=f"{self.ch_database}.{self.ch_table}",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        data=data
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\driver\client.py", line 804, in insert
+    context.data = data
+    ^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\driver\insert.py", line 95, in data
+    raise ProgrammingError('Insert data column count does not match column names')
+clickhouse_connect.driver.exceptions.ProgrammingError: Insert data column count does not match column names
+
+2026-01-10 20:01:44 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 20:01:44 [ERROR] [MTG_ETL] ETL Job FAILED for report_date: 2026-01-09
+2026-01-10 20:01:44 [ERROR] [MTG_ETL] Error: Data insertion failed
+2026-01-10 20:01:44 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 20:05:08 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:05:08 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-10 20:05:08 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:05:08 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 20:05:08 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 20:05:08 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 20:05:08 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:05:08 [DEBUG] [MTG_ETL] Request params: {'start_time': '2026-01-09', 'end_time': '2026-01-09', 'type': 1, 'timezone': '+8', 'dimension_option': 'Offer,Campaign,Creative', 'time_granularity': 'daily'}
+2026-01-10 20:05:09 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:05:09 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:05:09 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Downloaded 869593 bytes of data
+2026-01-10 20:05:10 [DEBUG] [MTG_ETL] Raw TSV content (first 500 chars): Date	Offer Id	Offer Uuid	Offer Name	Campaign Id	Creative Id	Creative Name	Currency	Impression	Click	Conversion	Ecpm	Cpc	Ctr	Cvr	Ivr	Spend
+20260109	356954	ss_01_F_GiftBox_IOS	01_F_GiftBox_IOS	115115	2185785976	msbox_10_5	USD	1	0	0	0.00000	0.00000	0.00000	0.00000	0.00000	0.00000
+20260109	474858	ss_SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	156225	2231615250	0107ipad_offer-ipad-SP-1280-720-0107-LJD-21_offer-ipad-TP-720-1280-0107-LJD-06	USD	1	1	0	
+2026-01-10 20:05:10 [DEBUG] [MTG_ETL] TSV headers: ['Date', 'Offer Id', 'Offer Uuid', 'Offer Name', 'Campaign Id', 'Creative Id', 'Creative Name', 'Currency', 'Impression', 'Click', 'Conversion', 'Ecpm', 'Cpc', 'Ctr', 'Cvr', 'Ivr', 'Spend']
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Parsed 3796 data rows from TSV
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Extracted 3796 raw rows from API
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Step 2: Transforming data...
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Transformed 3796 rows
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Step 3: Deleting existing data...
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Deleting existing data for 2026-01-09
+2026-01-10 20:05:10 [DEBUG] [MTG_ETL] SQL: 
+                ALTER TABLE ad_platform.dwd_marketing_report_daily
+                DELETE
+                WHERE Media = 'MTG'
+                AND reportDate = '2026-01-09'
+            
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Existing data deleted successfully
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Step 4: Loading data into ClickHouse...
+2026-01-10 20:05:10 [INFO] [MTG_ETL] Inserting 3796 rows into ad_platform.dwd_marketing_report_daily
+2026-01-10 20:05:10 [DEBUG] [MTG_ETL] First row data: {'reportDate': '2026-01-09', 'Media': 'MTG', 'Campaign': '', 'CampaignID': '115115', 'Adset': '01_F_GiftBox_IOS', 'AdsetID': '356954', 'Ads': 'msbox_10_5', 'AdsID': '2185785976', 'spend': 0.0, 'm_imp': 1, 'm_clicks': 0, 'm_conv': 0}
+2026-01-10 20:05:10 [ERROR] [MTG_ETL] Failed to insert data: unsupported operand type(s) for -: 'str' and 'datetime.date'
+2026-01-10 20:05:10 [ERROR] [MTG_ETL] Traceback: Traceback (most recent call last):
+  File "E:\code\bicode\backend\mtg_etl\mtg_etl.py", line 252, in insert_data
+    self.ch_client.insert(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        table=f"{self.ch_database}.{self.ch_table}",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        column_names=columns,
+        ^^^^^^^^^^^^^^^^^^^^^
+        data=rows
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\driver\client.py", line 805, in insert
+    return self.data_insert(context)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\driver\httpclient.py", line 330, in data_insert
+    response = self._raw_request(block_gen, params, headers, error_handler=error_handler, server_wait=False)
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\driver\httpclient.py", line 547, in _raw_request
+    error_handler(response)
+    ~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\driver\httpclient.py", line 315, in error_handler
+    raise ex
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\driver\transform.py", line 101, in chunk_gen
+    col_type.write_column(data, output, context)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\datatypes\base.py", line 215, in write_column
+    self.write_column_data(column, dest, ctx)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\datatypes\base.py", line 230, in write_column_data
+    self._write_column_binary(column, dest, ctx)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Roaming\Python\Python313\site-packages\clickhouse_connect\datatypes\temporal.py", line 59, in _write_column_binary
+    column = [(x - esd).days for x in column]
+               ~~^~~~~
+TypeError: unsupported operand type(s) for -: 'str' and 'datetime.date'
+
+2026-01-10 20:05:10 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 20:05:10 [ERROR] [MTG_ETL] ETL Job FAILED for report_date: 2026-01-09
+2026-01-10 20:05:10 [ERROR] [MTG_ETL] Error: Data insertion failed
+2026-01-10 20:05:10 [ERROR] [MTG_ETL] ============================================================
+2026-01-10 20:06:20 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:06:20 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-10 20:06:20 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:06:20 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 20:06:20 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 20:06:20 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 20:06:20 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:06:20 [DEBUG] [MTG_ETL] Request params: {'start_time': '2026-01-09', 'end_time': '2026-01-09', 'type': 1, 'timezone': '+8', 'dimension_option': 'Offer,Campaign,Creative', 'time_granularity': 'daily'}
+2026-01-10 20:06:23 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:06:23 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:06:23 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Downloaded 869593 bytes of data
+2026-01-10 20:06:24 [DEBUG] [MTG_ETL] Raw TSV content (first 500 chars): Date	Offer Id	Offer Uuid	Offer Name	Campaign Id	Creative Id	Creative Name	Currency	Impression	Click	Conversion	Ecpm	Cpc	Ctr	Cvr	Ivr	Spend
+20260109	356954	ss_01_F_GiftBox_IOS	01_F_GiftBox_IOS	115115	2185785976	msbox_10_5	USD	1	0	0	0.00000	0.00000	0.00000	0.00000	0.00000	0.00000
+20260109	474858	ss_SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	SOI_LJD_CID16d8_MTG_BC1_AC1_ipad_base_260107_02	156225	2231615250	0107ipad_offer-ipad-SP-1280-720-0107-LJD-21_offer-ipad-TP-720-1280-0107-LJD-06	USD	1	1	0	
+2026-01-10 20:06:24 [DEBUG] [MTG_ETL] TSV headers: ['Date', 'Offer Id', 'Offer Uuid', 'Offer Name', 'Campaign Id', 'Creative Id', 'Creative Name', 'Currency', 'Impression', 'Click', 'Conversion', 'Ecpm', 'Cpc', 'Ctr', 'Cvr', 'Ivr', 'Spend']
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Parsed 3796 data rows from TSV
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Extracted 3796 raw rows from API
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Step 2: Transforming data...
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Transformed 3796 rows
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Step 3: Deleting existing data...
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Deleting existing data for 2026-01-09
+2026-01-10 20:06:24 [DEBUG] [MTG_ETL] SQL: 
+                ALTER TABLE ad_platform.dwd_marketing_report_daily
+                DELETE
+                WHERE Media = 'MTG'
+                AND reportDate = '2026-01-09'
+            
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Existing data deleted successfully
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Step 4: Loading data into ClickHouse...
+2026-01-10 20:06:24 [INFO] [MTG_ETL] Inserting 3796 rows into ad_platform.dwd_marketing_report_daily
+2026-01-10 20:06:24 [DEBUG] [MTG_ETL] First row data: {'reportDate': datetime.date(2026, 1, 9), 'Media': 'MTG', 'Campaign': '', 'CampaignID': '115115', 'Adset': '01_F_GiftBox_IOS', 'AdsetID': '356954', 'Ads': 'msbox_10_5', 'AdsID': '2185785976', 'spend': 0.0, 'm_imp': 1, 'm_clicks': 0, 'm_conv': 0}
+2026-01-10 20:06:25 [INFO] [MTG_ETL] Data inserted successfully
+2026-01-10 20:06:25 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:06:25 [INFO] [MTG_ETL] ETL Job Completed for report_date: 2026-01-09
+2026-01-10 20:06:25 [INFO] [MTG_ETL] Rows inserted: 3796
+2026-01-10 20:06:25 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:16:13 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:16:13 [INFO] [MTG_ETL] ETL Job Started for report_date: 2026-01-09
+2026-01-10 20:16:13 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:16:13 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 20:16:13 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 20:16:13 [INFO] [MTG_ETL] Step 1: Extracting data from MTG API...
+2026-01-10 20:16:13 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:16:13 [DEBUG] [MTG_ETL] Request params: {'start_time': '2026-01-09', 'end_time': '2026-01-09', 'type': 1, 'timezone': '0', 'dimension_option': 'Offer,Campaign,Creative', 'time_granularity': 'daily'}
+2026-01-10 20:16:15 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:16:15 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:16:15 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Downloaded 878732 bytes of data
+2026-01-10 20:16:16 [DEBUG] [MTG_ETL] Raw TSV content (first 500 chars): Date	Offer Id	Offer Uuid	Offer Name	Campaign Id	Creative Id	Creative Name	Currency	Impression	Click	Conversion	Ecpm	Cpc	Ctr	Cvr	Ivr	Spend
+20260109	342750	ss_MSbox	MSbox	110161	2176828477	msbox_icon_512x512	USD	6085	11	0	0.00000	0.00000	0.00180	0.00000	0.00000	0.00000
+20260109	353777	ss_01_I_Lenovo	01_I_Lenovo	114086	2184501868	laptop_0414LaptopVd03_0414LaptopPic5	USD	96	50	0	0.00000	0.00000	0.52083	0.00000	0.00000	0.00000
+20260109	407168	ss_AV_MTG_BC1_AC1_GuardAv_JR_base_250827_AQI_Cpid_fb4eCPE	
+2026-01-10 20:16:16 [DEBUG] [MTG_ETL] TSV headers: ['Date', 'Offer Id', 'Offer Uuid', 'Offer Name', 'Campaign Id', 'Creative Id', 'Creative Name', 'Currency', 'Impression', 'Click', 'Conversion', 'Ecpm', 'Cpc', 'Ctr', 'Cvr', 'Ivr', 'Spend']
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Parsed 3830 data rows from TSV
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Extracted 3830 raw rows from API
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Step 2: Transforming data...
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Transformed 3830 rows
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Step 3: Deleting existing data...
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Deleting existing data for 2026-01-09
+2026-01-10 20:16:16 [DEBUG] [MTG_ETL] SQL: 
+                ALTER TABLE ad_platform.dwd_marketing_report_daily
+                DELETE
+                WHERE Media = 'MTG'
+                AND reportDate = '2026-01-09'
+            
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Existing data deleted successfully
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Step 4: Loading data into ClickHouse...
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Inserting 3830 rows into ad_platform.dwd_marketing_report_daily
+2026-01-10 20:16:16 [DEBUG] [MTG_ETL] First row data: {'reportDate': datetime.date(2026, 1, 9), 'Media': 'MTG', 'Campaign': '', 'CampaignID': '110161', 'Adset': 'MSbox', 'AdsetID': '342750', 'Ads': 'msbox_icon_512x512', 'AdsID': '2176828477', 'spend': 0.0, 'm_imp': 6085, 'm_clicks': 11, 'm_conv': 0}
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Data inserted successfully
+2026-01-10 20:16:16 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:16:16 [INFO] [MTG_ETL] ETL Job Completed for report_date: 2026-01-09
+2026-01-10 20:16:16 [INFO] [MTG_ETL] Rows inserted: 3830
+2026-01-10 20:16:16 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:40:36 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:40:36 [INFO] [MTG_ETL] MTG ETL Job Started for report_date: 2026-01-09
+2026-01-10 20:40:36 [INFO] [MTG_ETL] Total accounts: 3
+2026-01-10 20:40:36 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:40:36 [INFO] [MTG_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-10 20:40:36 [INFO] [MTG_ETL] ClickHouse connection initialized (will test on first query)
+2026-01-10 20:40:36 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:40:36 [INFO] [MTG_ETL] Processing account: Account1
+2026-01-10 20:40:36 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:40:36 [INFO] [MTG_ETL] [Account1] Step 1: Extracting data from MTG API...
+2026-01-10 20:40:36 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:40:43 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:40:43 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:40:43 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:40:50 [INFO] [MTG_ETL] Downloaded 878732 bytes of data
+2026-01-10 20:40:50 [INFO] [MTG_ETL] Parsed 3830 data rows from TSV
+2026-01-10 20:40:50 [INFO] [MTG_ETL] [Account1] Extracted 3830 raw rows from API
+2026-01-10 20:40:50 [INFO] [MTG_ETL] [Account1] Step 2: Transforming data...
+2026-01-10 20:40:50 [INFO] [MTG_ETL] [Account1] Transformed 3830 rows
+2026-01-10 20:40:50 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:41:18 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:41:18 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:41:18 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:41:19 [INFO] [MTG_ETL] Downloaded 878732 bytes of data
+2026-01-10 20:41:19 [INFO] [MTG_ETL] Parsed 3830 data rows from TSV
+2026-01-10 20:41:19 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:41:19 [INFO] [MTG_ETL] Processing account: Account2
+2026-01-10 20:41:19 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:41:19 [INFO] [MTG_ETL] [Account2] Step 1: Extracting data from MTG API...
+2026-01-10 20:41:19 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:41:19 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:41:19 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:41:19 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:41:24 [INFO] [MTG_ETL] Downloaded 390496 bytes of data
+2026-01-10 20:41:24 [INFO] [MTG_ETL] Parsed 1705 data rows from TSV
+2026-01-10 20:41:24 [INFO] [MTG_ETL] [Account2] Extracted 1705 raw rows from API
+2026-01-10 20:41:24 [INFO] [MTG_ETL] [Account2] Step 2: Transforming data...
+2026-01-10 20:41:24 [INFO] [MTG_ETL] [Account2] Transformed 1705 rows
+2026-01-10 20:41:24 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:41:28 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:41:28 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:41:28 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:41:28 [INFO] [MTG_ETL] Downloaded 390496 bytes of data
+2026-01-10 20:41:28 [INFO] [MTG_ETL] Parsed 1705 data rows from TSV
+2026-01-10 20:41:28 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:41:28 [INFO] [MTG_ETL] Processing account: Account3
+2026-01-10 20:41:28 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:41:28 [INFO] [MTG_ETL] [Account3] Step 1: Extracting data from MTG API...
+2026-01-10 20:41:28 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:41:29 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:41:29 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:41:29 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:41:29 [INFO] [MTG_ETL] Downloaded 10276 bytes of data
+2026-01-10 20:41:29 [INFO] [MTG_ETL] Parsed 66 data rows from TSV
+2026-01-10 20:41:29 [INFO] [MTG_ETL] [Account3] Extracted 66 raw rows from API
+2026-01-10 20:41:29 [INFO] [MTG_ETL] [Account3] Step 2: Transforming data...
+2026-01-10 20:41:29 [INFO] [MTG_ETL] [Account3] Transformed 66 rows
+2026-01-10 20:41:29 [INFO] [MTG_ETL] Initiating report: 2026-01-09 to 2026-01-09
+2026-01-10 20:41:30 [INFO] [MTG_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-10 20:41:30 [INFO] [MTG_ETL] Report ready: hours=24, is_complete=True
+2026-01-10 20:41:30 [INFO] [MTG_ETL] Downloading report data...
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Downloaded 10276 bytes of data
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Parsed 66 data rows from TSV
+2026-01-10 20:41:45 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Extraction Summary:
+2026-01-10 20:41:45 [INFO] [MTG_ETL]   Accounts succeeded: 3/3
+2026-01-10 20:41:45 [INFO] [MTG_ETL]   Accounts failed: 0/3
+2026-01-10 20:41:45 [INFO] [MTG_ETL]   Total rows: 5601
+2026-01-10 20:41:45 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Step 3: Deleting existing data...
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Deleting existing data for 2026-01-09 (CampaignIDs: 146 accounts)
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Existing data deleted successfully
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Step 4: Loading data into ClickHouse...
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Inserting 5601 rows into ad_platform.dwd_marketing_report_daily
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Data inserted successfully
+2026-01-10 20:41:45 [INFO] [MTG_ETL] ============================================================
+2026-01-10 20:41:45 [INFO] [MTG_ETL] ETL Job Completed for report_date: 2026-01-09
+2026-01-10 20:41:45 [INFO] [MTG_ETL] Total rows inserted: 5601
+2026-01-10 20:41:45 [INFO] [MTG_ETL] ============================================================

@@ -1,0 +1,34 @@
+# AdData Dashboard API Configuration
+
+# API Server Settings
+server:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+
+# ClickHouse Configuration (using existing ETL config values)
+clickhouse:
+  host: "43.160.248.9"
+  port: 8123
+  database: "ad_platform"
+  table: "dwd_marketing_report_daily"
+  username: "default"
+  password: "admin123"
+  secure: false
+
+# CORS Settings
+cors:
+  allow_origins:
+    - "http://localhost:5173"
+    - "http://localhost:3000"
+    - "http://127.0.0.1:5173"
+    - "http://127.0.0.1:3000"
+  allow_methods:
+    - "*"
+  allow_headers:
+    - "*"
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

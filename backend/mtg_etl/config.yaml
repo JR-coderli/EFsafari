@@ -1,0 +1,57 @@
+# MTG Report API ETL Configuration
+
+# API Configuration
+api:
+  base_url: "https://ss-api.mintegral.com"
+  endpoint: "/api/v2/reports/data"
+  timezone: "0"  # UTC 0 时区，与数据库其他媒体统一
+  dimension_option: "Offer,Campaign,Creative"
+  time_granularity: "daily"
+
+# Multiple MTG Accounts
+accounts:
+  - name: "Account1"
+    access_key: "28e3b671a1c06171448e85233b65e0e0"
+    api_key: "25e8f524265bb39fa0521ea7f72924e4"
+  - name: "Account2"
+    access_key: "00c6e1387b44dc94d5d7df4256ed07eb"
+    api_key: "ea70b2e328b7c11b1ecec66dea2d1a49"
+  - name: "Account3"
+    access_key: "e0c55f0bc62515cfbb08c21d98ca7776"
+    api_key: "1c23a2044c0dac36cf7a0671e075c3d9"
+
+# Retry Configuration
+retry:
+  max_attempts: 3
+  backoff_factor: 2
+  retry_status_codes: [500, 502, 503, 504]
+
+# Poll Configuration (for type=1 status check)
+poll:
+  max_attempts: 20
+  interval_seconds: 15
+  timeout_seconds: 300
+
+# ClickHouse Configuration
+clickhouse:
+  host: "43.160.248.9"
+  port: 8123
+  database: "ad_platform"
+  table: "dwd_marketing_report_daily"
+  username: "default"
+  password: "admin123"
+  secure: false
+
+# ETL Configuration
+etl:
+  media_source: "MTG"
+  batch_size: 10000
+  date_offset_days: 1  # 1 = yesterday, 0 = today
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_dir: "logs"
+  log_file: "mtg_etl.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5

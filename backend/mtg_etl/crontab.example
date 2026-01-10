@@ -1,0 +1,13 @@
+# MTG ETL Crontab Configuration
+# Edit with: crontab -e
+
+# 每小时运行一次（每小时的第30分钟执行）
+# 注意：MTG数据在当天过后1.5小时左右可以拉取，建议凌晨1:30后再执行
+30 * * * * cd /path/to/mtg_etl && ./run.sh >> logs/cron.log 2>&1
+
+# 如果只想每天运行一次（推荐），使用以下配置：
+# 每天凌晨2点运行，拉取昨天的数据
+# 0 2 * * * cd /path/to/mtg_etl && ./run.sh >> logs/cron.log 2>&1
+
+# 每30分钟运行一次（高频率）
+# */30 * * * * cd /path/to/mtg_etl && ./run.sh >> logs/cron.log 2>&1

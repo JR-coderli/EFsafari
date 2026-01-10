@@ -1,0 +1,5 @@
+{
+  "name": "AdData Intelligence - Multi-dimensional Pivot Table",
+  "description": "A high-performance AdTech reporting platform featuring a multi-dimensional pivot table with tree-based drill-downs, built with React and Tailwind CSS.",
+  "requestFramePermissions": []
+}

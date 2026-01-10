@@ -1,0 +1,10 @@
+# MTG ETL Requirements
+
+# HTTP client
+requests>=2.31.0
+
+# ClickHouse client
+clickhouse-connect>=0.6.13
+
+# YAML parser
+PyYAML>=6.0.1
