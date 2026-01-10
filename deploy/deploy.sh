@@ -223,7 +223,7 @@ User=$RUN_USER
 Group=$RUN_USER
 WorkingDirectory=$PROJECT_DIR/backend
 Environment="PATH=$PROJECT_DIR/backend/venv/bin"
-ExecStart=$PROJECT_DIR/backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port $API_PORT
+ExecStart=$PROJECT_DIR/backend/venv/bin/uvicorn api.main:app --host 0.0.0.0 --port $API_PORT
 Restart=always
 RestartSec=10
 StandardOutput=journal
