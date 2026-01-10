@@ -28,7 +28,8 @@ interface ApiUser {
   username: string;
   email: string;
   role: string;
-  keywords: string[];
+  keywords?: string[];
+  allowed_keywords?: string[];
   created_at: string;
   updated_at: string | null;
 }
@@ -43,7 +44,7 @@ interface User {
   keywords: string[];
 }
 
-// Convert API user to frontend User
+// Convert API user to frontend User (handles both keywords and allowed_keywords field names)
 function toFrontendUser(apiUser: ApiUser): User {
   return {
     id: apiUser.id,
@@ -51,7 +52,7 @@ function toFrontendUser(apiUser: ApiUser): User {
     username: apiUser.username,
     email: apiUser.email,
     role: apiUser.role,
-    keywords: apiUser.keywords,
+    keywords: apiUser.keywords || apiUser.allowed_keywords || [],
   };
 }
 
@@ -237,6 +238,11 @@ export const usersApi = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to create user' }));
+      // Handle FastAPI validation error format (detail is an array)
+      if (Array.isArray(error.detail)) {
+        const errorMessages = error.detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ');
+        throw new Error(errorMessages || 'Failed to create user');
+      }
       throw new Error(error.detail || 'Failed to create user');
     }
 
@@ -277,6 +283,10 @@ export const usersApi = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to update user' }));
+      if (Array.isArray(error.detail)) {
+        const errorMessages = error.detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ');
+        throw new Error(errorMessages || 'Failed to update user');
+      }
       throw new Error(error.detail || 'Failed to update user');
     }
 

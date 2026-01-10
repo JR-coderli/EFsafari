@@ -417,6 +417,55 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     }
   }, [resizingColumn]);
 
+  // Filter and flatten data before pagination
+  const filteredAndFlattenedData = useMemo(() => {
+    const flatten = (rows: AdRow[], isChild: boolean = false): AdRow[] => {
+      const results: AdRow[] = [];
+      rows.forEach(row => {
+        // Apply quickFilterText only to top-level rows (not expanded children)
+        const matchesFilter = !quickFilterText || row.name.toLowerCase().includes(quickFilterText.toLowerCase());
+        // Hide rows with zero impressions
+        const hasImpressions = !hideZeroImpressions || row.impressions > 0;
+
+        if (matchesFilter && hasImpressions) {
+          results.push(row);
+        }
+
+        // Always include expanded children (don't filter them by quickFilterText)
+        if (expandedDimRows.has(row.id) && row.children) {
+          const childRows = row.children || [];
+          // For children, only filter by impressions, not by quickFilterText
+          childRows.forEach(child => {
+            if (!hideZeroImpressions || child.impressions > 0) {
+              results.push(child);
+              // Include grandchildren if also expanded
+              if (expandedDimRows.has(child.id) && child.children) {
+                results.push(...flatten(child.children, true));
+              }
+            }
+          });
+        }
+      });
+      return results;
+    };
+    const flattened = flatten(data);
+
+    // Apply sorting
+    if (sortColumn && sortOrder) {
+      const sorted = [...flattened].sort((a, b) => {
+        const aVal = a[sortColumn] as number;
+        const bVal = b[sortColumn] as number;
+        if (sortOrder === 'asc') {
+          return aVal - bVal;
+        } else {
+          return bVal - aVal;
+        }
+      });
+      return sorted;
+    }
+    return flattened;
+  }, [data, expandedDimRows, quickFilterText, hideZeroImpressions, sortColumn, sortOrder]);
+
   // Paginated data
   const paginatedData = useMemo(() => {
     const startIndex = (paginationPage - 1) * rowsPerPage;
@@ -762,54 +811,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     }
     setExpandedDailyRows(next);
   };
-
-  const filteredAndFlattenedData = useMemo(() => {
-    const flatten = (rows: AdRow[], isChild: boolean = false): AdRow[] => {
-      const results: AdRow[] = [];
-      rows.forEach(row => {
-        // Apply quickFilterText only to top-level rows (not expanded children)
-        const matchesFilter = !quickFilterText || row.name.toLowerCase().includes(quickFilterText.toLowerCase());
-        // Hide rows with zero impressions
-        const hasImpressions = !hideZeroImpressions || row.impressions > 0;
-
-        if (matchesFilter && hasImpressions) {
-          results.push(row);
-        }
-
-        // Always include expanded children (don't filter them by quickFilterText)
-        if (expandedDimRows.has(row.id) && row.children) {
-          const childRows = row.children || [];
-          // For children, only filter by impressions, not by quickFilterText
-          childRows.forEach(child => {
-            if (!hideZeroImpressions || child.impressions > 0) {
-              results.push(child);
-              // Include grandchildren if also expanded
-              if (expandedDimRows.has(child.id) && child.children) {
-                results.push(...flatten(child.children, true));
-              }
-            }
-          });
-        }
-      });
-      return results;
-    };
-    const flattened = flatten(data);
-
-    // Apply sorting
-    if (sortColumn && sortOrder) {
-      const sorted = [...flattened].sort((a, b) => {
-        const aVal = a[sortColumn] as number;
-        const bVal = b[sortColumn] as number;
-        if (sortOrder === 'asc') {
-          return aVal - bVal;
-        } else {
-          return bVal - aVal;
-        }
-      });
-      return sorted;
-    }
-    return flattened;
-  }, [data, expandedDimRows, quickFilterText, hideZeroImpressions, sortColumn, sortOrder]);
 
   // User CRUD
   const saveUser = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1204,12 +1205,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Username</label>
-                  <input required name="username" defaultValue={editingUser?.username} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Username <span className="text-slate-300 font-normal">(min 3 chars)</span></label>
+                  <input required name="username" minLength={3} defaultValue={editingUser?.username} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="username" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Password</label>
-                  <input required type="password" name="password" defaultValue={editingUser?.password} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Password <span className="text-slate-300 font-normal">(min 6 chars)</span></label>
+                  <input required type="password" name="password" minLength={6} defaultValue={editingUser?.password} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" placeholder="••••••" />
                 </div>
               </div>
               <div className="space-y-1">
