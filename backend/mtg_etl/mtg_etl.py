@@ -224,14 +224,89 @@ class MTGETL:
             self.logger.error(f"Failed to reset MTG metrics: {str(e)}")
             return False
 
-    def insert_data(self, data: List[Dict]) -> bool:
+    def _get_cf_impression_groups(self, report_date: str) -> Dict[str, int]:
         """
-        Update/UPSERT data into ClickHouse.
-        MTG data only supplements existing Clickflare data - it updates spend/metric fields
-        instead of inserting separate duplicate rows.
+        Query Clickflare data to get impressions grouped by CampaignID+AdsetID+AdsID.
+        Returns a dict keyed by 'CampaignID_AdsetID_AdsID' with total impressions as value.
 
         Args:
-            data: List of transformed rows
+            report_date: Report date string
+
+        Returns:
+            Dict: {key: total_impressions}
+        """
+        try:
+            query = f"""
+                SELECT CampaignID, AdsetID, AdsID, sum(impressions) as total_imp
+                FROM {self.ch_database}.{self.ch_table}
+                WHERE reportDate = '{report_date}'
+                AND dataSource = 'Clickflare'
+                GROUP BY CampaignID, AdsetID, AdsID
+            """
+            result = self.ch_client.query(query)
+            impression_groups = {}
+            for row in result.named_results():
+                key = f"{row['CampaignID']}_{row.get('AdsetID', '')}_{row.get('AdsID', '')}"
+                impression_groups[key] = row['total_imp']
+            return impression_groups
+        except Exception as e:
+            self.logger.error(f"Failed to query CF impression groups: {str(e)}")
+            return {}
+
+    def _get_cf_detail_rows(self, report_date: str, campaign_id: str, adset_id: str = '', ads_id: str = '') -> List[Dict]:
+        """
+        Get detailed CF rows that match the given CampaignID+AdsetID+AdsID.
+        Returns list of rows with their impressions and offer info.
+
+        Args:
+            report_date: Report date string
+            campaign_id: Campaign ID
+            adset_id: Adset ID
+            ads_id: Ads ID
+
+        Returns:
+            List of Dict with row details
+        """
+        try:
+            where_clause = f"reportDate = '{report_date}' AND CampaignID = '{campaign_id}'"
+            if adset_id and adset_id != '0':
+                where_clause += f" AND AdsetID = '{adset_id}'"
+            if ads_id and ads_id != '0':
+                where_clause += f" AND AdsID = '{ads_id}'"
+
+            query = f"""
+                SELECT CampaignID, AdsetID, AdsID, offerID, advertiserID, impressions
+                FROM {self.ch_database}.{self.ch_table}
+                WHERE {where_clause}
+                AND dataSource = 'Clickflare'
+            """
+            result = self.ch_client.query(query)
+            rows = []
+            for row in result.named_results():
+                rows.append({
+                    'CampaignID': row['CampaignID'],
+                    'AdsetID': row.get('AdsetID', ''),
+                    'AdsID': row.get('AdsID', ''),
+                    'offerID': row.get('offerID', ''),
+                    'advertiserID': row.get('advertiserID', ''),
+                    'impressions': row['impressions']
+                })
+            return rows
+        except Exception as e:
+            self.logger.error(f"Failed to query CF detail rows: {str(e)}")
+            return []
+
+    def insert_data(self, data: List[Dict]) -> bool:
+        """
+        Update ClickHouse data with MTG metrics, distributing spend by impressions ratio.
+
+        Logic:
+        1. Get CF data grouped by CampaignID+AdsetID+AdsID with total impressions
+        2. For each MTG row, find matching CF rows
+        3. Distribute MTG spend/metrics proportionally by impressions
+
+        Args:
+            data: List of transformed MTG rows
 
         Returns:
             bool: Operation success status
@@ -241,12 +316,13 @@ class MTGETL:
             return True
 
         try:
-            self.logger.info(f"Updating {len(data)} rows in {self.ch_database}.{self.ch_table}")
+            self.logger.info(f"Updating {len(data)} MTG rows with impressions-based distribution")
 
-            # Log first row for debugging
-            self.logger.debug(f"First row data: {data[0]}")
+            total_spend = sum(row.get('spend', 0) for row in data)
+            total_m_imp = sum(row.get('m_imp', 0) for row in data)
+            total_m_clicks = sum(row.get('m_clicks', 0) for row in data)
+            total_m_conv = sum(row.get('m_conv', 0) for row in data)
 
-            # For each row, try to UPDATE existing Clickflare data
             updated_count = 0
             for row in data:
                 report_date = row['reportDate']
@@ -254,25 +330,118 @@ class MTGETL:
                 adset_id = row.get('AdsetID', '')
                 ads_id = row.get('AdsID', '')
 
-                # Build UPDATE SQL to match and update existing rows (single line)
-                update_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE spend = spend + {row['spend']}, m_imp = m_imp + {row['m_imp']}, m_clicks = m_clicks + {row['m_clicks']}, m_conv = m_conv + {row['m_conv']} WHERE reportDate = '{report_date}' AND CampaignID = '{campaign_id}'"
+                mtg_spend = row.get('spend', 0)
+                mtg_imp = row.get('m_imp', 0)
+                mtg_clicks = row.get('m_clicks', 0)
+                mtg_conv = row.get('m_conv', 0)
 
-                # Add more specific filters if available
-                if adset_id and adset_id != '0':
-                    update_sql += f" AND AdsetID = '{adset_id}'"
-                if ads_id and ads_id != '0':
-                    update_sql += f" AND AdsID = '{ads_id}'"
+                # Get matching CF rows
+                cf_rows = self._get_cf_detail_rows(report_date, campaign_id, adset_id, ads_id)
 
-                result = self.ch_client.command(update_sql)
-                updated_count += 1
+                if not cf_rows:
+                    self.logger.warning(f"No matching CF rows for CampaignID={campaign_id}, AdsetID={adset_id}, AdsID={ads_id}")
+                    continue
 
-            self.logger.info(f"Data updated successfully: {updated_count} rows affected")
+                # Calculate total impressions for this group
+                total_cf_impressions = sum(r['impressions'] for r in cf_rows)
+
+                if total_cf_impressions == 0:
+                    # If no impressions, distribute evenly
+                    spend_per_row = mtg_spend / len(cf_rows)
+                    imp_per_row = mtg_imp / len(cf_rows)
+                    clicks_per_row = mtg_clicks / len(cf_rows)
+                    conv_per_row = mtg_conv / len(cf_rows)
+
+                    for cf_row in cf_rows:
+                        self._update_single_row(
+                            report_date,
+                            cf_row['CampaignID'],
+                            cf_row['AdsetID'],
+                            cf_row['AdsID'],
+                            cf_row['offerID'],
+                            cf_row['advertiserID'],
+                            spend_per_row,
+                            imp_per_row,
+                            clicks_per_row,
+                            conv_per_row
+                        )
+                        updated_count += 1
+                else:
+                    # Distribute by impressions ratio
+                    for cf_row in cf_rows:
+                        ratio = cf_row['impressions'] / total_cf_impressions
+                        spend_add = mtg_spend * ratio
+                        imp_add = mtg_imp * ratio
+                        clicks_add = mtg_clicks * ratio
+                        conv_add = mtg_conv * ratio
+
+                        self._update_single_row(
+                            report_date,
+                            cf_row['CampaignID'],
+                            cf_row['AdsetID'],
+                            cf_row['AdsID'],
+                            cf_row['offerID'],
+                            cf_row['advertiserID'],
+                            spend_add,
+                            imp_add,
+                            clicks_add,
+                            conv_add
+                        )
+                        updated_count += 1
+
+            self.logger.info(f"Data updated successfully: {updated_count} CF rows updated")
             return True
 
         except Exception as e:
             self.logger.error(f"Failed to update data: {str(e)}")
             import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+
+    def _update_single_row(self, report_date: str, campaign_id: str, adset_id: str, ads_id: str,
+                          offer_id: str, advertiser_id: str,
+                          spend_add: float, imp_add: float, clicks_add: float, conv_add: float) -> bool:
+        """
+        Update a single CF row with MTG metrics.
+
+        Args:
+            report_date: Report date
+            campaign_id: Campaign ID
+            adset_id: Adset ID
+            ads_id: Ads ID
+            offer_id: Offer ID (for precise matching)
+            advertiser_id: Advertiser ID (for precise matching)
+            spend_add: Spend to add
+            imp_add: Impressions to add
+            clicks_add: Clicks to add
+            conv_add: Conversions to add
+
+        Returns:
+            bool: Success status
+        """
+        try:
+            # Build precise WHERE clause with all available identifiers
+            where_clause = f"reportDate = '{report_date}' AND CampaignID = '{campaign_id}'"
+            if adset_id and adset_id != '0' and adset_id != '':
+                where_clause += f" AND AdsetID = '{adset_id}'"
+            if ads_id and ads_id != '0' and ads_id != '':
+                where_clause += f" AND AdsID = '{ads_id}'"
+            if offer_id and offer_id != '0' and offer_id != '':
+                where_clause += f" AND offerID = '{offer_id}'"
+            if advertiser_id and advertiser_id != '0' and advertiser_id != '':
+                where_clause += f" AND advertiserID = '{advertiser_id}'"
+
+            update_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE "
+            update_sql += f"spend = spend + {spend_add}, "
+            update_sql += f"m_imp = m_imp + {imp_add}, "
+            update_sql += f"m_clicks = m_clicks + {clicks_add}, "
+            update_sql += f"m_conv = m_conv + {conv_add} "
+            update_sql += f"WHERE {where_clause}"
+
+            self.ch_client.command(update_sql)
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to update single row: {str(e)}")
             return False
 
     def run_account(self, account: Dict, report_date: str) -> tuple[bool, int]:
