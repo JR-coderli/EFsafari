@@ -43,6 +43,7 @@ class MTGETL:
         self.media_source = self.config["etl"]["media_source"]
         self.batch_size = self.config["etl"]["batch_size"]
         self.date_offset_days = self.config["etl"]["date_offset_days"]
+        self.mtg_media_keywords = self.config["etl"].get("mtg_media_keywords", ["Mintegral", "Hastraffic"])
 
         self.ch_client = None
 
@@ -196,11 +197,7 @@ class MTGETL:
     def reset_mtg_metrics(self, report_date: str) -> bool:
         """
         Reset MTG metrics to 0 for media that use MTG spend data.
-        Only reset Mintegral and Hastraffic media - other media keep CF spend.
-
-        Media using MTG spend (contains these keywords):
-        - Mintegral (e.g., "Mintegral 2Events", "Mintegral CPL")
-        - Hastraffic (e.g., "Hastraffic (AV)")
+        Only reset media specified in mtg_media_keywords config - other media keep CF spend.
 
         Args:
             report_date: Report date to reset
@@ -209,19 +206,21 @@ class MTGETL:
             bool: Operation success status
         """
         try:
-            # Only reset Mintegral and Hastraffic media
+            # Build WHERE clause with media keywords from config
+            media_conditions = " OR ".join([f"Media LIKE '%{keyword}%'" for keyword in self.mtg_media_keywords])
+
             reset_sql = f"""
                 ALTER TABLE {self.ch_database}.{self.ch_table}
                 UPDATE spend = 0, m_imp = 0, m_clicks = 0, m_conv = 0
                 WHERE reportDate = '{report_date}'
-                AND (Media LIKE '%Mintegral%' OR Media LIKE '%Hastraffic%')
+                AND ({media_conditions})
             """
 
-            self.logger.info(f"Resetting MTG metrics for Mintegral/Hastraffic media on {report_date}")
+            self.logger.info(f"Resetting MTG metrics for media: {self.mtg_media_keywords}")
             self.logger.debug(f"SQL: {reset_sql}")
 
             self.ch_client.command(reset_sql)
-            self.logger.info("MTG metrics reset successfully (only Mintegral/Hastraffic affected)")
+            self.logger.info("MTG metrics reset successfully")
             return True
 
         except Exception as e:

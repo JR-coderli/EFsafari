@@ -48,6 +48,15 @@ etl:
   batch_size: 10000
   date_offset_days: 1  # 1 = yesterday, 0 = today
 
+  # Media that use MTG spend data (reset and update from MTG API)
+  # Media names containing these keywords will use MTG spend instead of Clickflare spend
+  mtg_media_keywords:
+    - "Mintegral"
+    - "Hastraffic"
+    # Add more media keywords here as needed
+    # Example:
+    # - "SomeOtherNetwork"
+
 # Logging Configuration
 logging:
   level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
