@@ -193,34 +193,35 @@ class MTGETL:
         except:
             return 0.0
 
-    def delete_existing_data(self, report_date: str, campaign_ids: List[str] = None) -> bool:
+    def reset_mtg_metrics(self, report_date: str) -> bool:
         """
-        Delete all existing data for the report date before inserting new data.
-        This ensures no duplicate accumulation when ETL is re-run.
+        Reset MTG metrics to 0 before updating.
+        MTG ETL runs AFTER Clickflare ETL, so we don't delete data.
+        We only reset MTG fields (spend, m_imp, m_clicks, m_conv) to 0,
+        then UPDATE them with new values.
 
         Args:
-            report_date: Report date to delete
-            campaign_ids: Ignored (kept for compatibility, delete all data for this date)
+            report_date: Report date to reset
 
         Returns:
             bool: Operation success status
         """
         try:
-            delete_sql = f"""
+            reset_sql = f"""
                 ALTER TABLE {self.ch_database}.{self.ch_table}
-                DELETE
+                UPDATE spend = 0, m_imp = 0, m_clicks = 0, m_conv = 0
                 WHERE reportDate = '{report_date}'
             """
 
-            self.logger.info(f"Deleting ALL existing data for {report_date}")
-            self.logger.debug(f"SQL: {delete_sql}")
+            self.logger.info(f"Resetting MTG metrics for {report_date}")
+            self.logger.debug(f"SQL: {reset_sql}")
 
-            self.ch_client.command(delete_sql)
-            self.logger.info("Existing data deleted successfully")
+            self.ch_client.command(reset_sql)
+            self.logger.info("MTG metrics reset successfully")
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to delete existing data: {str(e)}")
+            self.logger.error(f"Failed to reset MTG metrics: {str(e)}")
             return False
 
     def insert_data(self, data: List[Dict]) -> bool:
@@ -401,12 +402,9 @@ class MTGETL:
                 self.logger.warning("No data to insert from any account")
                 return True
 
-            # Step 4: Delete existing data
-            self.logger.info("Step 3: Deleting existing data...")
-            if all_campaign_ids:
-                self.delete_existing_data(report_date, list(all_campaign_ids))
-            else:
-                self.logger.warning("No CampaignIDs to delete, skipping delete")
+            # Step 4: Reset MTG metrics to 0 (don't delete data, CF already inserted)
+            self.logger.info("Step 3: Resetting MTG metrics...")
+            self.reset_mtg_metrics(report_date)
 
             # Step 5: Load data into ClickHouse
             self.logger.info("Step 4: Loading data into ClickHouse...")
