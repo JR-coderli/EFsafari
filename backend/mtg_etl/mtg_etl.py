@@ -369,6 +369,7 @@ class MTGETL:
                             report_date,
                             cf_row['CampaignID'],
                             cf_row['AdsetID'],
+                            cf_row['AdsID'],
                             spend_per_row,
                             imp_per_row,
                             clicks_per_row,
@@ -390,6 +391,7 @@ class MTGETL:
                             report_date,
                             cf_row['CampaignID'],
                             cf_row['AdsetID'],
+                            cf_row['AdsID'],
                             spend_add,
                             imp_add,
                             clicks_add,
@@ -406,16 +408,17 @@ class MTGETL:
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
 
-    def _update_single_row(self, report_date: str, campaign_id: str, adset_id: str,
+    def _update_single_row(self, report_date: str, campaign_id: str, adset_id: str, ads_id: str,
                           spend_add: float, imp_add: float, clicks_add: float, conv_add: float) -> bool:
         """
-        Update CF rows with MTG metrics using CampaignID + AdsetID.
-        NOTE: We don't use AdsID because MTG and CF Creative IDs don't match exactly.
+        Update a specific CF row with MTG metrics.
+        Uses AdsID to precisely match the row, avoiding duplicate updates.
 
         Args:
             report_date: Report date
             campaign_id: Campaign ID
-            adset_id: Adset ID (Offer ID)
+            adset_id: Adset ID
+            ads_id: Ads ID (from CF data, used for precise matching)
             spend_add: Spend to add
             imp_add: Impressions to add
             clicks_add: Clicks to add
@@ -425,11 +428,16 @@ class MTGETL:
             bool: Success status
         """
         try:
-            # Build WHERE clause using CampaignID + AdsetID only
+            # Build WHERE clause - use AdsID for precise matching
             where_clause = f"reportDate = '{report_date}' AND CampaignID = '{campaign_id}'"
             if adset_id and adset_id != '0' and adset_id != '':
                 where_clause += f" AND AdsetID = '{adset_id}'"
-            # NOTE: NOT using AdsID - will update ALL matching rows
+            # Use AdsID from CF to match the exact row
+            if ads_id and ads_id != '0' and ads_id != '':
+                where_clause += f" AND AdsID = '{ads_id}'"
+            else:
+                # If AdsID is empty, use isEmpty condition
+                where_clause += f" AND (AdsID = '' OR AdsID = '0' OR isEmpty(AdsID))"
 
             update_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE "
             update_sql += f"spend = spend + {spend_add}, "
