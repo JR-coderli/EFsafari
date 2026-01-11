@@ -258,7 +258,8 @@ class ClickflareETL:
 
     def delete_existing_data(self, report_date: str) -> bool:
         """
-        Delete existing data for the report date and media source
+        Delete all existing data for the report date before inserting new data.
+        This ensures no duplicate accumulation when ETL is re-run.
 
         Args:
             report_date: Report date to delete
@@ -271,10 +272,9 @@ class ClickflareETL:
                 ALTER TABLE {self.ch_database}.{self.ch_table}
                 DELETE
                 WHERE reportDate = '{report_date}'
-                AND Media = '{self.media_source}'
             """
 
-            self.logger.info(f"Deleting existing data for {report_date}, Media={self.media_source}")
+            self.logger.info(f"Deleting ALL existing data for {report_date}")
             self.logger.debug(f"SQL: {delete_sql}")
 
             self.ch_client.command(delete_sql)

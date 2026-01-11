@@ -195,36 +195,32 @@ class MTGETL:
 
     def delete_existing_data(self, report_date: str, campaign_ids: List[str] = None) -> bool:
         """
-        Reset MTG metrics to 0 before updating (idempotent operation).
-        Since MTG data supplements Clickflare, we reset MTG fields to 0 first,
-        then add new values in insert_data().
+        Delete all existing data for the report date before inserting new data.
+        This ensures no duplicate accumulation when ETL is re-run.
 
         Args:
-            report_date: Report date to reset
-            campaign_ids: List of CampaignIDs to reset (if None, reset all for this date)
+            report_date: Report date to delete
+            campaign_ids: Ignored (kept for compatibility, delete all data for this date)
 
         Returns:
             bool: Operation success status
         """
         try:
-            if campaign_ids:
-                # Reset MTG fields for specific CampaignIDs
-                campaign_ids_str = ",".join([f"'{cid}'" for cid in campaign_ids])
-                reset_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE spend = 0, m_imp = 0, m_clicks = 0, m_conv = 0 WHERE reportDate = '{report_date}' AND CampaignID IN ({campaign_ids_str})"
-                self.logger.info(f"Resetting MTG fields for {report_date} (CampaignIDs: {len(campaign_ids)} accounts)")
-            else:
-                # Reset MTG fields for all data on this date
-                reset_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE spend = 0, m_imp = 0, m_clicks = 0, m_conv = 0 WHERE reportDate = '{report_date}'"
-                self.logger.warning(f"Resetting MTG fields for ALL data on {report_date}")
+            delete_sql = f"""
+                ALTER TABLE {self.ch_database}.{self.ch_table}
+                DELETE
+                WHERE reportDate = '{report_date}'
+            """
 
-            self.logger.debug(f"SQL: {reset_sql}")
+            self.logger.info(f"Deleting ALL existing data for {report_date}")
+            self.logger.debug(f"SQL: {delete_sql}")
 
-            self.ch_client.command(reset_sql)
-            self.logger.info("MTG fields reset successfully")
+            self.ch_client.command(delete_sql)
+            self.logger.info("Existing data deleted successfully")
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to reset existing data: {str(e)}")
+            self.logger.error(f"Failed to delete existing data: {str(e)}")
             return False
 
     def insert_data(self, data: List[Dict]) -> bool:
