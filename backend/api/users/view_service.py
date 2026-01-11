@@ -123,7 +123,8 @@ class ViewService:
         update_fields = []
 
         if "name" in updates:
-            update_fields.append(f"name = '{updates['name'].replace("'", "''")}'")
+            safe_name = updates["name"].replace("'", "''")
+            update_fields.append(f"name = '{safe_name}'")
         if "dimensions" in updates:
             dim_list = "', '".join(updates["dimensions"])
             update_fields.append(f"dimensions = ['{dim_list}']")
