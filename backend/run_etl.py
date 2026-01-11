@@ -87,27 +87,39 @@ def main():
         report_date = (datetime.now() - __import__('datetime').timedelta(days=1)).strftime("%Y-%m-%d")
         print(f"No date specified, using yesterday: {report_date}")
 
-    # Run ETLs in sequence
-    success = True
+    # Run ETLs in sequence and track results
+    results = {
+        "clickflare": False,
+        "mtg": False
+    }
 
     # Step 1: Clickflare (base data)
-    if not run_clickflare_etl(report_date):
+    results["clickflare"] = run_clickflare_etl(report_date)
+    if not results["clickflare"]:
         print("\nERROR: Clickflare ETL failed!")
-        success = False
 
     # Step 2: MTG (supplemental data)
-    if not run_mtg_etl(report_date):
-        print("\nWARNING: MTG ETL failed (but Clickflare succeeded)")
-        # Don't fail the whole job if MTG fails
+    results["mtg"] = run_mtg_etl(report_date)
+    if not results["mtg"]:
+        print("\nWARNING: MTG ETL failed!")
 
+    # Summary
     print("\n" + "=" * 60)
-    if success:
+    print("ETL SUMMARY")
+    print("=" * 60)
+    print(f"Clickflare ETL: {'✓ SUCCESS' if results['clickflare'] else '✗ FAILED'}")
+    print(f"MTG ETL:        {'✓ SUCCESS' if results['mtg'] else '✗ FAILED'}")
+    print("=" * 60)
+
+    # Only report overall success if ALL ETLs succeeded
+    all_success = all(results.values())
+    if all_success:
         print("ETL completed successfully!")
     else:
         print("ETL completed with errors!")
     print("=" * 60)
 
-    sys.exit(0 if success else 1)
+    sys.exit(0 if all_success else 1)
 
 if __name__ == "__main__":
     main()
