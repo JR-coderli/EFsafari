@@ -16,6 +16,7 @@ export interface DailyBreakdown {
   conversions: number;
   spend: number;
   revenue: number;
+  profit: number;
   m_imp: number;
   m_clicks: number;
   m_conv: number;
@@ -31,6 +32,7 @@ export interface AdRow {
   conversions: number;
   spend: number;
   revenue: number;
+  profit: number;
   m_imp: number;
   m_clicks: number;
   m_conv: number;
@@ -60,7 +62,7 @@ export interface MetricConfig {
   key: keyof AdRow;
   label: string;
   visible: boolean;
-  type: 'money' | 'percent' | 'number';
+  type: 'money' | 'percent' | 'number' | 'profit';
   group?: 'Dimension' | 'Basic' | 'Calculated';
 }
 
@@ -69,6 +71,8 @@ export interface SavedView {
   name: string;
   dimensions: Dimension[];
   visibleMetrics: string[];
+  userId?: string;
+  createdAt?: string;
 }
 
 export interface UserPermission {

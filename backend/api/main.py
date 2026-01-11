@@ -14,6 +14,7 @@ import json
 from api.routers.dashboard import router as dashboard_router
 from api.routers.auth import router as auth_router
 from api.users.router import router as users_router
+from api.routers.daily_report import router as daily_report_router
 
 
 # Custom JSON encoder for datetime
@@ -69,12 +70,13 @@ app = FastAPI(
 # )
 
 # Include routers
-logger.info(f"Including routers: dashboard={dashboard_router}, auth={auth_router}, users={users_router}")
+logger.info(f"Including routers: dashboard={dashboard_router}, auth={auth_router}, users={users_router}, daily_report={daily_report_router}")
 logger.info(f"Auth router prefix: {auth_router.prefix}")
 logger.info(f"Auth router routes: {[r.path for r in auth_router.routes]}")
 app.include_router(dashboard_router)
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(daily_report_router)
 
 
 @app.get("/test")
@@ -107,7 +109,8 @@ async def root():
             "aggregate": "/api/dashboard/aggregate",
             "login": "/api/auth/login",
             "verify": "/api/auth/verify",
-            "users": "/api/users"
+            "users": "/api/users",
+            "daily_report": "/api/daily-report"
         }
     }
 

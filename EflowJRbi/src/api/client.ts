@@ -214,4 +214,133 @@ export const dashboardApi = {
   },
 };
 
+/**
+ * Daily Report API endpoints
+ */
+export const dailyReportApi = {
+  /**
+   * Get daily report data
+   */
+  async getData(params: {
+    startDate: string;
+    endDate: string;
+    media?: string;
+  }) {
+    const queryParams = buildQueryParams({
+      start_date: params.startDate,
+      end_date: params.endDate,
+      media: params.media,
+    });
+
+    return request<Array<{
+      date: string;
+      media: string;
+      impressions: number;
+      clicks: number;
+      conversions: number;
+      revenue: number;
+      spend_original: number;
+      spend_manual: number;
+      spend_final: number;
+      m_imp: number;
+      m_clicks: number;
+      m_conv: number;
+    }>>(`/daily-report/data?${queryParams}`);
+  },
+
+  /**
+   * Update spend for a specific date and media
+   */
+  async updateSpend(data: {
+    date: string;
+    media: string;
+    spend_value: number;
+  }) {
+    return request<{ success: boolean; message: string }>('/daily-report/update-spend', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Get daily report summary
+   */
+  async getSummary(params: {
+    startDate: string;
+    endDate: string;
+    media?: string;
+  }) {
+    const queryParams = buildQueryParams({
+      start_date: params.startDate,
+      end_date: params.endDate,
+      media: params.media,
+    });
+
+    return request<{
+      impressions: number;
+      clicks: number;
+      conversions: number;
+      revenue: number;
+      spend: number;
+      m_imp: number;
+      m_clicks: number;
+      m_conv: number;
+      ctr: number;
+      cvr: number;
+      roi: number;
+      cpa: number;
+    }>(`/daily-report/summary?${queryParams}`);
+  },
+
+  /**
+   * Get available media list
+   */
+  async getMediaList() {
+    return request<{ media: Array<{ name: string }> }>('/daily-report/media-list');
+  },
+
+  /**
+   * Health check
+   */
+  async health() {
+    return request<{ status: string; service: string }>('/daily-report/health');
+  },
+
+  /**
+   * Sync data from Performance table
+   */
+  async syncData(params: {
+    startDate: string;
+    endDate: string;
+  }) {
+    return request<{ success: boolean; message: string; row_count: number }>('/daily-report/sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        start_date: params.startDate,
+        end_date: params.endDate,
+      }),
+    });
+  },
+
+  /**
+   * Lock/Unlock a specific date
+   */
+  async lockDate(params: {
+    date: string;
+    lock: boolean;
+  }) {
+    return request<{ success: boolean; message: string }>('/daily-report/lock-date', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+
+  /**
+   * Get locked dates list
+   */
+  async getLockedDates() {
+    return request<{ locked_dates: string[] }>('/daily-report/locked-dates');
+  },
+};
+
 export default dashboardApi;

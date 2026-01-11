@@ -5,6 +5,7 @@ import { AdRow, Dimension, MetricConfig, SavedView, UserPermission, DailyBreakdo
 import { generateMockReport } from './mockData';
 import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoadDailyData } from './src/api/hooks';
 import { authApi, usersApi, tokenManager } from './src/api/auth';
+import { dailyReportApi } from './src/api/client';
 
 interface Filter {
   dimension: Dimension;
@@ -40,6 +41,7 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { key: 'spend', label: 'Spend', visible: true, type: 'money', group: 'Basic' },
   { key: 'conversions', label: 'Conversions', visible: true, type: 'number', group: 'Basic' },
   { key: 'revenue', label: 'Revenue', visible: true, type: 'money', group: 'Basic' },
+  { key: 'profit', label: 'Profit', visible: true, type: 'profit' as const, group: 'Basic' },
   { key: 'impressions', label: 'Impressions', visible: true, type: 'number', group: 'Basic' },
   { key: 'clicks', label: 'Clicks', visible: true, type: 'number', group: 'Basic' },
   { key: 'm_imp', label: 'm_imp', visible: true, type: 'number', group: 'Basic' },
@@ -51,10 +53,20 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { key: 'cpa', label: 'CPA', visible: true, type: 'money', group: 'Calculated' },
 ];
 
-const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number'; isSub?: boolean }> = ({ value, type, isSub }) => {
-  const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[12px] text-slate-500 font-medium' : 'text-[13px] text-slate-800 font-bold'}`;
+const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number' | 'profit'; isSub?: boolean }> = ({ value, type, isSub }) => {
   const displayValue = isFinite(value) ? value : 0;
-  if (type === 'money') return <span className={baseClasses}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+
+  // Only profit type gets color (positive=green, negative=red)
+  let colorClasses = '';
+  if (!isSub && type === 'profit') {
+    if (displayValue > 0) colorClasses = 'text-emerald-600';
+    else if (displayValue < 0) colorClasses = 'text-rose-600';
+    else colorClasses = 'text-slate-800';
+  }
+
+  const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[12px] text-slate-500 font-medium' : `text-[13px] ${colorClasses} font-bold`}`;
+
+  if (type === 'money' || type === 'profit') return <span className={baseClasses}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
   if (type === 'percent') return <span className={baseClasses}>{(displayValue * 100).toFixed(2)}%</span>;
   return <span className={baseClasses}>{Math.floor(displayValue).toLocaleString()}</span>;
 };
@@ -260,6 +272,366 @@ const DatePicker: React.FC<{ onRangeChange: (range: string, start?: Date, end?: 
   );
 };
 
+// Daily Report Page Component
+interface DailyReportPageProps {
+  selectedRange: string;
+  customDateStart: Date | undefined;
+  customDateEnd: Date | undefined;
+  onRangeChange: (range: string, start?: Date, end?: Date) => void;
+  currentUser: UserPermission;
+}
+
+const DailyReportPage: React.FC<DailyReportPageProps> = ({ selectedRange, customDateStart, customDateEnd, onRangeChange, currentUser }) => {
+  const [data, setData] = useState<Array<{
+    date: string;
+    media: string;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    revenue: number;
+    spend_original: number;
+    spend_manual: number;
+    spend_final: number;
+    m_imp: number;
+    m_clicks: number;
+    m_conv: number;
+    is_locked?: number;
+  }>>([]);
+  const [summary, setSummary] = useState<any>(null);
+  const [mediaList, setMediaList] = useState<Array<{ name: string }>>([]);
+  const [selectedMedia, setSelectedMedia] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editingSpend, setEditingSpend] = useState<{ date: string; media: string } | null>(null);
+  const [lockedDates, setLockedDates] = useState<Set<string>>(new Set());
+  const [showSyncModal, setShowSyncModal] = useState(false);
+
+  // Calculate date range
+  const dateInfo = useMemo(() => getRangeInfo(selectedRange, customDateStart, customDateEnd), [selectedRange, customDateStart, customDateEnd]);
+  const startDate = dateInfo.start.toISOString().split('T')[0];
+  const endDate = dateInfo.end.toISOString().split('T')[0];
+
+  // Load data
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [dataResult, summaryResult, mediaResult] = await Promise.all([
+          dailyReportApi.getData({ startDate, endDate, media: selectedMedia || undefined }),
+          dailyReportApi.getSummary({ startDate, endDate, media: selectedMedia || undefined }),
+          dailyReportApi.getMediaList(),
+        ]);
+        setData(dataResult);
+        setSummary(summaryResult);
+        setMediaList(mediaResult.media);
+      } catch (err) {
+        console.error('Error loading daily report:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [startDate, endDate, selectedMedia]);
+
+  // Handle spend edit
+  const handleSpendClick = (row: typeof data[0]) => {
+    setEditingSpend({ date: row.date, media: row.media });
+  };
+
+  const handleSpendSave = async (newValue: string) => {
+    if (!editingSpend) return;
+    const spendValue = parseFloat(newValue);
+    if (isNaN(spendValue)) {
+      alert('Invalid value');
+      return;
+    }
+
+    try {
+      await dailyReportApi.updateSpend({
+        date: editingSpend.date,
+        media: editingSpend.media,
+        spend_value: spendValue,
+      });
+      // Reload data
+      const [dataResult, summaryResult] = await Promise.all([
+        dailyReportApi.getData({ startDate, endDate, media: selectedMedia || undefined }),
+        dailyReportApi.getSummary({ startDate, endDate, media: selectedMedia || undefined }),
+      ]);
+      setData(dataResult);
+      setSummary(summaryResult);
+      setEditingSpend(null);
+    } catch (err) {
+      alert('Failed to update spend: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
+
+  // Load locked dates
+  useEffect(() => {
+    const loadLockedDates = async () => {
+      try {
+        const result = await dailyReportApi.getLockedDates();
+        setLockedDates(new Set(result.locked_dates));
+      } catch (err) {
+        console.error('Error loading locked dates:', err);
+      }
+    };
+    loadLockedDates();
+  }, []);
+
+  // Handle sync data
+  const handleSyncData = async () => {
+    setSyncing(true);
+    try {
+      const result = await dailyReportApi.syncData({ startDate, endDate });
+      alert(result.message);
+      // Reload data
+      const [dataResult, summaryResult] = await Promise.all([
+        dailyReportApi.getData({ startDate, endDate, media: selectedMedia || undefined }),
+        dailyReportApi.getSummary({ startDate, endDate, media: selectedMedia || undefined }),
+      ]);
+      setData(dataResult);
+      setSummary(summaryResult);
+    } catch (err) {
+      alert('Sync failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setSyncing(false);
+      setShowSyncModal(false);
+    }
+  };
+
+  // Handle lock/unlock date
+  const handleToggleLock = async (date: string) => {
+    const isCurrentlyLocked = lockedDates.has(date);
+    const newLockState = !isCurrentlyLocked;
+
+    if (!confirm(`${newLockState ? 'Lock' : 'Unlock'} date ${date}?`)) return;
+
+    try {
+      await dailyReportApi.lockDate({ date, lock: newLockState });
+      // Update locked dates
+      if (newLockState) {
+        setLockedDates(prev => new Set(prev).add(date));
+      } else {
+        setLockedDates(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(date);
+          return newSet;
+        });
+      }
+    } catch (err) {
+      alert('Failed to toggle lock: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
+
+  // Calculate summary for filtered data
+  const filteredSummary = useMemo(() => {
+    const total = data.reduce((acc, row) => ({
+      impressions: acc.impressions + row.impressions,
+      clicks: acc.clicks + row.clicks,
+      conversions: acc.conversions + row.conversions,
+      spend: acc.spend + row.spend_final,
+      revenue: acc.revenue + row.revenue,
+    }), { impressions: 0, clicks: 0, conversions: 0, spend: 0, revenue: 0 });
+
+    return {
+      ...total,
+      ctr: total.clicks / (total.impressions || 1),
+      cvr: total.conversions / (total.clicks || 1),
+      roi: (total.revenue - total.spend) / (total.spend || 1),
+    };
+  }, [data]);
+
+  return (
+    <div className="flex-1 flex flex-col bg-white min-w-0">
+      {/* Summary Cards */}
+      <div className="px-8 py-6 border-b border-slate-100 bg-slate-50">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <h3 className="text-lg font-black uppercase italic tracking-tighter">Daily Report Summary</h3>
+            {(currentUser.role === 'admin' || currentUser.role === 'ops') && (
+              <button
+                onClick={() => setShowSyncModal(true)}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold uppercase hover:bg-indigo-700 transition-all flex items-center gap-1"
+                disabled={syncing}
+              >
+                <i className={`fas ${syncing ? 'fa-spinner fa-spin' : 'fa-sync-alt'}`}></i>
+                {syncing ? 'Syncing...' : 'Sync Data'}
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedMedia}
+              onChange={(e) => setSelectedMedia(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              <option value="">All Media</option>
+              {mediaList.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-6 gap-4">
+          {[
+            { label: 'Impressions', value: filteredSummary.impressions, type: 'number' as const, color: 'indigo' },
+            { label: 'Clicks', value: filteredSummary.clicks, type: 'number' as const, color: 'blue' },
+            { label: 'Conversions', value: filteredSummary.conversions, type: 'number' as const, color: 'purple' },
+            { label: 'Spend', value: filteredSummary.spend, type: 'money' as const, color: 'rose' },
+            { label: 'Revenue', value: filteredSummary.revenue, type: 'money' as const, color: 'emerald' },
+            { label: 'ROI', value: filteredSummary.roi, type: 'percent' as const, color: 'amber' },
+          ].map((card) => (
+            <div key={card.label} className={`bg-${card.color}-50 border border-${card.color}-100 rounded-2xl p-4`}>
+              <div className={`text-[10px] font-black uppercase text-${card.color}-500 tracking-widest mb-1`}>{card.label}</div>
+              <div className={`text-xl font-black text-${card.color}-700`}>
+                <MetricValue value={card.value} type={card.type} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Data Table */}
+      <div className="flex-1 overflow-auto">
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-slate-400">Loading...</div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-rose-500">{error}</div>
+          </div>
+        ) : (
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 sticky top-0 z-10">
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">Media</th>
+                <th className="px-4 py-3 text-right">Impressions</th>
+                <th className="px-4 py-3 text-right">Clicks</th>
+                <th className="px-4 py-3 text-right">Conversions</th>
+                <th className="px-4 py-3 text-right">Spend (Editable)</th>
+                <th className="px-4 py-3 text-right">Revenue</th>
+                <th className="px-4 py-3 text-right">ROI</th>
+                {(currentUser.role === 'admin' || currentUser.role === 'ops') && (
+                  <th className="px-4 py-3 text-center">Lock</th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {data.map((row, idx) => {
+                const isLocked = lockedDates.has(row.date);
+                return (
+                <tr key={`${row.date}-${row.media}`} className={`hover:bg-indigo-50/40 transition-colors ${isLocked ? 'bg-amber-50/30' : ''}`}>
+                  <td className="px-4 py-3 text-xs font-bold text-slate-600">{row.date}</td>
+                  <td className="px-4 py-3 text-xs font-bold text-slate-800">{row.media}</td>
+                  <td className="px-4 py-3 text-right"><MetricValue value={row.impressions} type="number" /></td>
+                  <td className="px-4 py-3 text-right"><MetricValue value={row.clicks} type="number" /></td>
+                  <td className="px-4 py-3 text-right"><MetricValue value={row.conversions} type="number" /></td>
+                  <td
+                    className="px-4 py-3 text-right cursor-pointer hover:bg-indigo-100 transition-colors group relative"
+                    onClick={() => handleSpendClick(row)}
+                  >
+                    {editingSpend?.date === row.date && editingSpend?.media === row.media ? (
+                      <input
+                        type="number"
+                        autoFocus
+                        defaultValue={row.spend_manual}
+                        onBlur={(e) => handleSpendSave(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSpendSave((e.target as HTMLInputElement).value);
+                          if (e.key === 'Escape') setEditingSpend(null);
+                        }}
+                        className="w-24 px-2 py-1 bg-white border border-indigo-500 rounded text-right text-xs font-bold outline-none"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className={row.spend_manual !== 0 ? 'text-amber-600 font-bold' : ''}>
+                        <MetricValue value={row.spend_final} type="money" />
+                      </span>
+                    )}
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
+                  </td>
+                  <td className="px-4 py-3 text-right"><MetricValue value={row.revenue} type="money" /></td>
+                  <td className="px-4 py-3 text-right">
+                    <MetricValue value={row.spend_final > 0 ? (row.revenue - row.spend_final) / row.spend_final : 0} type="percent" />
+                  </td>
+                  {(currentUser.role === 'admin' || currentUser.role === 'ops') && (
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleToggleLock(row.date)}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                          isLocked
+                            ? 'bg-amber-100 text-amber-600 hover:bg-amber-200'
+                            : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                        }`}
+                        title={isLocked ? 'Unlock this date' : 'Lock this date'}
+                      >
+                        <i className={`fas ${isLocked ? 'fa-lock' : 'fa-lock-open'} text-xs`}></i>
+                      </button>
+                    </td>
+                  )}
+                </tr>
+                );
+              })}
+            </tbody>
+            <tfoot className="bg-indigo-600 sticky bottom-0 z-10 border-t-2 border-indigo-700">
+              <tr>
+                <td className="px-4 py-3 font-bold text-white text-xs" colSpan={2}>
+                  <i className="fas fa-calculator mr-2"></i>TOTAL
+                </td>
+                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.impressions} type="number" /></td>
+                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.clicks} type="number" /></td>
+                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.conversions} type="number" /></td>
+                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.spend} type="money" /></td>
+                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.revenue} type="money" /></td>
+                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.roi} type="percent" /></td>
+                {(currentUser.role === 'admin' || currentUser.role === 'ops') && <td className="px-4 py-3 bg-indigo-600"></td>}
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
+      {/* Sync Confirmation Modal */}
+      {showSyncModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowSyncModal(false)}></div>
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter mb-4">
+              <i className="fas fa-sync-alt mr-2 text-indigo-600"></i>Sync Data from Performance
+            </h3>
+            <p className="text-sm text-slate-600 mb-6">
+              将从 Performance 表同步数据到 Daily Report 表。<br />
+              <span className="text-amber-600 font-bold">注意：</span>已锁定的日期不会被覆盖。
+            </p>
+            <div className="bg-slate-50 rounded-xl p-4 mb-6">
+              <div className="text-xs text-slate-500 mb-2">同步范围：</div>
+              <div className="font-bold text-slate-700">{startDate} 至 {endDate}</div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowSyncModal(false)}
+                className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-slate-200 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSyncData}
+                disabled={syncing}
+                className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {syncing ? 'Syncing...' : 'Confirm Sync'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const LoginPage: React.FC<{ onLogin: (user: UserPermission) => void }> = ({ onLogin }) => {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('password');
@@ -340,7 +712,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [useMock, setUseMock] = useState(false);  // Fallback to mock if API fails
   const [activeDims, setActiveDims] = useState<Dimension[]>(['platform', 'offer']);
   const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
-  const [currentPage, setCurrentPage] = useState<'performance' | 'permissions'>('performance');
+  const [currentPage, setCurrentPage] = useState<'performance' | 'permissions' | 'daily_report'>('performance');
   const [activeFilters, setActiveFilters] = useState<Filter[]>([]);
   const [expandedDailyRows, setExpandedDailyRows] = useState<Set<string>>(new Set());
   const [expandedDimRows, setExpandedDimRows] = useState<Set<string>>(new Set());
@@ -466,6 +838,40 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     return flattened;
   }, [data, expandedDimRows, quickFilterText, hideZeroImpressions, sortColumn, sortOrder]);
 
+  // Calculate summary data for all filtered rows
+  const summaryData = useMemo(() => {
+    const summary = {
+      impressions: 0, clicks: 0, conversions: 0,
+      spend: 0, revenue: 0, profit: 0, m_imp: 0, m_clicks: 0, m_conv: 0,
+    };
+    filteredAndFlattenedData.forEach(row => {
+      summary.impressions += row.impressions || 0;
+      summary.clicks += row.clicks || 0;
+      summary.conversions += row.conversions || 0;
+      summary.spend += row.spend || 0;
+      summary.revenue += row.revenue || 0;
+      summary.profit += row.profit || 0;
+      summary.m_imp += row.m_imp || 0;
+      summary.m_clicks += row.m_clicks || 0;
+      summary.m_conv += row.m_conv || 0;
+    });
+    // Calculate derived metrics
+    return {
+      ...summary,
+      ctr: summary.clicks / (summary.impressions || 1),
+      cvr: summary.conversions / (summary.clicks || 1),
+      roi: summary.revenue > 0 ? (summary.revenue - summary.spend) / (summary.spend || 1) : 0,
+      cpa: summary.spend / (summary.conversions || 1),
+      rpa: summary.revenue / (summary.conversions || 1),
+      epc: summary.revenue / (summary.clicks || 1),
+      epv: summary.revenue / (summary.impressions || 1),
+      m_epc: summary.revenue / (summary.m_clicks || 1),
+      m_epv: summary.revenue / (summary.m_imp || 1),
+      m_cpc: summary.spend / (summary.m_clicks || 1),
+      m_cpv: summary.spend / (summary.m_imp || 1),
+    };
+  }, [filteredAndFlattenedData]);
+
   // Paginated data
   const paginatedData = useMemo(() => {
     const startIndex = (paginationPage - 1) * rowsPerPage;
@@ -533,11 +939,14 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
-  const STORAGE_KEY = 'ad_tech_saved_views_v3';
+  // 用户专属的存储键
+  const getUserStorageKey = (userId: string) => `ad_tech_saved_views_user_${userId}`;
+  const STORAGE_KEY = getUserStorageKey(currentUser.id);
 
   const [savedViews, setSavedViews] = useState<SavedView[]>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const userKey = getUserStorageKey(currentUser.id);
+      const saved = localStorage.getItem(userKey);
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
@@ -620,10 +1029,18 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     e.stopPropagation();
     const viewName = prompt("Save Current View As:");
     if (!viewName || viewName.trim() === "") return;
-    const newView = { id: "view_" + Date.now(), name: viewName.trim(), dimensions: [...activeDims], visibleMetrics: metrics.filter(m => m.visible).map(m => m.key as string) };
+    const newView = {
+      id: "view_" + Date.now(),
+      name: viewName.trim(),
+      dimensions: [...activeDims],
+      visibleMetrics: metrics.filter(m => m.visible).map(m => m.key as string),
+      userId: currentUser.id,
+      createdAt: new Date().toISOString()
+    };
     setSavedViews(prev => {
       const updated = [...prev, newView];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      const userKey = getUserStorageKey(currentUser.id);
+      localStorage.setItem(userKey, JSON.stringify(updated));
       return updated;
     });
     setShowViewList(false);
@@ -653,7 +1070,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     if (!window.confirm("Delete this saved view?")) return;
     setSavedViews(prev => {
       const updated = prev.filter(v => v.id !== id);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      const userKey = getUserStorageKey(currentUser.id);
+      localStorage.setItem(userKey, JSON.stringify(updated));
       return updated;
     });
   };
@@ -891,6 +1309,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             <i className="fas fa-chart-bar w-5 text-center"></i>
             {isSidebarOpen && <span className="text-sm font-bold">Performance</span>}
           </button>
+          <button onClick={() => setCurrentPage('daily_report')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'daily_report' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
+            <i className="fas fa-calendar-day w-5 text-center"></i>
+            {isSidebarOpen && <span className="text-sm font-bold">Daily Report</span>}
+          </button>
           <button onClick={() => setCurrentPage('permissions')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'permissions' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
             <i className="fas fa-user-shield w-5 text-center"></i>
             {isSidebarOpen && <span className="text-sm font-bold">Permissions</span>}
@@ -908,8 +1330,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 z-40 shadow-sm shrink-0">
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors"><i className="fas fa-bars"></i></button>
-            <h2 className="font-extrabold text-slate-800 tracking-tight ml-2 uppercase italic text-sm">{currentPage === 'performance' ? 'Analytics Data' : 'Permissions'}</h2>
-            {currentPage === 'performance' && <DatePicker onRangeChange={(range, start, end) => { setSelectedRange(range); setCustomDateStart(start); setCustomDateEnd(end); }} currentDisplay={dateDisplayString} currentRange={selectedRange} />}
+            <h2 className="font-extrabold text-slate-800 tracking-tight ml-2 uppercase italic text-sm">
+              {currentPage === 'performance' ? 'Analytics Data' : currentPage === 'daily_report' ? 'Daily Report' : 'Permissions'}
+            </h2>
+            {(currentPage === 'performance' || currentPage === 'daily_report') && (
+              <DatePicker onRangeChange={(range, start, end) => { setSelectedRange(range); setCustomDateStart(start); setCustomDateEnd(end); }} currentDisplay={dateDisplayString} currentRange={selectedRange} />
+            )}
             {/* Data source indicator */}
             {currentPage === 'performance' && (
               <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold ${useMock ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -1008,8 +1434,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
               <div className="flex-1 overflow-auto">
                 <table ref={tableRef} className="w-full text-left border-collapse" style={{ minWidth: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 200 }}>
                   <thead>
-                    <tr className="bg-slate-50/70 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 shadow-sm sticky top-0 z-20">
-                      <th className="px-4 py-4 sticky left-0 bg-slate-50 z-30 border-r border-slate-100 relative" style={{ width: columnWidths.hierarchy }}>
+                    <tr className="bg-slate-50/95 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 shadow-sm sticky top-0 z-50 backdrop-blur-sm">
+                      <th className="px-4 py-4 sticky left-0 bg-slate-50/95 z-[60] border-r border-slate-200 relative" style={{ width: columnWidths.hierarchy }}>
                         Grouping Hierarchy
                         <div
                           className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500 ${resizingColumn === 'hierarchy' ? 'bg-indigo-500' : 'bg-transparent'}`}
@@ -1062,12 +1488,51 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                 </table>
               </div>
 
-              {/* Pagination */}
+              {/* Summary Row - Integrated with Pagination */}
               {totalRows > 0 && (
-                <div className="border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between shrink-0">
-                  <div className="text-[11px] text-slate-500">
-                    Showing <span className="font-bold text-slate-700">{Math.min((paginationPage - 1) * rowsPerPage + 1, totalRows)}</span> to <span className="font-bold text-slate-700">{Math.min(paginationPage * rowsPerPage, totalRows)}</span> of <span className="font-bold text-slate-700">{totalRows}</span> rows
+                <>
+                  {/* Summary Bar */}
+                  <div className="border-t border-slate-200 bg-slate-50 px-6 py-2 flex items-center gap-6 shrink-0 overflow-x-auto">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest shrink-0">Summary:</span>
+                    <div className="flex items-center gap-4 text-xs">
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 font-bold">Imp:</span>
+                        <span className="font-mono font-bold text-slate-700">{Math.floor(summaryData.impressions).toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 font-bold">Click:</span>
+                        <span className="font-mono font-bold text-slate-700">{Math.floor(summaryData.clicks).toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 font-bold">Conv:</span>
+                        <span className="font-mono font-bold text-slate-700">{Math.floor(summaryData.conversions).toLocaleString()}</span>
+                      </div>
+                      <div className="w-px h-4 bg-slate-200"></div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 font-bold">Spend:</span>
+                        <span className="font-mono font-bold text-slate-700">${summaryData.spend.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 font-bold">Rev:</span>
+                        <span className="font-mono font-bold text-slate-700">${summaryData.revenue.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 font-bold">Profit:</span>
+                        <span className={`font-mono font-bold ${summaryData.profit > 0 ? 'text-emerald-600' : summaryData.profit < 0 ? 'text-rose-600' : 'text-slate-700'}`}>${summaryData.profit.toFixed(2)}</span>
+                      </div>
+                      <div className="w-px h-4 bg-slate-200"></div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-slate-400 font-bold">ROI:</span>
+                        <span className="font-mono font-bold text-slate-700">{(summaryData.roi * 100).toFixed(2)}%</span>
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Pagination Bar */}
+                  <div className="border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between shrink-0">
+                    <div className="text-[11px] text-slate-500">
+                      Showing <span className="font-bold text-slate-700">{Math.min((paginationPage - 1) * rowsPerPage + 1, totalRows)}</span> to <span className="font-bold text-slate-700">{Math.min(paginationPage * rowsPerPage, totalRows)}</span> of <span className="font-bold text-slate-700">{totalRows}</span> rows
+                    </div>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => setPaginationPage(1)}
@@ -1120,9 +1585,22 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     </button>
                   </div>
                 </div>
+                </>
               )}
             </div>
           </>
+        ) : currentPage === 'daily_report' ? (
+          <DailyReportPage
+            selectedRange={selectedRange}
+            customDateStart={customDateStart}
+            customDateEnd={customDateEnd}
+            onRangeChange={(range, start, end) => {
+              setSelectedRange(range);
+              setCustomDateStart(start);
+              setCustomDateEnd(end);
+            }}
+            currentUser={currentUser}
+          />
         ) : (
           <div className="flex-1 p-12 overflow-auto bg-slate-50/50">
              <div className="max-w-6xl mx-auto space-y-6">

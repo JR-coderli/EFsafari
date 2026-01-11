@@ -92,6 +92,7 @@ export async function loadRootData(
     return response.data.map(row => ({
       ...row,
       dimensionType: row.dimensionType as Dimension,
+      profit: (row.revenue || 0) - (row.spend || 0),
       hasChild: currentLevel < activeDims.length - 1,
     }));
   } catch (error) {
@@ -133,6 +134,7 @@ export async function loadChildData(
     return response.data.map(row => ({
       ...row,
       dimensionType: row.dimensionType as Dimension,
+      profit: (row.revenue || 0) - (row.spend || 0),
       hasChild: currentLevel + 1 < activeDims.length,
     }));
   } catch (error) {
@@ -168,6 +170,7 @@ export async function loadDailyData(
       conversions: day.conversions,
       spend: day.spend,
       revenue: day.revenue,
+      profit: (day.revenue || 0) - (day.spend || 0),
       m_imp: day.m_imp,
       m_clicks: day.m_clicks,
       m_conv: day.m_conv,
