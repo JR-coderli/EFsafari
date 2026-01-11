@@ -134,7 +134,6 @@ def main():
     print(f"  - Revenue:       ${results['clickflare']['revenue']:,.2f}")
     print(f"MTG ETL:           {'✓ SUCCESS' if results['mtg']['success'] else '✗ FAILED'}")
     print(f"  - Spend:         ${results['mtg']['spend']:,.2f}")
-    print(f"  - Total:         ${results['clickflare']['revenue'] + results['mtg']['spend']:,.2f}")
     print("=" * 60)
 
     # Only report overall success if ALL ETLs succeeded
