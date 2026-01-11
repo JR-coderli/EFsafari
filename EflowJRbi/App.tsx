@@ -754,6 +754,15 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     setPaginationPage(1);
   }, [activeFilters, quickFilterText, selectedRange, customDateStart, customDateEnd]);
 
+  // Reset mock mode when currentUser changes (user just logged in)
+  useEffect(() => {
+    if (useMock) {
+      console.log('User logged in, switching back to live API');
+      setUseMock(false);
+      setError(null);
+    }
+  }, [currentUser.id]);
+
   // Column resize handlers
   const handleResizeStart = (columnKey: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -791,9 +800,27 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
   // Filter and flatten data before pagination
   const filteredAndFlattenedData = useMemo(() => {
-    const flatten = (rows: AdRow[], isChild: boolean = false): AdRow[] => {
+    // Sort function - sorts a single level of rows
+    const sortRows = (rows: AdRow[]): AdRow[] => {
+      if (!sortColumn || !sortOrder) return rows;
+      return [...rows].sort((a, b) => {
+        const aVal = a[sortColumn] as number;
+        const bVal = b[sortColumn] as number;
+        if (sortOrder === 'asc') {
+          return aVal - bVal;
+        } else {
+          return bVal - aVal;
+        }
+      });
+    };
+
+    // Flatten while sorting each level independently
+    const flatten = (rows: AdRow[]): AdRow[] => {
+      // Sort the current level
+      const sortedRows = sortRows(rows);
       const results: AdRow[] = [];
-      rows.forEach(row => {
+
+      sortedRows.forEach(row => {
         // Apply quickFilterText only to top-level rows (not expanded children)
         const matchesFilter = !quickFilterText || row.name.toLowerCase().includes(quickFilterText.toLowerCase());
         // Hide rows with zero impressions
@@ -803,39 +830,30 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           results.push(row);
         }
 
-        // Always include expanded children (don't filter them by quickFilterText)
+        // Include expanded children - sort each child group independently
         if (expandedDimRows.has(row.id) && row.children) {
-          const childRows = row.children || [];
-          // For children, only filter by impressions, not by quickFilterText
+          let childRows = row.children || [];
+          // Filter by impressions first
+          childRows = childRows.filter(child => !hideZeroImpressions || child.impressions > 0);
+          // Sort the children
+          childRows = sortRows(childRows);
           childRows.forEach(child => {
-            if (!hideZeroImpressions || child.impressions > 0) {
-              results.push(child);
-              // Include grandchildren if also expanded
-              if (expandedDimRows.has(child.id) && child.children) {
-                results.push(...flatten(child.children, true));
-              }
+            results.push(child);
+            // Include grandchildren if also expanded - sort them too
+            if (expandedDimRows.has(child.id) && child.children) {
+              let grandchildRows = child.children.filter(gc => !hideZeroImpressions || gc.impressions > 0);
+              grandchildRows = sortRows(grandchildRows);
+              grandchildRows.forEach(grandchild => {
+                results.push(grandchild);
+              });
             }
           });
         }
       });
       return results;
     };
-    const flattened = flatten(data);
 
-    // Apply sorting
-    if (sortColumn && sortOrder) {
-      const sorted = [...flattened].sort((a, b) => {
-        const aVal = a[sortColumn] as number;
-        const bVal = b[sortColumn] as number;
-        if (sortOrder === 'asc') {
-          return aVal - bVal;
-        } else {
-          return bVal - aVal;
-        }
-      });
-      return sorted;
-    }
-    return flattened;
+    return flatten(data);
   }, [data, expandedDimRows, quickFilterText, hideZeroImpressions, sortColumn, sortOrder]);
 
   // Calculate summary data for all filtered rows
@@ -1000,20 +1018,32 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     } catch (err) {
       console.error('Error loading data:', err);
       const errorMsg = err instanceof Error ? err.message : 'Failed to load data';
-      setError(errorMsg);
 
-      // Auto-fallback to mock on API error
-      if (!useMock) {
-        console.log('API unavailable, falling back to mock data');
-        setUseMock(true);
-        // Retry with mock
-        setTimeout(() => {
-          loadRootData();
-        }, 100);
+      // Only show error if not using mock
+      if (useMock) {
+        setError(errorMsg);
+        setLoading(false);
         return;
       }
-    } finally {
+
+      // Check if it's an auth error (401) - don't fallback to mock for auth errors
+      if (errorMsg.includes('Not authenticated') || errorMsg.includes('401')) {
+        setError('Please login to access data');
+        setLoading(false);
+        return;
+      }
+
+      setError(errorMsg);
+
+      // Auto-fallback to mock on other API errors
+      console.log('API unavailable, falling back to mock data');
+      setUseMock(true);
       setLoading(false);
+      return;
+    } finally {
+      if (!useMock) {
+        setLoading(false);
+      }
     }
   }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentUser, useMock]);
 
@@ -1457,17 +1487,19 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {loading ? <tr><td colSpan={30} className="px-8 py-10"><div className="h-10 bg-slate-50 rounded-2xl w-full animate-pulse"></div></td></tr> : paginatedData.map(row => (
+                    {loading ? <tr><td colSpan={30} className="px-8 py-10"><div className="h-10 bg-slate-50 rounded-2xl w-full animate-pulse"></div></td></tr> : paginatedData.map((row, idx) => {
+                      const isExpanded = expandedDimRows.has(row.id);
+                      return (
                       <React.Fragment key={row.id}>
-                        <tr className="hover:bg-indigo-50/40 transition-all cursor-pointer group" onClick={() => {
-                          const nextFilters = row.id.split('|').map((v, i) => ({ dimension: activeDims[i], value: v }));
-                          setActiveFilters(nextFilters);
-                          setQuickFilterText('');
-                        }}>
+                        <tr className="hover:bg-indigo-50/40 transition-all cursor-pointer group">
                           <td className="px-4 py-3 sticky left-0 bg-white z-10 border-r border-slate-50" style={{ paddingLeft: `${row.level * 20 + 32}px`, width: columnWidths.hierarchy }}>
-                            <div className="flex items-center gap-2">
-                              <button onClick={(e) => toggleDailyBreakdown(e, row.id)} className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${expandedDailyRows.has(row.id) ? 'bg-indigo-600 shadow-sm' : 'bg-slate-100'}`}><div className={`w-1.5 h-1.5 rounded-full ${expandedDailyRows.has(row.id) ? 'bg-white' : 'bg-slate-400'}`}></div></button>
-                              {row.hasChild && <button onClick={(e) => toggleDimExpansion(e, row)} className={`w-6 h-6 rounded flex items-center justify-center transition-all bg-slate-50 border border-slate-100 text-slate-400 ${expandedDimRows.has(row.id) ? 'rotate-90' : ''}`}><i className="fas fa-chevron-right text-[10px]"></i></button>}
+                            <div className="flex items-center gap-2" onClick={() => {
+                              const nextFilters = row.id.split('|').map((v, i) => ({ dimension: activeDims[i], value: v }));
+                              setActiveFilters(nextFilters);
+                              setQuickFilterText('');
+                            }}>
+                              <button onClick={(e) => { e.stopPropagation(); toggleDailyBreakdown(e, row.id); }} className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${expandedDailyRows.has(row.id) ? 'bg-indigo-600 shadow-sm' : 'bg-slate-100'}`}><div className={`w-1.5 h-1.5 rounded-full ${expandedDailyRows.has(row.id) ? 'bg-white' : 'bg-slate-400'}`}></div></button>
+                              {row.hasChild && <button onClick={(e) => { e.stopPropagation(); toggleDimExpansion(e, row); }} className={`w-6 h-6 rounded flex items-center justify-center transition-all bg-slate-50 border border-slate-100 text-slate-400 ${isExpanded ? 'rotate-90' : ''}`}><i className="fas fa-chevron-right text-[10px]"></i></button>}
                               <div className="flex flex-col min-w-0">
                                 <span className="text-[13px] font-black text-slate-800 truncate group-hover:text-indigo-600">{row.name}</span>
                                 <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label}</span>
@@ -1483,7 +1515,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                           </tr>
                         ))}
                       </React.Fragment>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
