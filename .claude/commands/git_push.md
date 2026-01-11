@@ -4,7 +4,7 @@ execution: python E:/code/bicode/.claude/commands/git_push.py
 ---
 
 Push all changes to GitHub repository with an auto-generated commit message including the current timestamp.
-
+注意不要漏文件，以及推动到main上
 Steps performed:
 1. Add all changes to git staging area
 2. Create commit with auto-generated message (format: "YYYY年MM月DD日 HH:MM:SS")

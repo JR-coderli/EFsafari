@@ -17,7 +17,28 @@
       "Bash(git push:*)",
       "WebSearch",
       "Bash(find:*)",
-      "Bash(wmic:*)"
+      "Bash(wmic:*)",
+      "Bash(tasklist:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJfaWQiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc2ODE1OTQzMX0.RQpnvBZ34raaIrd2o25hZMK1t74uj1y43LJyu47YOIM\")",
+      "Bash(for pid in 18940 22576 36644 35756 34904 30852)",
+      "Bash(do taskkill /F /PID $pid)",
+      "Bash(done sleep 2 netstat -ano)",
+      "Bash(for:*)",
+      "Bash(done)",
+      "Bash(powershell:*)",
+      "Bash(findstr:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "Bash(git commit:*)",
+      "Bash(git log:*)",
+      "Bash(while read f)",
+      "Bash(do if ! git ls-files --error-unmatch \"$f\")",
+      "Bash(then echo \"$f\" fi done)",
+      "Bash(git restore:*)",
+      "Bash(ss:*)",
+      "Bash(ssh:*)",
+      "Bash(tree:*)",
+      "Bash(uvicorn:*)"
     ]
   }
 }
