@@ -253,16 +253,15 @@ class MTGETL:
             self.logger.error(f"Failed to query CF impression groups: {str(e)}")
             return {}
 
-    def _get_cf_detail_rows(self, report_date: str, campaign_id: str, adset_id: str = '', ads_id: str = '') -> List[Dict]:
+    def _get_cf_detail_rows(self, report_date: str, campaign_id: str, adset_id: str = '') -> List[Dict]:
         """
-        Get detailed CF rows that match the given CampaignID+AdsetID+AdsID.
-        Returns list of rows with their impressions and offer info.
+        Get detailed CF rows that match the given CampaignID+AdsetID.
+        NOTE: We don't use AdsID because MTG and CF Creative IDs may not match exactly.
 
         Args:
             report_date: Report date string
             campaign_id: Campaign ID
-            adset_id: Adset ID
-            ads_id: Ads ID
+            adset_id: Adset ID (Offer ID in MTG)
 
         Returns:
             List of Dict with row details
@@ -271,15 +270,16 @@ class MTGETL:
             where_clause = f"reportDate = '{report_date}' AND CampaignID = '{campaign_id}'"
             if adset_id and adset_id != '0':
                 where_clause += f" AND AdsetID = '{adset_id}'"
-            if ads_id and ads_id != '0':
-                where_clause += f" AND AdsID = '{ads_id}'"
+            # NOTE: NOT using AdsID - MTG and CF Creative IDs don't match exactly
+            # We match by CampaignID + AdsetID and distribute by impressions
 
             query = f"""
-                SELECT CampaignID, AdsetID, AdsID, offerID, advertiserID, impressions
+                SELECT CampaignID, AdsetID, AdsID, impressions
                 FROM {self.ch_database}.{self.ch_table}
                 WHERE {where_clause}
                 AND dataSource = 'Clickflare'
             """
+
             result = self.ch_client.query(query)
             rows = []
             for row in result.named_results():
@@ -287,10 +287,12 @@ class MTGETL:
                     'CampaignID': row['CampaignID'],
                     'AdsetID': row.get('AdsetID', ''),
                     'AdsID': row.get('AdsID', ''),
-                    'offerID': row.get('offerID', ''),
-                    'advertiserID': row.get('advertiserID', ''),
                     'impressions': row['impressions']
                 })
+
+            if len(rows) > 0:
+                self.logger.debug(f"CF query returned {len(rows)} rows for CampaignID={campaign_id}, AdsetID={adset_id}")
+
             return rows
         except Exception as e:
             self.logger.error(f"Failed to query CF detail rows: {str(e)}")
@@ -331,18 +333,17 @@ class MTGETL:
                 report_date = row['reportDate']
                 campaign_id = row['CampaignID']
                 adset_id = row.get('AdsetID', '')
-                ads_id = row.get('AdsID', '')
 
                 mtg_spend = row.get('spend', 0)
                 mtg_imp = row.get('m_imp', 0)
                 mtg_clicks = row.get('m_clicks', 0)
                 mtg_conv = row.get('m_conv', 0)
 
-                # Get matching CF rows
-                cf_rows = self._get_cf_detail_rows(report_date, campaign_id, adset_id, ads_id)
+                # Get matching CF rows (only by CampaignID + AdsetID, not AdsID)
+                cf_rows = self._get_cf_detail_rows(report_date, campaign_id, adset_id)
 
                 if not cf_rows:
-                    self.logger.warning(f"No matching CF rows for CampaignID={campaign_id}, AdsetID={adset_id}, AdsID={ads_id}")
+                    self.logger.warning(f"No matching CF rows for CampaignID={campaign_id}, AdsetID={adset_id}")
                     skipped_count += 1
                     continue
 
@@ -365,7 +366,6 @@ class MTGETL:
                             report_date,
                             cf_row['CampaignID'],
                             cf_row['AdsetID'],
-                            cf_row['AdsID'],
                             spend_per_row,
                             imp_per_row,
                             clicks_per_row,
@@ -387,7 +387,6 @@ class MTGETL:
                             report_date,
                             cf_row['CampaignID'],
                             cf_row['AdsetID'],
-                            cf_row['AdsID'],
                             spend_add,
                             imp_add,
                             clicks_add,
@@ -404,19 +403,16 @@ class MTGETL:
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
 
-    def _update_single_row(self, report_date: str, campaign_id: str, adset_id: str, ads_id: str,
+    def _update_single_row(self, report_date: str, campaign_id: str, adset_id: str,
                           spend_add: float, imp_add: float, clicks_add: float, conv_add: float) -> bool:
         """
-        Update CF rows with MTG metrics using only shared dimensions.
-
-        Uses: CampaignID + AdsetID + AdsID (both MTG and CF have these)
-        Does NOT use: offerID, advertiserID (MTG doesn't have these)
+        Update CF rows with MTG metrics using CampaignID + AdsetID.
+        NOTE: We don't use AdsID because MTG and CF Creative IDs don't match exactly.
 
         Args:
             report_date: Report date
             campaign_id: Campaign ID
-            adset_id: Adset ID
-            ads_id: Ads ID
+            adset_id: Adset ID (Offer ID)
             spend_add: Spend to add
             imp_add: Impressions to add
             clicks_add: Clicks to add
@@ -426,12 +422,11 @@ class MTGETL:
             bool: Success status
         """
         try:
-            # Build WHERE clause using only shared dimensions
+            # Build WHERE clause using CampaignID + AdsetID only
             where_clause = f"reportDate = '{report_date}' AND CampaignID = '{campaign_id}'"
             if adset_id and adset_id != '0' and adset_id != '':
                 where_clause += f" AND AdsetID = '{adset_id}'"
-            if ads_id and ads_id != '0' and ads_id != '':
-                where_clause += f" AND AdsID = '{ads_id}'"
+            # NOTE: NOT using AdsID - will update ALL matching rows
 
             update_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE "
             update_sql += f"spend = spend + {spend_add}, "
