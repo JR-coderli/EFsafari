@@ -6,8 +6,10 @@ Runs Clickflare ETL first to establish base data, then MTG ETL to supplement.
 import os
 import sys
 import subprocess
+import io
 from datetime import datetime
 import argparse
+
 
 def run_clickflare_etl(date: str) -> tuple[bool, float]:
     """Run Clickflare ETL for the specified date. Returns (success, revenue_sum)."""
@@ -23,19 +25,32 @@ def run_clickflare_etl(date: str) -> tuple[bool, float]:
         return False, 0.0
 
     try:
-        result = subprocess.run(
+        # 设置环境变量确保子进程输出不被缓冲
+        env = os.environ.copy()
+        env['PYTHONUNBUFFERED'] = '1'
+
+        process = subprocess.Popen(
             [sys.executable, etl_script, "-d", date],
             cwd=etl_dir,
-            capture_output=True,
-            text=True
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,  # Line buffered
+            env=env
         )
-        print(result.stdout)
-        if result.stderr:
-            print(result.stderr)
+
+        # 实时打印并捕获输出
+        output_buffer = io.StringIO()
+        for line in process.stdout:
+            print(line, end='')  # 实时显示
+            output_buffer.write(line)
+
+        process.wait()
+        result_output = output_buffer.getvalue()
 
         # Parse revenue from SUMMARY line
         revenue = 0.0
-        for line in result.stdout.split('\n'):
+        for line in result_output.split('\n'):
             if line.startswith('SUMMARY: revenue='):
                 try:
                     revenue = float(line.split('=')[1])
@@ -43,10 +58,11 @@ def run_clickflare_etl(date: str) -> tuple[bool, float]:
                     pass
                 break
 
-        return result.returncode == 0, revenue
+        return process.returncode == 0, revenue
     except Exception as e:
         print(f"Error running Clickflare ETL: {e}")
         return False, 0.0
+
 
 def run_mtg_etl(date: str) -> tuple[bool, float]:
     """Run MTG ETL to supplement Clickflare data. Returns (success, spend_sum)."""
@@ -62,19 +78,32 @@ def run_mtg_etl(date: str) -> tuple[bool, float]:
         return True, 0.0  # Not an error if MTG ETL doesn't exist
 
     try:
-        result = subprocess.run(
+        # 设置环境变量确保子进程输出不被缓冲
+        env = os.environ.copy()
+        env['PYTHONUNBUFFERED'] = '1'
+
+        process = subprocess.Popen(
             [sys.executable, etl_script, "-d", date],
             cwd=etl_dir,
-            capture_output=True,
-            text=True
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,  # Line buffered
+            env=env
         )
-        print(result.stdout)
-        if result.stderr:
-            print(result.stderr)
+
+        # 实时打印并捕获输出
+        output_buffer = io.StringIO()
+        for line in process.stdout:
+            print(line, end='')  # 实时显示
+            output_buffer.write(line)
+
+        process.wait()
+        result_output = output_buffer.getvalue()
 
         # Parse spend from SUMMARY line
         spend = 0.0
-        for line in result.stdout.split('\n'):
+        for line in result_output.split('\n'):
             if line.startswith('SUMMARY: spend='):
                 try:
                     spend = float(line.split('=')[1])
@@ -82,10 +111,11 @@ def run_mtg_etl(date: str) -> tuple[bool, float]:
                     pass
                 break
 
-        return result.returncode == 0, spend
+        return process.returncode == 0, spend
     except Exception as e:
         print(f"Error running MTG ETL: {e}")
         return False, 0.0
+
 
 def main():
     parser = argparse.ArgumentParser(description="Unified ETL Runner")
@@ -145,6 +175,7 @@ def main():
     print("=" * 60)
 
     sys.exit(0 if all_success else 1)
+
 
 if __name__ == "__main__":
     main()
