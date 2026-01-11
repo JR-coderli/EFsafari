@@ -9,8 +9,8 @@ import subprocess
 from datetime import datetime
 import argparse
 
-def run_clickflare_etl(date: str) -> bool:
-    """Run Clickflare ETL for the specified date."""
+def run_clickflare_etl(date: str) -> tuple[bool, float]:
+    """Run Clickflare ETL for the specified date. Returns (success, revenue_sum)."""
     print("=" * 60)
     print("STEP 1: Running Clickflare ETL (base data)")
     print("=" * 60)
@@ -20,7 +20,7 @@ def run_clickflare_etl(date: str) -> bool:
 
     if not os.path.exists(etl_script):
         print(f"Error: Clickflare ETL script not found: {etl_script}")
-        return False
+        return False, 0.0
 
     try:
         result = subprocess.run(
@@ -32,13 +32,24 @@ def run_clickflare_etl(date: str) -> bool:
         print(result.stdout)
         if result.stderr:
             print(result.stderr)
-        return result.returncode == 0
+
+        # Parse revenue from SUMMARY line
+        revenue = 0.0
+        for line in result.stdout.split('\n'):
+            if line.startswith('SUMMARY: revenue='):
+                try:
+                    revenue = float(line.split('=')[1])
+                except:
+                    pass
+                break
+
+        return result.returncode == 0, revenue
     except Exception as e:
         print(f"Error running Clickflare ETL: {e}")
-        return False
+        return False, 0.0
 
-def run_mtg_etl(date: str) -> bool:
-    """Run MTG ETL to supplement Clickflare data."""
+def run_mtg_etl(date: str) -> tuple[bool, float]:
+    """Run MTG ETL to supplement Clickflare data. Returns (success, spend_sum)."""
     print("\n" + "=" * 60)
     print("STEP 2: Running MTG ETL (supplemental data)")
     print("=" * 60)
@@ -48,7 +59,7 @@ def run_mtg_etl(date: str) -> bool:
 
     if not os.path.exists(etl_script):
         print(f"Warning: MTG ETL script not found: {etl_script}")
-        return True  # Not an error if MTG ETL doesn't exist
+        return True, 0.0  # Not an error if MTG ETL doesn't exist
 
     try:
         result = subprocess.run(
@@ -60,10 +71,21 @@ def run_mtg_etl(date: str) -> bool:
         print(result.stdout)
         if result.stderr:
             print(result.stderr)
-        return result.returncode == 0
+
+        # Parse spend from SUMMARY line
+        spend = 0.0
+        for line in result.stdout.split('\n'):
+            if line.startswith('SUMMARY: spend='):
+                try:
+                    spend = float(line.split('=')[1])
+                except:
+                    pass
+                break
+
+        return result.returncode == 0, spend
     except Exception as e:
         print(f"Error running MTG ETL: {e}")
-        return False
+        return False, 0.0
 
 def main():
     parser = argparse.ArgumentParser(description="Unified ETL Runner")
@@ -89,31 +111,34 @@ def main():
 
     # Run ETLs in sequence and track results
     results = {
-        "clickflare": False,
-        "mtg": False
+        "clickflare": {"success": False, "revenue": 0.0},
+        "mtg": {"success": False, "spend": 0.0}
     }
 
     # Step 1: Clickflare (base data)
-    results["clickflare"] = run_clickflare_etl(report_date)
-    if not results["clickflare"]:
+    results["clickflare"]["success"], results["clickflare"]["revenue"] = run_clickflare_etl(report_date)
+    if not results["clickflare"]["success"]:
         print("\nERROR: Clickflare ETL failed!")
 
     # Step 2: MTG (supplemental data)
-    results["mtg"] = run_mtg_etl(report_date)
-    if not results["mtg"]:
+    results["mtg"]["success"], results["mtg"]["spend"] = run_mtg_etl(report_date)
+    if not results["mtg"]["success"]:
         print("\nWARNING: MTG ETL failed!")
 
     # Summary
     print("\n" + "=" * 60)
     print("ETL SUMMARY")
     print("=" * 60)
-    print(f"Report Date:    {report_date}")
-    print(f"Clickflare ETL: {'✓ SUCCESS' if results['clickflare'] else '✗ FAILED'}")
-    print(f"MTG ETL:        {'✓ SUCCESS' if results['mtg'] else '✗ FAILED'}")
+    print(f"Report Date:       {report_date}")
+    print(f"Clickflare ETL:    {'✓ SUCCESS' if results['clickflare']['success'] else '✗ FAILED'}")
+    print(f"  - Revenue:       ${results['clickflare']['revenue']:,.2f}")
+    print(f"MTG ETL:           {'✓ SUCCESS' if results['mtg']['success'] else '✗ FAILED'}")
+    print(f"  - Spend:         ${results['mtg']['spend']:,.2f}")
+    print(f"  - Total:         ${results['clickflare']['revenue'] + results['mtg']['spend']:,.2f}")
     print("=" * 60)
 
     # Only report overall success if ALL ETLs succeeded
-    all_success = all(results.values())
+    all_success = results["clickflare"]["success"] and results["mtg"]["success"]
     if all_success:
         print("ETL completed successfully!")
     else:

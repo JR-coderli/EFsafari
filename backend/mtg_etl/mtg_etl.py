@@ -415,6 +415,11 @@ class MTGETL:
             self.logger.info(f"{'='*60}")
             self.logger.info(f"ETL Job Completed for report_date: {report_date}")
             self.logger.info(f"Total rows inserted: {len(all_transformed_data)}")
+
+            # Calculate and log spend summary
+            total_spend = sum(row.get('spend', 0) for row in all_transformed_data)
+            print(f"SUMMARY: spend={total_spend:.2f}")
+
             self.logger.info(f"{'='*60}")
             return True
 

@@ -457,7 +457,13 @@ class ClickflareETL:
                 self.logger.log_etl_failed(report_date, "Data insertion failed")
                 return False
 
+            # Calculate and log revenue summary
+            total_revenue = sum(row.get('revenue', 0) for row in transformed_data)
             self.logger.log_etl_complete(report_date, len(transformed_data))
+
+            # Print summary for run_etl.py to parse
+            print(f"SUMMARY: revenue={total_revenue:.2f}")
+
             return True
 
         except Exception as e:
