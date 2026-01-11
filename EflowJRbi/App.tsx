@@ -53,15 +53,30 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { key: 'cpa', label: 'CPA', visible: true, type: 'money', group: 'Calculated' },
 ];
 
-const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number' | 'profit'; isSub?: boolean }> = ({ value, type, isSub }) => {
+const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number' | 'profit'; isSub?: boolean; colorMode?: boolean; metricKey?: string }> = ({ value, type, isSub, colorMode, metricKey }) => {
   const displayValue = isFinite(value) ? value : 0;
 
-  // Only profit type gets color (positive=green, negative=red)
-  let colorClasses = '';
+  // Profit always has color (positive=green, negative=red)
   if (!isSub && type === 'profit') {
-    if (displayValue > 0) colorClasses = 'text-emerald-600';
-    else if (displayValue < 0) colorClasses = 'text-rose-600';
-    else colorClasses = 'text-slate-800';
+    if (displayValue > 0) return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-emerald-600">${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+    else if (displayValue < 0) return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-rose-600">${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+    else return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-slate-800">${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+  }
+
+  // ROI always has color (positive=green, negative=red)
+  if (!isSub && metricKey === 'roi') {
+    if (displayValue > 0) return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-emerald-600">{(displayValue * 100).toFixed(2)}%</span>;
+    else if (displayValue < 0) return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-rose-600">{(displayValue * 100).toFixed(2)}%</span>;
+    else return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-slate-800">{(displayValue * 100).toFixed(2)}%</span>;
+  }
+
+  // Color mode for specific metrics
+  let colorClasses = '';
+  if (colorMode && !isSub) {
+    if (metricKey === 'revenue') colorClasses = 'text-amber-500';      // 黄色
+    else if (metricKey === 'spend') colorClasses = 'text-rose-500';    // 红色
+    else if (metricKey === 'cpa') colorClasses = 'text-blue-500';      // 蓝色
+    else if (metricKey === 'epa') colorClasses = 'text-amber-500';     // 黄色
   }
 
   const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[12px] text-slate-500 font-medium' : `text-[13px] ${colorClasses} font-bold`}`;
@@ -248,7 +263,7 @@ const DatePicker: React.FC<{ onRangeChange: (range: string, start?: Date, end?: 
         <i className={`fas fa-chevron-down text-[10px] text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
       </button>
       {isOpen && (
-        <div className="absolute top-full mt-2 left-0 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[100] overflow-hidden">
+        <div className="absolute top-full mt-2 left-0 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[9999] overflow-hidden">
           {!showCalendar ? (
             <div className="p-2 w-48">
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Quick Select</div>
@@ -555,7 +570,11 @@ const DailyReportPage: React.FC<DailyReportPageProps> = ({ selectedRange, custom
                   </td>
                   <td className="px-4 py-3 text-right"><MetricValue value={row.revenue} type="money" /></td>
                   <td className="px-4 py-3 text-right">
-                    <MetricValue value={row.spend_final > 0 ? (row.revenue - row.spend_final) / row.spend_final : 0} type="percent" />
+                    {(() => {
+                      const roi = row.spend_final > 0 ? (row.revenue - row.spend_final) / row.spend_final : 0;
+                      const roiClass = roi > 0 ? 'text-emerald-600' : roi < 0 ? 'text-rose-600' : 'text-slate-700';
+                      return <span className={`font-mono font-bold text-[13px] ${roiClass}`}>{(roi * 100).toFixed(2)}%</span>;
+                    })()}
                   </td>
                   {(currentUser.role === 'admin' || currentUser.role === 'ops') && (
                     <td className="px-4 py-3 text-center">
@@ -586,7 +605,9 @@ const DailyReportPage: React.FC<DailyReportPageProps> = ({ selectedRange, custom
                 <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.conversions} type="number" /></td>
                 <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.spend} type="money" /></td>
                 <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.revenue} type="money" /></td>
-                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.roi} type="percent" /></td>
+                <td className="px-4 py-3 text-right bg-indigo-600 text-white">
+                  <span className={`font-mono font-bold ${filteredSummary.roi > 0 ? 'text-emerald-300' : filteredSummary.roi < 0 ? 'text-rose-300' : 'text-white'}`}>{(filteredSummary.roi * 100).toFixed(2)}%</span>
+                </td>
                 {(currentUser.role === 'admin' || currentUser.role === 'ops') && <td className="px-4 py-3 bg-indigo-600"></td>}
               </tr>
             </tfoot>
@@ -735,6 +756,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [sortColumn, setSortColumn] = useState<SortColumn>('revenue');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [hideZeroImpressions, setHideZeroImpressions] = useState(true);
+  const [colorMode, setColorMode] = useState(false);
 
   // Column width state
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
@@ -1064,6 +1086,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       name: viewName.trim(),
       dimensions: [...activeDims],
       visibleMetrics: metrics.filter(m => m.visible).map(m => m.key as string),
+      colorMode: colorMode,
       userId: currentUser.id,
       createdAt: new Date().toISOString()
     };
@@ -1090,6 +1113,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       });
       return sorted.map(m => ({ ...m, visible: visibleKeys.includes(m.key as string) }));
     });
+    setColorMode(view.colorMode || false);
     setShowViewList(false);
     setActiveFilters([]);
     setQuickFilterText('');
@@ -1357,7 +1381,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 bg-[#f8fafc]">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 z-40 shadow-sm shrink-0">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 z-[100] shadow-sm shrink-0">
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors"><i className="fas fa-bars"></i></button>
             <h2 className="font-extrabold text-slate-800 tracking-tight ml-2 uppercase italic text-sm">
@@ -1450,6 +1474,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     <input type="checkbox" checked={hideZeroImpressions} onChange={(e) => setHideZeroImpressions(e.target.checked)} className="w-3 h-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                     <span className="text-[10px] font-bold text-slate-600">Hide Zero Impressions</span>
                   </label>
+                  <label className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                    <input type="checkbox" checked={colorMode} onChange={(e) => setColorMode(e.target.checked)} className="w-3 h-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                    <span className="text-[10px] font-bold text-slate-600">Color Mode</span>
+                  </label>
                 </div>
                 <div className="flex gap-2 items-center">
                   <div className="relative w-64">
@@ -1506,12 +1534,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                               </div>
                             </div>
                           </td>
-                          {visibleMetrics.map(m => <td key={m.key} className="px-4 py-3 text-right" style={{ width: columnWidths[m.key] || 120 }}><MetricValue value={row[m.key] as number} type={m.type} /></td>)}
+                          {visibleMetrics.map(m => <td key={m.key} className="px-4 py-3 text-right" style={{ width: columnWidths[m.key] || 120 }}><MetricValue value={row[m.key] as number} type={m.type} colorMode={colorMode} metricKey={m.key as string} /></td>)}
                         </tr>
                         {expandedDailyRows.has(row.id) && row.dailyData?.slice(0, 7).map(day => (
                           <tr key={day.date} className="bg-slate-50/50">
                             <td className="px-4 py-2 sticky left-0 bg-slate-50 z-10 border-l-4 border-indigo-600/60 border-r border-slate-50" style={{ paddingLeft: `${row.level * 20 + 72}px`, width: columnWidths.hierarchy }}><span className="text-[12px] font-bold text-slate-500">{day.date}</span></td>
-                            {visibleMetrics.map(m => <td key={m.key} className="px-4 py-2 text-right opacity-80" style={{ width: columnWidths[m.key] || 120 }}><MetricValue value={day[m.key as keyof DailyBreakdown] as number || 0} type={m.type} isSub /></td>)}
+                            {visibleMetrics.map(m => <td key={m.key} className="px-4 py-2 text-right opacity-80" style={{ width: columnWidths[m.key] || 120 }}><MetricValue value={day[m.key as keyof DailyBreakdown] as number || 0} type={m.type} isSub colorMode={colorMode} metricKey={m.key as string} /></td>)}
                           </tr>
                         ))}
                       </React.Fragment>
@@ -1556,7 +1584,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                       <div className="w-px h-4 bg-slate-200"></div>
                       <div className="flex items-center gap-1">
                         <span className="text-slate-400 font-bold">ROI:</span>
-                        <span className="font-mono font-bold text-slate-700">{(summaryData.roi * 100).toFixed(2)}%</span>
+                        <span className={`font-mono font-bold ${summaryData.roi > 0 ? 'text-emerald-600' : summaryData.roi < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{(summaryData.roi * 100).toFixed(2)}%</span>
                       </div>
                     </div>
                   </div>

@@ -71,6 +71,7 @@ export interface SavedView {
   name: string;
   dimensions: Dimension[];
   visibleMetrics: string[];
+  colorMode?: boolean;
   userId?: string;
   createdAt?: string;
 }
