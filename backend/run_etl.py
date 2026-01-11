@@ -107,6 +107,7 @@ def main():
     print("\n" + "=" * 60)
     print("ETL SUMMARY")
     print("=" * 60)
+    print(f"Report Date:    {report_date}")
     print(f"Clickflare ETL: {'✓ SUCCESS' if results['clickflare'] else '✗ FAILED'}")
     print(f"MTG ETL:        {'✓ SUCCESS' if results['mtg'] else '✗ FAILED'}")
     print("=" * 60)
