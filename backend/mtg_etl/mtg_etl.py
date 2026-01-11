@@ -323,7 +323,10 @@ class MTGETL:
             total_m_clicks = sum(row.get('m_clicks', 0) for row in data)
             total_m_conv = sum(row.get('m_conv', 0) for row in data)
 
+            self.logger.info(f"MTG total - Spend: {total_spend:.2f}, Imp: {total_m_imp}, Clicks: {total_m_clicks}, Conv: {total_m_conv}")
+
             updated_count = 0
+            skipped_count = 0
             for row in data:
                 report_date = row['reportDate']
                 campaign_id = row['CampaignID']
@@ -340,13 +343,18 @@ class MTGETL:
 
                 if not cf_rows:
                     self.logger.warning(f"No matching CF rows for CampaignID={campaign_id}, AdsetID={adset_id}, AdsID={ads_id}")
+                    skipped_count += 1
                     continue
+
+                # Log matching info
+                self.logger.debug(f"MTG row CampaignID={campaign_id} matched {len(cf_rows)} CF rows")
 
                 # Calculate total impressions for this group
                 total_cf_impressions = sum(r['impressions'] for r in cf_rows)
 
                 if total_cf_impressions == 0:
                     # If no impressions, distribute evenly
+                    self.logger.debug(f"No impressions for CampaignID={campaign_id}, distributing evenly")
                     spend_per_row = mtg_spend / len(cf_rows)
                     imp_per_row = mtg_imp / len(cf_rows)
                     clicks_per_row = mtg_clicks / len(cf_rows)
@@ -375,6 +383,8 @@ class MTGETL:
                         clicks_add = mtg_clicks * ratio
                         conv_add = mtg_conv * ratio
 
+                        self.logger.debug(f"Updating CF row - ratio: {ratio:.4f}, spend_add: {spend_add:.2f}")
+
                         self._update_single_row(
                             report_date,
                             cf_row['CampaignID'],
@@ -389,7 +399,7 @@ class MTGETL:
                         )
                         updated_count += 1
 
-            self.logger.info(f"Data updated successfully: {updated_count} CF rows updated")
+            self.logger.info(f"Data updated successfully: {updated_count} CF rows updated, {skipped_count} MTG rows skipped (no match)")
             return True
 
         except Exception as e:
