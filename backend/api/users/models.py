@@ -71,3 +71,41 @@ class TokenData(BaseModel):
     username: Optional[str] = None
     user_id: Optional[str] = None
     role: Optional[UserRole] = None
+
+
+# ============= Saved View Models =============
+
+class SavedViewCreate(BaseModel):
+    """Create saved view schema."""
+    name: str = Field(..., min_length=1, max_length=100)
+    dimensions: List[str] = Field(default_factory=list)
+    visible_metrics: List[str] = Field(default_factory=list)
+    color_mode: bool = False
+    is_default: bool = False
+
+
+class SavedViewUpdate(BaseModel):
+    """Update saved view schema."""
+    name: Optional[str] = None
+    dimensions: Optional[List[str]] = None
+    visible_metrics: Optional[List[str]] = None
+    color_mode: Optional[bool] = None
+    is_default: Optional[bool] = None
+
+
+class SavedViewResponse(BaseModel):
+    """Saved view response schema."""
+    id: str
+    user_id: str
+    name: str
+    dimensions: List[str]
+    visible_metrics: List[str]
+    color_mode: bool
+    is_default: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }

@@ -74,6 +74,7 @@ export interface SavedView {
   colorMode?: boolean;
   userId?: string;
   createdAt?: string;
+  isDefault?: boolean;
 }
 
 export interface UserPermission {

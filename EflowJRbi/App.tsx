@@ -6,6 +6,7 @@ import { generateMockReport } from './mockData';
 import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoadDailyData } from './src/api/hooks';
 import { authApi, usersApi, tokenManager } from './src/api/auth';
 import { dailyReportApi } from './src/api/client';
+import { viewsApi } from './src/api/views';
 
 interface Filter {
   dimension: Dimension;
@@ -1071,31 +1072,102 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
   useEffect(() => { if (currentPage === 'performance') loadRootData(); }, [loadRootData, currentPage]);
 
+  // 从后端加载保存的视图列表
+  useEffect(() => {
+    const loadViews = async () => {
+      try {
+        const views = await viewsApi.getAllViews();
+        setSavedViews(views);
+        // 同步到 localStorage 作为缓存
+        const userKey = getUserStorageKey(currentUser.id);
+        localStorage.setItem(userKey, JSON.stringify(views));
+      } catch (error) {
+        console.error('Failed to load views from backend:', error);
+        // 降级到 localStorage
+        const userKey = getUserStorageKey(currentUser.id);
+        const saved = localStorage.getItem(userKey);
+        if (saved) {
+          setSavedViews(JSON.parse(saved));
+        }
+      }
+    };
+    loadViews();
+  }, [currentUser.id]);
+
+  // 加载默认视图（只在首次登录时执行）
+  useEffect(() => {
+    const loadDefaultView = async () => {
+      try {
+        const defaultView = await viewsApi.getDefaultView();
+        if (defaultView) {
+          applyView(defaultView);
+        } else {
+          // 新用户没有默认视图，应用预设的初始视图
+          // 维度：media, adset
+          setActiveDims(['platform', 'sub_campaign_name']);
+        }
+      } catch (error) {
+        console.error('Failed to load default view:', error);
+        // 降级：应用预设的初始视图
+        setActiveDims(['platform', 'sub_campaign_name']);
+        // 降级：从 localStorage 读取
+        const userKey = getUserStorageKey(currentUser.id);
+        const saved = localStorage.getItem(userKey);
+        if (saved) {
+          const views: SavedView[] = JSON.parse(saved);
+          const defaultView = views.find(v => v.isDefault);
+          if (defaultView) {
+            applyView(defaultView);
+          }
+        }
+      }
+    };
+    // 只在组件挂载时加载一次（使用 ref 确保只执行一次）
+    const hasLoadedDefault = { current: false };
+    if (!hasLoadedDefault.current) {
+      hasLoadedDefault.current = true;
+      loadDefaultView();
+    }
+  }, []);
+
   useEffect(() => {
     const clickOutside = (e: MouseEvent) => { if (viewsDropdownRef.current && !viewsDropdownRef.current.contains(e.target as Node)) setShowViewList(false); };
     document.addEventListener('mousedown', clickOutside);
     return () => document.removeEventListener('mousedown', clickOutside);
   }, []);
 
-  const handleSaveView = (e: React.MouseEvent) => {
+  const handleSaveView = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const viewName = prompt("Save Current View As:");
     if (!viewName || viewName.trim() === "") return;
-    const newView = {
+    const newView: SavedView = {
       id: "view_" + Date.now(),
       name: viewName.trim(),
       dimensions: [...activeDims],
       visibleMetrics: metrics.filter(m => m.visible).map(m => m.key as string),
       colorMode: colorMode,
       userId: currentUser.id,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      isDefault: false
     };
-    setSavedViews(prev => {
-      const updated = [...prev, newView];
+
+    try {
+      // 保存到后端
+      const savedView = await viewsApi.createView(newView);
+      setSavedViews(prev => [...prev, savedView]);
+      // 同步到 localStorage 作为缓存
       const userKey = getUserStorageKey(currentUser.id);
-      localStorage.setItem(userKey, JSON.stringify(updated));
-      return updated;
-    });
+      localStorage.setItem(userKey, JSON.stringify([...savedViews, savedView]));
+    } catch (error) {
+      console.error('Failed to save view to backend:', error);
+      // 降级到 localStorage
+      setSavedViews(prev => {
+        const updated = [...prev, newView];
+        const userKey = getUserStorageKey(currentUser.id);
+        localStorage.setItem(userKey, JSON.stringify(updated));
+        return updated;
+      });
+    }
     setShowViewList(false);
   };
 
@@ -1119,15 +1191,51 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     setQuickFilterText('');
   };
 
-  const deleteView = (e: React.MouseEvent, id: string) => {
+  const deleteView = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (!window.confirm("Delete this saved view?")) return;
-    setSavedViews(prev => {
-      const updated = prev.filter(v => v.id !== id);
-      const userKey = getUserStorageKey(currentUser.id);
-      localStorage.setItem(userKey, JSON.stringify(updated));
-      return updated;
-    });
+
+    try {
+      await viewsApi.deleteView(id);
+      setSavedViews(prev => {
+        const updated = prev.filter(v => v.id !== id);
+        const userKey = getUserStorageKey(currentUser.id);
+        localStorage.setItem(userKey, JSON.stringify(updated));
+        return updated;
+      });
+    } catch (error) {
+      console.error('Failed to delete view from backend:', error);
+      // 降级处理
+      setSavedViews(prev => {
+        const updated = prev.filter(v => v.id !== id);
+        const userKey = getUserStorageKey(currentUser.id);
+        localStorage.setItem(userKey, JSON.stringify(updated));
+        return updated;
+      });
+    }
+  };
+
+  const setDefaultView = async (e: React.MouseEvent, viewId: string) => {
+    e.stopPropagation();
+
+    try {
+      const updatedView = await viewsApi.setDefaultView(viewId);
+      setSavedViews(prev => {
+        const updated = prev.map(v => ({ ...v, isDefault: v.id === viewId }));
+        const userKey = getUserStorageKey(currentUser.id);
+        localStorage.setItem(userKey, JSON.stringify(updated));
+        return updated;
+      });
+    } catch (error) {
+      console.error('Failed to set default view:', error);
+      // 降级处理
+      setSavedViews(prev => {
+        const updated = prev.map(v => ({ ...v, isDefault: v.id === viewId }));
+        const userKey = getUserStorageKey(currentUser.id);
+        localStorage.setItem(userKey, JSON.stringify(updated));
+        return updated;
+      });
+    }
   };
 
   const toggleDimension = (dim: Dimension) => {
@@ -1422,8 +1530,23 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                       <div className="max-h-72 overflow-y-auto custom-scrollbar p-1">
                         {savedViews.length > 0 ? savedViews.map(v => (
                           <div key={v.id} onClick={() => applyView(v)} className="flex items-center justify-between w-full px-3 py-3 text-[11px] font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 rounded-xl cursor-pointer group transition-all mb-1 border border-transparent hover:border-indigo-100">
-                            <div className="flex items-center gap-2 overflow-hidden"><i className="fas fa-table-list text-slate-300 group-hover:text-indigo-400"></i><span className="truncate">{v.name}</span></div>
-                            <button onClick={(e) => deleteView(e, v.id)} className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all"><i className="fas fa-trash-can text-[10px]"></i></button>
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <i className="fas fa-table-list text-slate-300 group-hover:text-indigo-400"></i>
+                              <span className="truncate">{v.name}</span>
+                              {v.isDefault && (
+                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[9px] font-bold uppercase tracking-wider">default</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => setDefaultView(e, v.id)}
+                                className={`w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all ${v.isDefault ? 'text-amber-500 bg-amber-50' : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50'}`}
+                                title={v.isDefault ? 'Remove as default' : 'Set as default'}
+                              >
+                                <i className={`fas ${v.isDefault ? 'fa-star' : 'fa-regular fa-star'} text-[10px]`}></i>
+                              </button>
+                              <button onClick={(e) => deleteView(e, v.id)} className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all"><i className="fas fa-trash-can text-[10px]"></i></button>
+                            </div>
                           </div>
                         )) : <p className="py-10 text-center text-slate-400 text-[10px]">No saved views</p>}
                       </div>

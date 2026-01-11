@@ -15,6 +15,7 @@ from api.routers.dashboard import router as dashboard_router
 from api.routers.auth import router as auth_router
 from api.users.router import router as users_router
 from api.routers.daily_report import router as daily_report_router
+from api.routers.views import router as views_router
 
 
 # Custom JSON encoder for datetime
@@ -70,13 +71,14 @@ app = FastAPI(
 # )
 
 # Include routers
-logger.info(f"Including routers: dashboard={dashboard_router}, auth={auth_router}, users={users_router}, daily_report={daily_report_router}")
+logger.info(f"Including routers: dashboard={dashboard_router}, auth={auth_router}, users={users_router}, daily_report={daily_report_router}, views={views_router}")
 logger.info(f"Auth router prefix: {auth_router.prefix}")
 logger.info(f"Auth router routes: {[r.path for r in auth_router.routes]}")
 app.include_router(dashboard_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(daily_report_router)
+app.include_router(views_router)
 
 
 @app.get("/test")
@@ -135,7 +137,7 @@ async def global_exception_handler(request, exc):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",
+        "api.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
