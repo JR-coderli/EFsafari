@@ -366,8 +366,6 @@ class MTGETL:
                             cf_row['CampaignID'],
                             cf_row['AdsetID'],
                             cf_row['AdsID'],
-                            cf_row['offerID'],
-                            cf_row['advertiserID'],
                             spend_per_row,
                             imp_per_row,
                             clicks_per_row,
@@ -390,8 +388,6 @@ class MTGETL:
                             cf_row['CampaignID'],
                             cf_row['AdsetID'],
                             cf_row['AdsID'],
-                            cf_row['offerID'],
-                            cf_row['advertiserID'],
                             spend_add,
                             imp_add,
                             clicks_add,
@@ -409,18 +405,18 @@ class MTGETL:
             return False
 
     def _update_single_row(self, report_date: str, campaign_id: str, adset_id: str, ads_id: str,
-                          offer_id: str, advertiser_id: str,
                           spend_add: float, imp_add: float, clicks_add: float, conv_add: float) -> bool:
         """
-        Update a single CF row with MTG metrics.
+        Update CF rows with MTG metrics using only shared dimensions.
+
+        Uses: CampaignID + AdsetID + AdsID (both MTG and CF have these)
+        Does NOT use: offerID, advertiserID (MTG doesn't have these)
 
         Args:
             report_date: Report date
             campaign_id: Campaign ID
             adset_id: Adset ID
             ads_id: Ads ID
-            offer_id: Offer ID (for precise matching)
-            advertiser_id: Advertiser ID (for precise matching)
             spend_add: Spend to add
             imp_add: Impressions to add
             clicks_add: Clicks to add
@@ -430,16 +426,12 @@ class MTGETL:
             bool: Success status
         """
         try:
-            # Build precise WHERE clause with all available identifiers
+            # Build WHERE clause using only shared dimensions
             where_clause = f"reportDate = '{report_date}' AND CampaignID = '{campaign_id}'"
             if adset_id and adset_id != '0' and adset_id != '':
                 where_clause += f" AND AdsetID = '{adset_id}'"
             if ads_id and ads_id != '0' and ads_id != '':
                 where_clause += f" AND AdsID = '{ads_id}'"
-            if offer_id and offer_id != '0' and offer_id != '':
-                where_clause += f" AND offerID = '{offer_id}'"
-            if advertiser_id and advertiser_id != '0' and advertiser_id != '':
-                where_clause += f" AND advertiserID = '{advertiser_id}'"
 
             update_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE "
             update_sql += f"spend = spend + {spend_add}, "
