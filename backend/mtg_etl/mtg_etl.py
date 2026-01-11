@@ -195,10 +195,12 @@ class MTGETL:
 
     def reset_mtg_metrics(self, report_date: str) -> bool:
         """
-        Reset MTG metrics to 0 before updating.
-        MTG ETL runs AFTER Clickflare ETL, so we don't delete data.
-        We only reset MTG fields (spend, m_imp, m_clicks, m_conv) to 0,
-        then UPDATE them with new values.
+        Reset MTG metrics to 0 for media that use MTG spend data.
+        Only reset Mintegral and Hastraffic media - other media keep CF spend.
+
+        Media using MTG spend (contains these keywords):
+        - Mintegral (e.g., "Mintegral 2Events", "Mintegral CPL")
+        - Hastraffic (e.g., "Hastraffic (AV)")
 
         Args:
             report_date: Report date to reset
@@ -207,17 +209,19 @@ class MTGETL:
             bool: Operation success status
         """
         try:
+            # Only reset Mintegral and Hastraffic media
             reset_sql = f"""
                 ALTER TABLE {self.ch_database}.{self.ch_table}
                 UPDATE spend = 0, m_imp = 0, m_clicks = 0, m_conv = 0
                 WHERE reportDate = '{report_date}'
+                AND (Media LIKE '%Mintegral%' OR Media LIKE '%Hastraffic%')
             """
 
-            self.logger.info(f"Resetting MTG metrics for {report_date}")
+            self.logger.info(f"Resetting MTG metrics for Mintegral/Hastraffic media on {report_date}")
             self.logger.debug(f"SQL: {reset_sql}")
 
             self.ch_client.command(reset_sql)
-            self.logger.info("MTG metrics reset successfully")
+            self.logger.info("MTG metrics reset successfully (only Mintegral/Hastraffic affected)")
             return True
 
         except Exception as e:
