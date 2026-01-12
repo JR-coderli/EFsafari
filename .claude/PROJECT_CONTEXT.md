@@ -164,12 +164,37 @@ export ENVIRONMENT=production
 ```bash
 # 重启后端
 cd /opt/bicode/backend
-pkill -f "uvicorn.*8000"
-nohup python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
+pkill -f "uvicorn.*8001"
+/opt/bicode/backend/start.sh &
 
 # 查看日志
 tail -f server.log
 ```
+
+### 部署流程
+
+**本地开发流程：**
+1. 修改代码（本地）
+2. 提交到 Git: `git commit -am "描述"`
+3. 推送到 GitHub: `git push`
+
+**服务器部署流程：**
+```bash
+# 登录服务器
+ssh root@43.160.248.9
+
+# 拉取最新代码并自动部署
+cd /opt/bicode
+./deploy/update.sh
+```
+
+**update.sh 自动执行：**
+- 拉取最新代码
+- 更新后端依赖
+- 重新构建前端
+- 清除 Redis 缓存
+- 清除 Nginx 缓存
+- 重启服务
 
 ---
 ## 使用说明
