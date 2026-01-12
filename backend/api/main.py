@@ -10,12 +10,24 @@ from fastapi.responses import JSONResponse
 from datetime import datetime
 import logging
 import json
+import yaml
+from pathlib import Path
 
 from api.routers.dashboard import router as dashboard_router
 from api.routers.auth import router as auth_router
 from api.users.router import router as users_router
 from api.routers.daily_report import router as daily_report_router
 from api.routers.views import router as views_router
+from api.cache import init_redis
+
+
+# Load configuration
+CONFIG_PATH = Path(__file__).parent / "config.yaml"
+def load_config():
+    with open(CONFIG_PATH) as f:
+        return yaml.safe_load(f)
+
+config = load_config()
 
 
 # Custom JSON encoder for datetime
@@ -55,6 +67,14 @@ app = FastAPI(
     version="1.0.0",
     response_model_by_alias=False
 )
+
+
+# Startup event - initialize Redis
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup."""
+    redis_config = config.get("redis", {})
+    init_redis(redis_config)
 
 # Configure CORS
 # app.add_middleware(

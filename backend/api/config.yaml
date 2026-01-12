@@ -16,6 +16,16 @@ clickhouse:
   password: "admin123"
   secure: false
 
+# Redis Configuration
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: null
+  # Cache TTL in seconds
+  default_ttl: 300
+  data_ttl: 60
+
 # CORS Settings
 cors:
   allow_origins:
@@ -23,6 +33,7 @@ cors:
     - "http://localhost:3000"
     - "http://127.0.0.1:5173"
     - "http://127.0.0.1:3000"
+    - "https://safari.eflow-media.com"
   allow_methods:
     - "*"
   allow_headers:

@@ -4,6 +4,7 @@ Dashboard API router for data panel queries.
 Includes role-based data filtering:
 - admin: sees all data
 - ops: filtered by Adset keywords
+- ops02: filtered by Media (platform) keywords
 - business: filtered by offer keywords
 """
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -23,6 +24,7 @@ from api.models.schemas import (
     DimensionType,
     DateRangeFilter
 )
+from api.cache import cache_key, get_cache, set_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -197,6 +199,13 @@ async def get_aggregated_data(
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="Invalid filters JSON")
 
+    # Check cache
+    user_id = current_user.get("id", "anonymous")
+    cache_key_val = cache_key("data", start_date, end_date, dimensions, filter_list, user_id)
+    cached_result = get_cache(cache_key_val)
+    if cached_result is not None:
+        return DataQueryResponse(**cached_result)
+
     # Build query
     db = get_db()
     try:
@@ -255,11 +264,14 @@ async def get_aggregated_data(
             formatted_row["hasChild"] = len(dimensions) > 1
             formatted_data.append(formatted_row)
 
-        return DataQueryResponse(
+        response = DataQueryResponse(
             data=formatted_data,
             total=len(formatted_data),
             dateRange=DateRangeFilter(start_date=start_date, end_date=end_date)
         )
+        # Cache for 60 seconds
+        set_cache(cache_key_val, response.dict(), ttl=60)
+        return response
 
     except Exception as e:
         import traceback
@@ -453,3 +465,123 @@ async def get_aggregate_summary(
     except Exception as e:
         logger.error(f"Error fetching aggregate: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching aggregate: {str(e)}")
+
+
+@router.get("/hierarchy")
+async def get_data_hierarchy(
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
+    dimensions: str = Query(..., description="Comma-separated dimensions"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Preload all hierarchy data at once.
+    Returns a nested structure with all levels for the given dimensions.
+
+    This reduces API calls from N+1 to just 1 request.
+    """
+    # Parse dimensions
+    dim_list = [d.strip() for d in dimensions.split(",") if d.strip()]
+    if not dim_list:
+        raise HTTPException(status_code=400, detail="At least one dimension required")
+
+    # Check cache
+    user_id = current_user.get("id", "anonymous")
+    cache_key_val = cache_key("hierarchy", start_date, end_date, dim_list, user_id)
+    cached_result = get_cache(cache_key_val)
+    if cached_result is not None:
+        return cached_result
+
+    # Build permission filter
+    user_role = current_user.get("role")
+    user_keywords = current_user.get("keywords", [])
+    permission_filter = _build_permission_filter(user_role, user_keywords)
+
+    db = get_db()
+    try:
+        client = db.connect()
+
+        # Fetch all data grouped by all dimensions at once
+        columns = [DIMENSION_COLUMN_MAP.get(d, d) for d in dim_list]
+        group_by_clause = ", ".join(columns)
+
+        base_query = f"""
+            SELECT
+                {', '.join(columns)},
+                sum(impressions) as impressions,
+                sum(clicks) as clicks,
+                sum(conversions) as conversions,
+                sum(spend) as spend,
+                sum(revenue) as revenue,
+                sum(m_imp) as m_imp,
+                sum(m_clicks) as m_clicks,
+                sum(m_conv) as m_conv
+            FROM {db.database}.{db.table}
+            WHERE reportDate >= '{start_date}' AND reportDate <= '{end_date}'
+        """
+
+        # Add permission filter
+        if permission_filter:
+            base_query += f" AND {permission_filter}"
+
+        base_query += f" GROUP BY {group_by_clause} ORDER BY revenue DESC"
+
+        result = client.query(base_query)
+
+        # Build hierarchy structure
+        hierarchy = {}
+
+        for row in result.named_results():
+            # Build nested path
+            current_level = hierarchy
+            for i, dim in enumerate(dim_list):
+                col_name = DIMENSION_COLUMN_MAP.get(dim, dim)
+                value = row.get(col_name, "Unknown")
+                if value == "" or value is None:
+                    value = "Unknown"
+
+                # Create key for this level
+                level_key = value
+
+                if level_key not in current_level:
+                    # Last level - add metrics
+                    is_last = (i == len(dim_list) - 1)
+
+                    current_level[level_key] = {
+                        "_metrics": {
+                            "impressions": row.get("impressions", 0),
+                            "clicks": row.get("clicks", 0),
+                            "conversions": row.get("conversions", 0),
+                            "spend": row.get("spend", 0),
+                            "revenue": row.get("revenue", 0),
+                            "profit": (row.get("revenue", 0) or 0) - (row.get("spend", 0) or 0),
+                            "m_imp": row.get("m_imp", 0),
+                            "m_clicks": row.get("m_clicks", 0),
+                            "m_conv": row.get("m_conv", 0),
+                            "ctr": (row.get("clicks", 0) or 0) / (row.get("impressions", 0) or 1),
+                            "cvr": (row.get("conversions", 0) or 0) / (row.get("clicks", 0) or 1),
+                            "roi": ((row.get("revenue", 0) or 0) - (row.get("spend", 0) or 0)) / (row.get("spend", 0) or 1),
+                            "cpa": (row.get("spend", 0) or 0) / (row.get("conversions", 0) or 1),
+                        },
+                        "_dimension": dim,
+                        "_children": {} if not is_last else None
+                    }
+
+                # Move to next level
+                if not is_last and current_level[level_key].get("_children") is not None:
+                    current_level = current_level[level_key]["_children"]
+
+        result = {
+            "dimensions": dim_list,
+            "hierarchy": hierarchy,
+            "startDate": start_date,
+            "endDate": end_date
+        }
+        # Cache for 60 seconds
+        set_cache(cache_key_val, result, ttl=60)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error fetching hierarchy: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching hierarchy: {str(e)}")
+
