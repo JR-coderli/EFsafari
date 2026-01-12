@@ -93,8 +93,16 @@ class UserService:
         table_name = self._get_table_name()
         client = self.db.connect()
 
-        # Format keywords as array string
-        keywords_str = str(user.keywords)
+        # Format keywords as ClickHouse array with proper escaping
+        if user.keywords:
+            escaped_items = []
+            for k in user.keywords:
+                # Escape backslashes first, then single quotes
+                escaped = k.replace("\\", "\\\\").replace("'", "''")
+                escaped_items.append(f"'{escaped}'")
+            keywords_str = f"[{', '.join(escaped_items)}]"
+        else:
+            keywords_str = "[]"
 
         # Format datetime
         created_at_str = user.created_at.strftime('%Y-%m-%d %H:%M:%S') if user.created_at else 'now()'
@@ -103,11 +111,14 @@ class UserService:
         # Role is now a string literal
         role_value = user.role if isinstance(user.role, str) else str(user.role)
 
+        # Escape special characters in string fields
+        name_escaped = user.name.replace("\\", "\\\\").replace("'", "''")
+
         insert_sql = f"""
             INSERT INTO {table_name} (id, name, username, password_hash, email, role, keywords, created_at, updated_at)
             VALUES (
                 '{user.id}',
-                '{user.name.replace("'", "''")}',
+                '{name_escaped}',
                 '{user.username}',
                 '{user.password_hash}',
                 '{user.email}',
