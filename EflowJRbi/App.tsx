@@ -1380,28 +1380,20 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
               value: v
             }));
 
-            // Calculate number of days based on selected date range
-            const rangeInfo = getRangeInfo(selectedRange, customDateStart, customDateEnd);
-            const daysDiff = Math.ceil((rangeInfo.end.getTime() - rangeInfo.start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-            // Cap at reasonable limit for daily breakdown
-            const dailyLimit = Math.min(daysDiff, 90);
-
-            // Load daily data
-            if (!row.dailyData || row.dailyData.length === 0) {
-              apiLoadDailyData(rowFilters, selectedRange, dailyLimit, customDateStart, customDateEnd).then(dailyData => {
-                setData(prev => {
-                  const update = (rows: AdRow[]): AdRow[] =>
-                    rows.map(r =>
-                      r.id === rowId
-                        ? { ...r, dailyData }
-                        : (r.children ? { ...r, children: update(r.children) } : r)
+            // Daily breakdown always shows last 7 days from today (fixed, not affected by date range selection)
+            apiLoadDailyData(rowFilters, 'Last 7 Days', 7).then(dailyData => {
+              setData(prev => {
+                const update = (rows: AdRow[]): AdRow[] =>
+                  rows.map(r =>
+                    r.id === rowId
+                      ? { ...r, dailyData }
+                      : (r.children ? { ...r, children: update(r.children) } : r)
                     );
-                  return update(prev);
-                });
-              }).catch(err => {
-                console.error('Error loading daily data:', err);
+                return update(prev);
               });
-            }
+            }).catch(err => {
+              console.error('Error loading daily data:', err);
+            });
             return true;
           }
           if (row.children && findRowAndLoadDaily(row.children)) {
