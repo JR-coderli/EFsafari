@@ -1,5 +1,5 @@
 
-export type UserRole = 'admin' | 'ops' | 'business';
+export type UserRole = 'admin' | 'ops' | 'ops02' | 'business';
 
 export type Dimension = 
   | 'platform' 

@@ -332,6 +332,10 @@ class UserService:
             # Filter by Adset column
             keyword_conditions = [f"lower(Adset) LIKE lower('%{k}%')" for k in user.keywords]
             return f"({' OR '.join(keyword_conditions)})"
+        elif user.role == 'ops02':
+            # Filter by platform column
+            keyword_conditions = [f"lower(platform) LIKE lower('%{k}%')" for k in user.keywords]
+            return f"({' OR '.join(keyword_conditions)})"
         elif user.role == 'business':
             # Filter by offer column
             keyword_conditions = [f"lower(offer) LIKE lower('%{k}%')" for k in user.keywords]

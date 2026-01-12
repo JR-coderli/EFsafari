@@ -1901,13 +1901,14 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                 <select name="role" defaultValue={editingUser?.role || 'ops'} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20">
                   <option value="admin">Admin (Full Access)</option>
                   <option value="ops">OPS (Adset Filter)</option>
+                  <option value="ops02">OPS02 (Platform Filter)</option>
                   <option value="business">Business (Offer Filter)</option>
                 </select>
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Keywords (Comma separated)</label>
                 <input name="keywords" defaultValue={editingUser?.keywords?.join(', ') || ''} placeholder="e.g. ZP, Zp, zp" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" />
-                <p className="text-[9px] text-slate-400 font-bold mt-1 italic">* OPS: filter by Adset, Business: filter by Offer. Empty = all access.</p>
+                <p className="text-[9px] text-slate-400 font-bold mt-1 italic">* OPS: Adset, OPS02: Platform, Business: Offer. Empty = all access.</p>
               </div>
             </div>
             <div className="mt-8 flex gap-3">

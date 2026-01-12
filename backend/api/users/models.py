@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 # Role type as string literal
-UserRole = Literal['admin', 'ops', 'business']
+UserRole = Literal['admin', 'ops', 'ops02', 'business']
 
 
 class UserBase(BaseModel):
