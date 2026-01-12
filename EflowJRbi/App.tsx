@@ -1480,7 +1480,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     <div className="flex h-screen bg-white overflow-hidden text-slate-900 font-sans">
       <aside className={`bg-[#1e293b] text-slate-400 flex flex-col shrink-0 transition-all ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-6 border-b border-slate-700/50 flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-500 rounded-lg text-white flex items-center justify-center font-bold"><i className="fas fa-layer-group text-sm"></i></div>
+          <div className="w-8 h-8 bg-indigo-500 rounded-lg text-white flex items-center justify-center font-bold text-xs">EF</div>
           {isSidebarOpen && <span className="text-white font-black text-sm uppercase italic tracking-tighter">Data Insight</span>}
         </div>
         <nav className="flex-1 py-6">
