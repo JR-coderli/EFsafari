@@ -55,7 +55,7 @@ class UserService:
                 username String,
                 password_hash String,
                 email String,
-                role Enum('admin', 'ops', 'business'),
+                role Enum('admin', 'ops', 'ops02', 'business'),
                 keywords Array(String),
                 created_at DateTime,
                 updated_at Nullable(DateTime)
@@ -64,6 +64,19 @@ class UserService:
         """
         client = self.db.connect()
         client.command(create_sql)
+
+        # Try to alter existing table to add ops02 to enum (for existing tables)
+        try:
+            alter_sql = f"""
+                ALTER TABLE {table_name}
+                MODIFY COLUMN role Enum('admin' = 1, 'ops' = 2, 'ops02' = 3, 'business' = 4)
+            """
+            client.command(alter_sql)
+            logger.info(f"Table {table_name} role enum updated to include ops02")
+        except Exception as e:
+            # Table might already have the correct schema or other issue
+            logger.debug(f"Could not alter role column (might already be correct): {e}")
+
         logger.info(f"Table {table_name} ensured")
 
     def init_admin_user(self):
