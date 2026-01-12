@@ -239,7 +239,9 @@ class UserService:
             update_fields.append(f"role = '{role_value}'")
         if "keywords" in updates:
             keywords_arr = updates["keywords"]
-            keywords_str = str(keywords_arr).replace("'", "\\'")
+            # Properly format ClickHouse array: ['item1', 'item2']
+            formatted_items = ", ".join([f"'{k.replace(\"'\", \"''\")}'" for k in keywords_arr])
+            keywords_str = f"[{formatted_items}]"
             update_fields.append(f"keywords = {keywords_str}")
 
         if not update_fields:

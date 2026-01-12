@@ -655,8 +655,8 @@ const DailyReportPage: React.FC<DailyReportPageProps> = ({ selectedRange, custom
 };
 
 const LoginPage: React.FC<{ onLogin: (user: UserPermission) => void }> = ({ onLogin }) => {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('password');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [useLocalAuth, setUseLocalAuth] = useState(false);  // Fallback to local auth
@@ -716,8 +716,24 @@ const LoginPage: React.FC<{ onLogin: (user: UserPermission) => void }> = ({ onLo
         </div>
         {error && <div className="mb-4 text-rose-500 text-sm font-bold text-center">{error}</div>}
         <form onSubmit={handleLogin} className="space-y-6">
-          <input type="text" required className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl" value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" />
-          <input type="password" required className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+          <input
+            type="text"
+            autoComplete="username"
+            required
+            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            placeholder="Username"
+          />
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="••••••••"
+          />
           <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-5 rounded-2xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             {loading ? 'Authenticating...' : 'Authenticate'}
           </button>
