@@ -18,7 +18,7 @@ clickhouse:
 
 # Redis Configuration
 redis:
-  enabled: true  # Set to false to disable caching (useful for development)
+  enabled: true  # Auto-disabled in development, enabled in production
   host: "localhost"
   port: 6379
   db: 0

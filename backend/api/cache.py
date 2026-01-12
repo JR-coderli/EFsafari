@@ -50,9 +50,16 @@ def init_redis(redis_config: dict):
     _refresh_before_expiry = redis_config.get("refresh_before_expiry", 120)
     _data_ttl = redis_config.get("data_ttl", 600)
 
-    # Check if cache is explicitly disabled
+    # Check if cache is explicitly disabled or in development
     cache_enabled_config = redis_config.get("enabled", True)
     cache_env = os.getenv("CACHE_ENABLED", "true").lower()
+    is_dev = os.getenv("ENVIRONMENT", "development").lower() != "production"
+
+    if is_dev:
+        logger.info("Development environment detected - caching disabled")
+        _cache_enabled = False
+        _redis_client = None
+        return
 
     if not cache_enabled_config or cache_env == "false":
         logger.info("Caching is disabled via configuration")

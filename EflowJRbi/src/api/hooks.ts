@@ -8,23 +8,24 @@ import dashboardApi from './client';
 
 /**
  * In-memory cache for API responses
- * Cache TTL is longer for production (data updates daily)
- * Development mode uses shorter cache to avoid stale data
+ * Cache is disabled in development mode, enabled in production
  */
 class DataCache {
   private cache = new Map<string, { data: any; timestamp: number }>();
-  private defaultTTL = 5 * 60 * 1000; // 5 minutes (data updates daily, so longer cache is fine)
+  private defaultTTL = 5 * 60 * 1000; // 5 minutes
 
-  // Check if we're in development mode
+  // Check if we're in development mode - caching disabled
   private isDev = import.meta.env.DEV;
 
   set(key: string, data: any, ttl: number = this.defaultTTL) {
-    // Shorter cache in dev mode to avoid stale data during development
-    const actualTTL = this.isDev ? Math.min(ttl, 60000) : ttl; // Max 1 min in dev
-    this.cache.set(key, { data, timestamp: Date.now() + actualTTL });
+    // Skip caching in development mode
+    if (this.isDev) return;
+    this.cache.set(key, { data, timestamp: Date.now() + ttl });
   }
 
   get(key: string): any | null {
+    // Skip cache in development mode
+    if (this.isDev) return null;
     const entry = this.cache.get(key);
     if (!entry) return null;
     if (Date.now() > entry.timestamp) {
@@ -192,31 +193,40 @@ function hierarchyNodeToAdRow(
   maxLevel: number,
   parentFilters: Array<{ dimension: Dimension; value: string }>
 ): AdRow {
+  const revenue = Number(node._metrics.revenue) || 0;
+  const spend = Number(node._metrics.spend) || 0;
+  const impressions = Number(node._metrics.impressions) || 0;
+  const clicks = Number(node._metrics.clicks) || 0;
+  const conversions = Number(node._metrics.conversions) || 0;
+  const m_imp = Number(node._metrics.m_imp) || 0;
+  const m_clicks = Number(node._metrics.m_clicks) || 0;
+  const m_conv = Number(node._metrics.m_conv) || 0;
+
   return {
     id: `row_${name}_${level}`,
     name,
     level,
     dimensionType: node._dimension,
-    impressions: node._metrics.impressions,
-    clicks: node._metrics.clicks,
-    conversions: node._metrics.conversions,
-    spend: node._metrics.spend,
-    revenue: node._metrics.revenue,
-    profit: node._metrics.profit,
-    m_imp: node._metrics.m_imp,
-    m_clicks: node._metrics.m_clicks,
-    m_conv: node._metrics.m_conv,
-    ctr: node._metrics.ctr,
-    cvr: node._metrics.cvr,
-    roi: node._metrics.roi,
-    cpa: node._metrics.cpa,
-    rpa: node._metrics.revenue / (node._metrics.conversions || 1),
-    epc: node._metrics.revenue / (node._metrics.clicks || 1),
-    epv: node._metrics.revenue / (node._metrics.impressions || 1),
-    m_epc: (node._metrics.revenue * 0.4) / (node._metrics.m_clicks || 1),
-    m_epv: (node._metrics.revenue * 0.4) / (node._metrics.m_imp || 1),
-    m_cpc: (node._metrics.spend * 0.4) / (node._metrics.m_clicks || 1),
-    m_cpv: (node._metrics.spend * 0.4) / (node._metrics.m_imp || 1),
+    impressions,
+    clicks,
+    conversions,
+    spend,
+    revenue,
+    profit: revenue - spend,
+    m_imp,
+    m_clicks,
+    m_conv,
+    ctr: Number(node._metrics.ctr) || 0,
+    cvr: Number(node._metrics.cvr) || 0,
+    roi: Number(node._metrics.roi) || 0,
+    cpa: Number(node._metrics.cpa) || 0,
+    rpa: revenue / (conversions || 1),
+    epc: revenue / (clicks || 1),
+    epv: revenue / (impressions || 1),
+    m_epc: (revenue * 0.4) / (m_clicks || 1),
+    m_epv: (revenue * 0.4) / (m_imp || 1),
+    m_cpc: (spend * 0.4) / (m_clicks || 1),
+    m_cpv: (spend * 0.4) / (m_imp || 1),
     hasChild: level < maxLevel,
     isExpanded: false,
     children: [],
@@ -300,12 +310,42 @@ export async function loadRootData(
       limit: 1000,
     });
 
-    const result = response.data.map(row => ({
-      ...row,
-      dimensionType: row.dimensionType as Dimension,
-      profit: (row.revenue || 0) - (row.spend || 0),
-      hasChild: currentLevel < activeDims.length - 1,
-    }));
+    const result = response.data.map(row => {
+      const revenue = Number(row.revenue) || 0;
+      const spend = Number(row.spend) || 0;
+      const impressions = Number(row.impressions) || 0;
+      const clicks = Number(row.clicks) || 0;
+      const conversions = Number(row.conversions) || 0;
+      const m_imp = Number(row.m_imp) || 0;
+      const m_clicks = Number(row.m_clicks) || 0;
+      const m_conv = Number(row.m_conv) || 0;
+
+      return {
+        ...row,
+        dimensionType: row.dimensionType as Dimension,
+        impressions,
+        clicks,
+        conversions,
+        spend,
+        revenue,
+        profit: revenue - spend,
+        m_imp,
+        m_clicks,
+        m_conv,
+        ctr: Number(row.ctr) || 0,
+        cvr: Number(row.cvr) || 0,
+        roi: Number(row.roi) || 0,
+        cpa: Number(row.cpa) || 0,
+        rpa: Number(row.rpa) || 0,
+        epc: Number(row.epc) || 0,
+        epv: Number(row.epv) || 0,
+        m_epc: Number(row.m_epc) || 0,
+        m_epv: Number(row.m_epv) || 0,
+        m_cpc: Number(row.m_cpc) || 0,
+        m_cpv: Number(row.m_cpv) || 0,
+        hasChild: currentLevel < activeDims.length - 1,
+      };
+    });
 
     dataCache.set(cacheKeyVal, result);
 
@@ -388,12 +428,42 @@ export async function loadChildData(
       limit: 1000,
     });
 
-    const result = response.data.map(row => ({
-      ...row,
-      dimensionType: row.dimensionType as Dimension,
-      profit: (row.revenue || 0) - (row.spend || 0),
-      hasChild: currentLevel + 1 < activeDims.length,
-    }));
+    const result = response.data.map(row => {
+      const revenue = Number(row.revenue) || 0;
+      const spend = Number(row.spend) || 0;
+      const impressions = Number(row.impressions) || 0;
+      const clicks = Number(row.clicks) || 0;
+      const conversions = Number(row.conversions) || 0;
+      const m_imp = Number(row.m_imp) || 0;
+      const m_clicks = Number(row.m_clicks) || 0;
+      const m_conv = Number(row.m_conv) || 0;
+
+      return {
+        ...row,
+        dimensionType: row.dimensionType as Dimension,
+        impressions,
+        clicks,
+        conversions,
+        spend,
+        revenue,
+        profit: revenue - spend,
+        m_imp,
+        m_clicks,
+        m_conv,
+        ctr: Number(row.ctr) || 0,
+        cvr: Number(row.cvr) || 0,
+        roi: Number(row.roi) || 0,
+        cpa: Number(row.cpa) || 0,
+        rpa: Number(row.rpa) || 0,
+        epc: Number(row.epc) || 0,
+        epv: Number(row.epv) || 0,
+        m_epc: Number(row.m_epc) || 0,
+        m_epv: Number(row.m_epv) || 0,
+        m_cpc: Number(row.m_cpc) || 0,
+        m_cpv: Number(row.m_cpv) || 0,
+        hasChild: currentLevel + 1 < activeDims.length,
+      };
+    });
 
     dataCache.set(cacheKeyVal, result);
     return result;
@@ -432,15 +502,15 @@ export async function loadDailyData(
 
     const result = dailyData.map(day => ({
       date: day.date,
-      impressions: day.impressions,
-      clicks: day.clicks,
-      conversions: day.conversions,
-      spend: day.spend,
-      revenue: day.revenue,
-      profit: (day.revenue || 0) - (day.spend || 0),
-      m_imp: day.m_imp,
-      m_clicks: day.m_clicks,
-      m_conv: day.m_conv,
+      impressions: Number(day.impressions) || 0,
+      clicks: Number(day.clicks) || 0,
+      conversions: Number(day.conversions) || 0,
+      spend: Number(day.spend) || 0,
+      revenue: Number(day.revenue) || 0,
+      profit: (Number(day.revenue) || 0) - (Number(day.spend) || 0),
+      m_imp: Number(day.m_imp) || 0,
+      m_clicks: Number(day.m_clicks) || 0,
+      m_conv: Number(day.m_conv) || 0,
     }));
 
     dataCache.set(cacheKeyVal, result, 15000); // 15 seconds cache for daily data
