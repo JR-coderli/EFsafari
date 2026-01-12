@@ -25,7 +25,8 @@ redis:
   password: null
   # Cache TTL in seconds
   default_ttl: 300
-  data_ttl: 60
+  data_ttl: 600  # 10 minutes (2-3x frontend cache for smooth experience)
+  refresh_before_expiry: 120  # Refresh 2 minutes before TTL expires
 
 # CORS Settings
 cors:

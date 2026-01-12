@@ -199,16 +199,13 @@ async def get_aggregated_data(
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="Invalid filters JSON")
 
-    # Check cache
     user_id = current_user.get("id", "anonymous")
     cache_key_val = cache_key("data", start_date, end_date, dimensions, filter_list, user_id)
-    cached_result = get_cache(cache_key_val)
-    if cached_result is not None:
-        return DataQueryResponse(**cached_result)
 
-    # Build query
-    db = get_db()
-    try:
+    # Define the data fetcher function for cache refresh
+    def fetch_data():
+        """Fetch data from ClickHouse - used for initial load and async refresh."""
+        db = get_db()
         client = db.connect()
 
         # Get the primary dimension (first in list) for grouping
@@ -264,14 +261,22 @@ async def get_aggregated_data(
             formatted_row["hasChild"] = len(dimensions) > 1
             formatted_data.append(formatted_row)
 
-        response = DataQueryResponse(
+        return DataQueryResponse(
             data=formatted_data,
             total=len(formatted_data),
             dateRange=DateRangeFilter(start_date=start_date, end_date=end_date)
-        )
-        # Cache for 60 seconds
-        set_cache(cache_key_val, response.dict(), ttl=60)
-        return response
+        ).dict()
+
+    # Check cache with async refresh capability
+    cached_result = get_cache(cache_key_val, refresher=fetch_data)
+    if cached_result is not None:
+        return DataQueryResponse(**cached_result)
+
+    # Cache miss - fetch and store
+    try:
+        response_data = fetch_data()
+        set_cache(cache_key_val, response_data)
+        return DataQueryResponse(**response_data)
 
     except Exception as e:
         import traceback
@@ -485,20 +490,18 @@ async def get_data_hierarchy(
     if not dim_list:
         raise HTTPException(status_code=400, detail="At least one dimension required")
 
-    # Check cache
     user_id = current_user.get("id", "anonymous")
     cache_key_val = cache_key("hierarchy", start_date, end_date, dim_list, user_id)
-    cached_result = get_cache(cache_key_val)
-    if cached_result is not None:
-        return cached_result
 
-    # Build permission filter
-    user_role = current_user.get("role")
-    user_keywords = current_user.get("keywords", [])
-    permission_filter = _build_permission_filter(user_role, user_keywords)
+    # Define the hierarchy fetcher function for cache refresh
+    def fetch_hierarchy():
+        """Fetch hierarchy data from ClickHouse - used for initial load and async refresh."""
+        # Build permission filter
+        user_role = current_user.get("role")
+        user_keywords = current_user.get("keywords", [])
+        permission_filter = _build_permission_filter(user_role, user_keywords)
 
-    db = get_db()
-    try:
+        db = get_db()
         client = db.connect()
 
         # Fetch all data grouped by all dimensions at once
@@ -571,16 +574,23 @@ async def get_data_hierarchy(
                 if not is_last and current_level[level_key].get("_children") is not None:
                     current_level = current_level[level_key]["_children"]
 
-        result = {
+        return {
             "dimensions": dim_list,
             "hierarchy": hierarchy,
             "startDate": start_date,
             "endDate": end_date
         }
-        # Cache for 60 seconds
-        set_cache(cache_key_val, result, ttl=60)
-        return result
 
+    # Check cache with async refresh capability
+    cached_result = get_cache(cache_key_val, refresher=fetch_hierarchy)
+    if cached_result is not None:
+        return cached_result
+
+    # Cache miss - fetch and store
+    try:
+        result = fetch_hierarchy()
+        set_cache(cache_key_val, result)
+        return result
     except Exception as e:
         logger.error(f"Error fetching hierarchy: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching hierarchy: {str(e)}")
