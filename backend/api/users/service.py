@@ -238,11 +238,18 @@ class UserService:
             role_value = updates["role"] if isinstance(updates["role"], str) else str(updates["role"])
             update_fields.append(f"role = '{role_value}'")
         if "keywords" in updates:
+            # Use array() function for safer ClickHouse array handling
             keywords_arr = updates["keywords"]
-            # Properly format ClickHouse array: ['item1', 'item2']
-            formatted_items = ", ".join([f"'{k.replace(\"'\", \"''\")}'" for k in keywords_arr])
-            keywords_str = f"[{formatted_items}]"
-            update_fields.append(f"keywords = {keywords_str}")
+            if keywords_arr:
+                escaped_items = []
+                for k in keywords_arr:
+                    # Escape single quotes by doubling them and escape backslashes
+                    escaped = k.replace("\\", "\\\\").replace("'", "''")
+                    escaped_items.append(f"'{escaped}'")
+                formatted_items = ", ".join(escaped_items)
+                update_fields.append(f"keywords = [{formatted_items}]")
+            else:
+                update_fields.append("keywords = []")
 
         if not update_fields:
             return user
