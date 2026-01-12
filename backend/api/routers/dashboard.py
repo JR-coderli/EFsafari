@@ -264,7 +264,9 @@ async def get_aggregated_data(
                 row,
                 dimension_type=primary_dim,
                 level=len(filter_list),
-                filter_values=filter_values
+                filter_values=filter_values,
+                all_dimensions=dimensions,
+                filter_list=filter_list
             )
             # Determine if this row can have children
             formatted_row["hasChild"] = len(dimensions) > 1

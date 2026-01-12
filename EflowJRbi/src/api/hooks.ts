@@ -202,8 +202,12 @@ function hierarchyNodeToAdRow(
   const m_clicks = Number(node._metrics.m_clicks) || 0;
   const m_conv = Number(node._metrics.m_conv) || 0;
 
+  // Build unique ID using filterPath values (hierarchical path)
+  const filterPath = [...parentFilters, { dimension: node._dimension, value: name }];
+  const uniqueId = filterPath.map(f => f.value).join('|');
+
   return {
-    id: `row_${name}_${level}`,
+    id: uniqueId,
     name,
     level,
     dimensionType: node._dimension,
@@ -231,6 +235,7 @@ function hierarchyNodeToAdRow(
     hasChild: level < maxLevel,
     isExpanded: false,
     children: [],
+    filterPath,
   };
 }
 
@@ -241,10 +246,11 @@ function getDataFromHierarchy(
   hierarchy: Record<string, HierarchyNode>,
   activeDims: Dimension[],
   activeFilters: Array<{ dimension: Dimension; value: string }>,
-  level: number = 0
+  startLevel: number = 0
 ): AdRow[] {
   // Navigate through hierarchy based on filters
   let currentLevel = hierarchy;
+  let actualLevel = startLevel;
 
   for (let i = 0; i < activeFilters.length && i < activeDims.length; i++) {
     const filter = activeFilters[i];
@@ -253,13 +259,15 @@ function getDataFromHierarchy(
       return [];
     }
     currentLevel = node._children;
+    actualLevel++; // Increment level as we go deeper
   }
 
   // Convert current level to AdRow format
   const maxLevel = activeDims.length - 1;
   const result = Object.entries(currentLevel).map(([name, node]) =>
-    hierarchyNodeToAdRow(name, node, level, maxLevel, activeFilters)
-  );
+    hierarchyNodeToAdRow(name, node, actualLevel, maxLevel, activeFilters)
+);
+  console.log("[getDataFromHierarchy] result:", result.length, "level:", result[0]?.level, "first dimensionType:", result[0]?.dimensionType);
   return result;
 }
 
@@ -296,7 +304,7 @@ export async function loadRootData(
   const hierarchyCacheKey = cacheKey('hierarchy', start, end, activeDims);
   const cachedHierarchy = dataCache.get(hierarchyCacheKey);
   if (cachedHierarchy) {
-    const result = getDataFromHierarchy(cachedHierarchy.hierarchy, activeDims, activeFilters, activeFilters.length);
+    const result = getDataFromHierarchy(cachedHierarchy.hierarchy, activeDims, activeFilters, 0);
     // Also cache this level for faster access
     dataCache.set(cacheKeyVal, result);
     return result;
@@ -322,8 +330,14 @@ export async function loadRootData(
       const m_clicks = Number(row.m_clicks) || 0;
       const m_conv = Number(row.m_conv) || 0;
 
+      // Build filterPath - use backend's if available, otherwise build from activeFilters
+      const rowFilterPath = (row as any).filterPath || [...activeFilters, { dimension: primaryDim, value: row.name }];
+      // Generate unique ID from filterPath (consistent with hierarchy data)
+      const uniqueId = rowFilterPath.map(f => f.value).join('|');
+
       return {
         ...row,
+        id: uniqueId,  // Use unique ID from filterPath
         dimensionType: row.dimensionType as Dimension,
         impressions,
         clicks,
@@ -347,6 +361,7 @@ export async function loadRootData(
         m_cpc: Number(row.m_cpc) || 0,
         m_cpv: Number(row.m_cpv) || 0,
         hasChild: currentLevel < activeDims.length - 1,
+        filterPath: rowFilterPath,
       };
     });
 
@@ -403,7 +418,7 @@ export async function loadChildData(
   // Try hierarchy first
   const hierarchy = await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
   if (hierarchy) {
-    return getDataFromHierarchy(hierarchy.hierarchy, activeDims, activeFilters, activeFilters.length);
+    return getDataFromHierarchy(hierarchy.hierarchy, activeDims, activeFilters, 0);
   }
 
   // Fallback to regular API
@@ -441,8 +456,14 @@ export async function loadChildData(
       const m_clicks = Number(row.m_clicks) || 0;
       const m_conv = Number(row.m_conv) || 0;
 
+      // Build filterPath - use backend's if available, otherwise build from activeFilters
+      const rowFilterPath = (row as any).filterPath || [...activeFilters, { dimension: nextDim, value: row.name }];
+      // Generate unique ID from filterPath (consistent with hierarchy data)
+      const uniqueId = rowFilterPath.map(f => f.value).join('|');
+
       return {
         ...row,
+        id: uniqueId,  // Use unique ID from filterPath
         dimensionType: row.dimensionType as Dimension,
         impressions,
         clicks,
@@ -466,6 +487,7 @@ export async function loadChildData(
         m_cpc: Number(row.m_cpc) || 0,
         m_cpv: Number(row.m_cpv) || 0,
         hasChild: currentLevel + 1 < activeDims.length,
+        filterPath: rowFilterPath,
       };
     });
 

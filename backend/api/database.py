@@ -115,7 +115,7 @@ def build_filters(filters: Dict[str, Any]) -> tuple[str, List[str]]:
     return where_clause, params
 
 
-def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int = 0, filter_values: List[str] = None) -> Dict[str, Any]:
+def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int = 0, filter_values: List[str] = None, all_dimensions: List[str] = None, filter_list: List[Dict] = None) -> Dict[str, Any]:
     """Format ClickHouse row for frontend consumption.
 
     Args:
@@ -123,6 +123,8 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
         dimension_type: The dimension type for this row
         level: Hierarchy level
         filter_values: Parent filter values for building ID
+        all_dimensions: Complete list of dimensions in the hierarchy (for building filterPath)
+        filter_list: Parent filter list with dimension and value
 
     Returns:
         Formatted dict matching frontend AdRow interface
@@ -155,6 +157,15 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
     m_cpc = spend / (m_clicks or 1)
     m_cpv = spend / (m_imp or 1)
 
+    # Build filterPath for frontend hierarchy navigation
+    # filterPath is an array of {dimension, value} objects representing the full path to this row
+    filter_path = []
+    if filter_list:
+        # Add parent filters from filter_list
+        filter_path.extend(filter_list)
+    # Add current row's dimension and value
+    filter_path.append({"dimension": dimension_type, "value": dim_value})
+
     return {
         "id": row_id,
         "name": dim_value,
@@ -180,6 +191,7 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
         "m_cpc": m_cpc,
         "m_cpv": m_cpv,
         "hasChild": True,  # Will be determined by query logic
+        "filterPath": filter_path,  # Add filterPath for frontend
     }
 
 

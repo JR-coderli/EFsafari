@@ -760,6 +760,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [activeFilters, setActiveFilters] = useState<Filter[]>([]);
   const [expandedDailyRows, setExpandedDailyRows] = useState<Set<string>>(new Set());
   const [expandedDimRows, setExpandedDimRows] = useState<Set<string>>(new Set());
+  // Store daily data separately to avoid reference issues with flattened data
+  const [dailyDataMap, setDailyDataMap] = useState<Map<string, DailyBreakdown[]>>(new Map());
   const [selectedRange, setSelectedRange] = useState('Yesterday');
   const [customDateStart, setCustomDateStart] = useState<Date | undefined>(undefined);
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(undefined);
@@ -1294,22 +1296,31 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   };
 
   const toggleDimExpansion = async (e: React.MouseEvent, row: AdRow) => {
+    console.log('[toggleDimExpansion] CALLED - row.id:', row.id, 'row.level:', row.level, 'row.hasChild:', row.hasChild);
     e.preventDefault(); e.stopPropagation();
-    if (!row.hasChild) return;
+    if (!row.hasChild) {
+      console.log('[toggleDimExpansion] Returning early because hasChild is false');
+      return;
+    }
     const nextExpanded = new Set(expandedDimRows);
     if (nextExpanded.has(row.id)) {
       nextExpanded.delete(row.id);
     } else {
       nextExpanded.add(row.id);
-      if (!row.children) {
+      if (!row.children || row.children.length === 0) {
         const nextLevel = row.level + 1;
         let children: AdRow[];
 
-        // Build filters for this row's hierarchy
-        const rowFilters = row.id.split('|').map((v, i) => ({
+        // Build filters for this row's hierarchy - use filterPath if available (for child rows)
+        const rowFilters = row.filterPath || row.id.split('|').map((v, i) => ({
           dimension: activeDims[i],
           value: v
         }));
+
+        console.log('[toggleDimExpansion] row.id:', row.id, 'row.level:', row.level, 'rowFilters:', rowFilters);
+        console.log('[toggleDimExpansion] row.filterPath:', row.filterPath);
+        console.log('[toggleDimExpansion] activeDims:', activeDims);
+        console.log('[toggleDimExpansion] activeDims.length:', activeDims.length, 'row.level + 1:', row.level + 1);
 
         if (useMock) {
           // Use mock data
@@ -1323,7 +1334,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         } else {
           // Use real API
           try {
+            // Pass row's filterPath to load child data
             children = await loadChildData(activeDims, rowFilters, selectedRange, row.id, customDateStart, customDateEnd);
+            console.log('[toggleDimExpansion] children loaded:', children);
+            if (children.length > 0) {
+              console.log('[toggleDimExpansion] first child:', children[0]);
+            }
           } catch (err) {
             console.error('Error loading child data:', err);
             children = [];
@@ -1343,61 +1359,56 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         }
 
         setData(prev => {
-          const update = (rows: AdRow[]): AdRow[] =>
-            rows.map(r =>
-              r.id === row.id
+          const update = (rows: AdRow[], depth = 0): AdRow[] => {
+            const indent = '  '.repeat(depth);
+            console.log(`[update] Depth ${depth}: checking ${rows.length} rows, looking for id:`, row.id);
+            return rows.map(r => {
+              const match = r.id === row.id;
+              if (match) {
+                console.log(`[update] FOUND MATCH at depth ${depth}: ${r.id} -> setting children with ${children.length} items`);
+              }
+              return match
                 ? { ...r, children }
-                : (r.children ? { ...r, children: update(r.children) } : r)
-            );
-          return update(prev);
+                : (r.children ? { ...r, children: update(r.children, depth + 1) } : r);
+            });
+          };
+          const updated = update(prev);
+          console.log('[setData] Updated data, row.id:', row.id, 'children.length:', children.length);
+          console.log('[setData] First child hasChild:', children[0]?.hasChild, 'first child id:', children[0]?.id);
+          return updated;
         });
       }
     }
     setExpandedDimRows(nextExpanded);
   };
 
-  // Fix: Added toggleDailyBreakdown implementation
-  const toggleDailyBreakdown = async (e: React.MouseEvent, rowId: string) => {
+  // Load daily data for a specific row - works for both parent and child rows
+  const toggleDailyBreakdown = async (e: React.MouseEvent, row: AdRow) => {
     e.preventDefault(); e.stopPropagation();
+    console.log('[toggleDailyBreakdown] row.id:', row.id, 'row.filterPath:', row.filterPath);
     const next = new Set(expandedDailyRows);
-    if (next.has(rowId)) {
-      next.delete(rowId);
+    if (next.has(row.id)) {
+      next.delete(row.id);
     } else {
-      next.add(rowId);
-      // Load daily data if not already loaded
-      // Find the row and load its daily data
-      const findRowAndLoadDaily = (rows: AdRow[]): boolean => {
-        for (const row of rows) {
-          if (row.id === rowId) {
-            // Build filters for this row
-            const rowFilters = rowId.split('|').map((v, i) => ({
-              dimension: activeDims[i],
-              value: v
-            }));
-
-            // Daily breakdown always shows last 7 days from today (fixed, not affected by date range selection)
-            apiLoadDailyData(rowFilters, 'Last 7 Days', 7).then(dailyData => {
-              setData(prev => {
-                const update = (rows: AdRow[]): AdRow[] =>
-                  rows.map(r =>
-                    r.id === rowId
-                      ? { ...r, dailyData }
-                      : (r.children ? { ...r, children: update(r.children) } : r)
-                    );
-                return update(prev);
-              });
-            }).catch(err => {
-              console.error('Error loading daily data:', err);
-            });
-            return true;
-          }
-          if (row.children && findRowAndLoadDaily(row.children)) {
-            return true;
-          }
-        }
-        return false;
-      };
-      findRowAndLoadDaily(data);
+      next.add(row.id);
+      // Check if data is already loaded
+      console.log('[toggleDailyBreakdown] dailyDataMap.has(row.id):', dailyDataMap.has(row.id));
+      if (!dailyDataMap.has(row.id) && row.filterPath) {
+        // Use filterPath from the row - this works for both parent and child rows
+        console.log('[toggleDailyBreakdown] using filterPath:', row.filterPath);
+        // Load daily data (last 7 days)
+        apiLoadDailyData(row.filterPath, 'Last 7 Days', 7).then(dailyData => {
+          console.log('[toggleDailyBreakdown] dailyData loaded:', dailyData);
+          setDailyDataMap(prev => {
+            const newMap = new Map(prev).set(row.id, dailyData);
+            console.log('[toggleDailyBreakdown] dailyDataMap size after set:', newMap.size);
+            console.log('[toggleDailyBreakdown] dailyDataMap.get(row.id):', newMap.get(row.id));
+            return newMap;
+          });
+        }).catch(err => {
+          console.error('Error loading daily data:', err);
+        });
+      }
     }
     setExpandedDailyRows(next);
   };
@@ -1668,11 +1679,11 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                         <tr className="hover:bg-indigo-50/40 transition-all cursor-pointer group">
                           <td className="px-4 py-3 sticky left-0 bg-white z-10 border-r border-slate-50" style={{ paddingLeft: `${row.level * 20 + 32}px`, width: columnWidths.hierarchy }}>
                             <div className="flex items-center gap-2" onClick={() => {
-                              const nextFilters = row.id.split('|').map((v, i) => ({ dimension: activeDims[i], value: v }));
+                              const nextFilters = row.filterPath || row.id.split('|').map((v, i) => ({ dimension: activeDims[i], value: v }));
                               setActiveFilters(nextFilters);
                               setQuickFilterText('');
                             }}>
-                              <button onClick={(e) => { e.stopPropagation(); toggleDailyBreakdown(e, row.id); }} className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${expandedDailyRows.has(row.id) ? 'bg-indigo-600 shadow-sm' : 'bg-slate-100'}`}><div className={`w-1.5 h-1.5 rounded-full ${expandedDailyRows.has(row.id) ? 'bg-white' : 'bg-slate-400'}`}></div></button>
+                              <button onClick={(e) => { e.stopPropagation(); toggleDailyBreakdown(e, row); }} className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${expandedDailyRows.has(row.id) ? 'bg-indigo-600 shadow-sm' : 'bg-slate-100'}`}><div className={`w-1.5 h-1.5 rounded-full ${expandedDailyRows.has(row.id) ? 'bg-white' : 'bg-slate-400'}`}></div></button>
                               {row.hasChild && <button onClick={(e) => { e.stopPropagation(); toggleDimExpansion(e, row); }} className={`w-6 h-6 rounded flex items-center justify-center transition-all bg-slate-50 border border-slate-100 text-slate-400 ${isExpanded ? 'rotate-90' : ''}`}><i className="fas fa-chevron-right text-[10px]"></i></button>}
                               <div className="flex flex-col min-w-0">
                                 <span className="text-[13px] font-black text-slate-800 truncate group-hover:text-indigo-600">{row.name}</span>
@@ -1682,12 +1693,16 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                           </td>
                           {visibleMetrics.map(m => <td key={m.key} className="px-4 py-3 text-right" style={{ width: columnWidths[m.key] || 120 }}><MetricValue value={row[m.key] as number} type={m.type} colorMode={colorMode} metricKey={m.key as string} /></td>)}
                         </tr>
-                        {expandedDailyRows.has(row.id) && row.dailyData?.slice(0, 7).map(day => (
+                        {expandedDailyRows.has(row.id) && (() => {
+                          const dailyData = dailyDataMap.get(row.id);
+                          console.log('[Render] row.id:', row.id, 'expandedDailyRows.has:', expandedDailyRows.has(row.id), 'dailyData:', dailyData);
+                          return dailyData?.slice(0, 7).map(day => (
                           <tr key={day.date} className="bg-slate-50/50">
                             <td className="px-4 py-2 sticky left-0 bg-slate-50 z-10 border-l-4 border-indigo-600/60 border-r border-slate-50" style={{ paddingLeft: `${row.level * 20 + 72}px`, width: columnWidths.hierarchy }}><span className="text-[12px] font-bold text-slate-500">{day.date}</span></td>
                             {visibleMetrics.map(m => <td key={m.key} className="px-4 py-2 text-right opacity-80" style={{ width: columnWidths[m.key] || 120 }}><MetricValue value={day[m.key as keyof DailyBreakdown] as number || 0} type={m.type} isSub colorMode={colorMode} metricKey={m.key as string} /></td>)}
                           </tr>
-                        ))}
+                          ));
+                        })()}
                       </React.Fragment>
                       );
                     })}
