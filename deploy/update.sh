@@ -42,6 +42,8 @@ pip install -r requirements.txt
 # 3. 重新构建前端
 log_info "构建前端..."
 cd "$PROJECT_DIR/EflowJRbi"
+# 清除 Vite 缓存确保完整构建
+rm -rf node_modules/.vite dist
 npm install
 npm run build
 
