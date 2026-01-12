@@ -48,14 +48,14 @@ def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Option
     if user_role == 'admin' or not user_keywords:
         return None
 
-    # Build keyword filter based on role
+    # Build keyword filter based on role (use actual ClickHouse column names)
     if user_role == 'ops':
         # Filter by Adset column
         keyword_conditions = [f"lower(Adset) LIKE lower('%{k}%')" for k in user_keywords]
         return f"({' OR '.join(keyword_conditions)})"
     elif user_role == 'ops02':
-        # Filter by platform column
-        keyword_conditions = [f"lower(platform) LIKE lower('%{k}%')" for k in user_keywords]
+        # Filter by Media column (platform dimension)
+        keyword_conditions = [f"lower(Media) LIKE lower('%{k}%')" for k in user_keywords]
         return f"({' OR '.join(keyword_conditions)})"
     elif user_role == 'business':
         # Filter by offer column
