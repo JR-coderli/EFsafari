@@ -115,9 +115,9 @@ npm run dev
 
 | 层级 | 时间 | 环境差异 | 说明 |
 |------|------|----------|------|
-| 前端缓存 | 5 分钟 | 开发环境 1 分钟 | 浏览器内存，刷新页面清空 |
-| 后端缓存 | 10 分钟 | - | Redis 共享，刷新页面保留 |
-| 异步刷新 | TTL 前 2 分钟 | - | 后台预热，用户无感知 |
+| 前端缓存 | 5 分钟 | 开发环境禁用 | 浏览器内存，刷新页面清空 |
+| 后端缓存 | 10 分钟 | 开发环境禁用 | Redis 共享，刷新页面保留 |
+| 异步刷新 | TTL 前 2 分钟 | 仅生产环境 | 后台预热，用户无感知 |
 
 ### 缓存效果
 
@@ -125,19 +125,50 @@ npm run dev
 - 缓存命中：秒级响应
 - 异步刷新：用户永远不等待慢查询
 
+### 环境自动判断
+
+- **开发环境**: `ENVIRONMENT` 未设置或为 `development` → 缓存自动禁用
+- **生产环境**: `ENVIRONMENT=production` → 缓存自动启用
+
 ### 配置文件
 
 - **后端**: `backend/api/config.yaml` → `redis.data_ttl: 600`
-- **前端**: `EflowJRbi/src/api/hooks.ts` → `defaultTTL = 5 * 60 * 1000`
+- **前端**: `EflowJRbi/src/api/hooks.ts` → 自动判断环境
 
-### 禁用缓存（开发环境）
+## 服务器信息
+
+### SSH 登接
+
+```yaml
+IP: 43.160.248.9
+用户: root
+密码: y?FJYqmp4*h@5
+```
+
+### 路径
+
+```yaml
+项目根目录: /opt/bicode/
+后端代码: /opt/bicode/backend/
+前端代码: /opt/bicode/EflowJRbi/
+```
+
+### 环境变量
 
 ```bash
-# 方式1: 配置文件
-redis.enabled: false
+export ENVIRONMENT=production
+```
 
-# 方式2: 环境变量
-export CACHE_ENABLED=false
+### 服务管理
+
+```bash
+# 重启后端
+cd /opt/bicode/backend
+pkill -f "uvicorn.*8000"
+nohup python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
+
+# 查看日志
+tail -f server.log
 ```
 
 ---

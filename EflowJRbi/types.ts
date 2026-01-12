@@ -20,6 +20,18 @@ export interface DailyBreakdown {
   m_imp: number;
   m_clicks: number;
   m_conv: number;
+  // Calculated metrics
+  ctr: number;
+  cvr: number;
+  roi: number;
+  cpa: number;
+  epa: number;  // Revenue per action (conversion)
+  epc: number;  // Earnings per click
+  epv: number;  // Earnings per view
+  m_epc: number;
+  m_epv: number;
+  m_cpc: number;
+  m_cpv: number;
 }
 
 export interface AdRow {
@@ -42,13 +54,14 @@ export interface AdRow {
   roi: number;
   cpa: number;
   rpa: number;
+  epa: number;  // Revenue per action (same as rpa)
   epc: number;
   epv: number;
   m_epc: number;
   m_epv: number;
   m_cpc: number;
   m_cpv: number;
-  
+
   hasChild: boolean;
   isExpanded?: boolean;
   children?: AdRow[];

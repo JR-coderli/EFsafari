@@ -52,6 +52,9 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { key: 'cvr', label: 'CVR', visible: true, type: 'percent', group: 'Calculated' },
   { key: 'roi', label: 'ROI', visible: true, type: 'percent', group: 'Calculated' },
   { key: 'cpa', label: 'CPA', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'epa', label: 'EPA', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'epv', label: 'EPV', visible: true, type: 'money', group: 'Calculated' },
 ];
 
 const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number' | 'profit'; isSub?: boolean; colorMode?: boolean; metricKey?: string }> = ({ value, type, isSub, colorMode, metricKey }) => {
@@ -78,6 +81,8 @@ const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number
     else if (metricKey === 'spend') colorClasses = 'text-rose-500';    // 红色
     else if (metricKey === 'cpa') colorClasses = 'text-blue-500';      // 蓝色
     else if (metricKey === 'epa') colorClasses = 'text-amber-500';     // 黄色
+    else if (metricKey === 'epc') colorClasses = 'text-amber-500';     // 黄色
+    else if (metricKey === 'epv') colorClasses = 'text-amber-500';     // 黄色
   }
 
   const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[12px] text-slate-500 font-medium' : `text-[13px] ${colorClasses} font-bold`}`;
@@ -1631,7 +1636,16 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             </div>
 
             <div className="flex-1 overflow-auto bg-white custom-scrollbar flex flex-col">
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-auto relative">
+                {/* Loading Overlay */}
+                {loading && (
+                  <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                      <span className="text-sm font-bold text-slate-600">Loading...</span>
+                    </div>
+                  </div>
+                )}
                 <table ref={tableRef} className="w-full text-left border-collapse" style={{ minWidth: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 200 }}>
                   <thead>
                     <tr className="bg-slate-50/95 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 shadow-sm sticky top-0 z-50 backdrop-blur-sm">
@@ -1657,7 +1671,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {loading ? <tr><td colSpan={30} className="px-8 py-10"><div className="h-10 bg-slate-50 rounded-2xl w-full animate-pulse"></div></td></tr> : paginatedData.map((row, idx) => {
+                    {paginatedData.map((row, idx) => {
                       const isExpanded = expandedDimRows.has(row.id);
                       return (
                       <React.Fragment key={row.id}>

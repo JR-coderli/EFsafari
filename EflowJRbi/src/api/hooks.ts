@@ -221,6 +221,7 @@ function hierarchyNodeToAdRow(
     roi: Number(node._metrics.roi) || 0,
     cpa: Number(node._metrics.cpa) || 0,
     rpa: revenue / (conversions || 1),
+    epa: revenue / (conversions || 1),  // Earnings Per Action
     epc: revenue / (clicks || 1),
     epv: revenue / (impressions || 1),
     m_epc: (revenue * 0.4) / (m_clicks || 1),
@@ -337,6 +338,7 @@ export async function loadRootData(
         roi: Number(row.roi) || 0,
         cpa: Number(row.cpa) || 0,
         rpa: Number(row.rpa) || 0,
+        epa: Number(row.rpa) || 0,  // Earnings Per Action (same as rpa)
         epc: Number(row.epc) || 0,
         epv: Number(row.epv) || 0,
         m_epc: Number(row.m_epc) || 0,
@@ -455,6 +457,7 @@ export async function loadChildData(
         roi: Number(row.roi) || 0,
         cpa: Number(row.cpa) || 0,
         rpa: Number(row.rpa) || 0,
+        epa: Number(row.rpa) || 0,  // Earnings Per Action (same as rpa)
         epc: Number(row.epc) || 0,
         epv: Number(row.epv) || 0,
         m_epc: Number(row.m_epc) || 0,
@@ -500,18 +503,41 @@ export async function loadDailyData(
       limit,
     });
 
-    const result = dailyData.map(day => ({
-      date: day.date,
-      impressions: Number(day.impressions) || 0,
-      clicks: Number(day.clicks) || 0,
-      conversions: Number(day.conversions) || 0,
-      spend: Number(day.spend) || 0,
-      revenue: Number(day.revenue) || 0,
-      profit: (Number(day.revenue) || 0) - (Number(day.spend) || 0),
-      m_imp: Number(day.m_imp) || 0,
-      m_clicks: Number(day.m_clicks) || 0,
-      m_conv: Number(day.m_conv) || 0,
-    }));
+    const result = dailyData.map(day => {
+      const impressions = Number(day.impressions) || 0;
+      const clicks = Number(day.clicks) || 0;
+      const conversions = Number(day.conversions) || 0;
+      const spend = Number(day.spend) || 0;
+      const revenue = Number(day.revenue) || 0;
+      const m_imp = Number(day.m_imp) || 0;
+      const m_clicks = Number(day.m_clicks) || 0;
+      const m_conv = Number(day.m_conv) || 0;
+
+      return {
+        date: day.date,
+        impressions,
+        clicks,
+        conversions,
+        spend,
+        revenue,
+        profit: revenue - spend,
+        m_imp,
+        m_clicks,
+        m_conv,
+        // Calculated metrics
+        ctr: clicks / (impressions || 1),
+        cvr: conversions / (clicks || 1),
+        roi: (revenue - spend) / (spend || 1),
+        cpa: spend / (conversions || 1),
+        epa: revenue / (conversions || 1),  // Earnings Per Action
+        epc: revenue / (clicks || 1),       // Earnings Per Click
+        epv: revenue / (impressions || 1),  // Earnings Per View
+        m_epc: revenue / (m_clicks || 1),
+        m_epv: revenue / (m_imp || 1),
+        m_cpc: spend / (m_clicks || 1),
+        m_cpv: spend / (m_imp || 1),
+      };
+    });
 
     dataCache.set(cacheKeyVal, result, 15000); // 15 seconds cache for daily data
     return result;
