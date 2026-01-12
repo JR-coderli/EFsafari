@@ -1487,14 +1487,18 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             <i className="fas fa-chart-bar w-5 text-center"></i>
             {isSidebarOpen && <span className="text-sm font-bold">Performance</span>}
           </button>
-          <button onClick={() => setCurrentPage('daily_report')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'daily_report' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
-            <i className="fas fa-calendar-day w-5 text-center"></i>
-            {isSidebarOpen && <span className="text-sm font-bold">Daily Report</span>}
-          </button>
-          <button onClick={() => setCurrentPage('permissions')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'permissions' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
-            <i className="fas fa-user-shield w-5 text-center"></i>
-            {isSidebarOpen && <span className="text-sm font-bold">Permissions</span>}
-          </button>
+          {currentUser.role === 'admin' && (
+            <button onClick={() => setCurrentPage('daily_report')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'daily_report' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
+              <i className="fas fa-calendar-day w-5 text-center"></i>
+              {isSidebarOpen && <span className="text-sm font-bold">Daily Report</span>}
+            </button>
+          )}
+          {currentUser.role === 'admin' && (
+            <button onClick={() => setCurrentPage('permissions')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'permissions' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
+              <i className="fas fa-user-shield w-5 text-center"></i>
+              {isSidebarOpen && <span className="text-sm font-bold">Permissions</span>}
+            </button>
+          )}
         </nav>
         <div className="p-4 border-t border-slate-700/50">
           <button onClick={onLogout} className="w-full flex items-center gap-4 px-2 py-3 hover:bg-slate-800 rounded-lg text-rose-400 transition-colors">
