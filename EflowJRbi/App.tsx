@@ -1380,9 +1380,15 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
               value: v
             }));
 
+            // Calculate number of days based on selected date range
+            const rangeInfo = getRangeInfo(selectedRange, customDateStart, customDateEnd);
+            const daysDiff = Math.ceil((rangeInfo.end.getTime() - rangeInfo.start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            // Cap at reasonable limit for daily breakdown
+            const dailyLimit = Math.min(daysDiff, 90);
+
             // Load daily data
             if (!row.dailyData || row.dailyData.length === 0) {
-              apiLoadDailyData(rowFilters, selectedRange, 7, customDateStart, customDateEnd).then(dailyData => {
+              apiLoadDailyData(rowFilters, selectedRange, dailyLimit, customDateStart, customDateEnd).then(dailyData => {
                 setData(prev => {
                   const update = (rows: AdRow[]): AdRow[] =>
                     rows.map(r =>
