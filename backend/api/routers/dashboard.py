@@ -38,7 +38,7 @@ def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Option
     """Build permission filter SQL based on user role and keywords.
 
     Args:
-        user_role: User role (admin, ops, business)
+        user_role: User role (admin, ops, ops02, business)
         user_keywords: User's keywords list
 
     Returns:
@@ -52,6 +52,10 @@ def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Option
     if user_role == 'ops':
         # Filter by Adset column
         keyword_conditions = [f"lower(Adset) LIKE lower('%{k}%')" for k in user_keywords]
+        return f"({' OR '.join(keyword_conditions)})"
+    elif user_role == 'ops02':
+        # Filter by platform column
+        keyword_conditions = [f"lower(platform) LIKE lower('%{k}%')" for k in user_keywords]
         return f"({' OR '.join(keyword_conditions)})"
     elif user_role == 'business':
         # Filter by offer column
