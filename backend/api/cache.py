@@ -1,9 +1,15 @@
 """
 Redis cache service for API responses.
+
+Caching can be disabled via:
+1. Redis not available (automatic fallback)
+2. enabled: false in config
+3. Set CACHE_ENABLED=false environment variable
 """
 import json
 import hashlib
 import logging
+import os
 from typing import Optional, Any
 from functools import wraps
 
@@ -11,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 # Global Redis client
 _redis_client = None
+# Cache can be disabled via environment variable or config
+_cache_enabled = True
 
 
 def get_redis():
@@ -18,9 +26,25 @@ def get_redis():
     return _redis_client
 
 
+def is_cache_enabled() -> bool:
+    """Check if caching is enabled."""
+    return _cache_enabled and _redis_client is not None
+
+
 def init_redis(redis_config: dict):
     """Initialize Redis client from config."""
-    global _redis_client
+    global _redis_client, _cache_enabled
+
+    # Check if cache is explicitly disabled
+    cache_enabled_config = redis_config.get("enabled", True)
+    cache_env = os.getenv("CACHE_ENABLED", "true").lower()
+
+    if not cache_enabled_config or cache_env == "false":
+        logger.info("Caching is disabled via configuration")
+        _cache_enabled = False
+        _redis_client = None
+        return
+
     try:
         import redis
         _redis_client = redis.Redis(
@@ -60,7 +84,9 @@ def cache_key(prefix: str, *args, **kwargs) -> str:
 
 
 def get_cache(key: str) -> Optional[Any]:
-    """Get value from cache."""
+    """Get value from cache. Returns None if caching is disabled."""
+    if not is_cache_enabled():
+        return None
     client = get_redis()
     if not client:
         return None
@@ -74,7 +100,9 @@ def get_cache(key: str) -> Optional[Any]:
 
 
 def set_cache(key: str, value: Any, ttl: int = 60) -> bool:
-    """Set value in cache with TTL."""
+    """Set value in cache with TTL. Does nothing if caching is disabled."""
+    if not is_cache_enabled():
+        return False
     client = get_redis()
     if not client:
         return False

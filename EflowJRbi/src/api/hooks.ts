@@ -8,13 +8,20 @@ import dashboardApi from './client';
 
 /**
  * In-memory cache for API responses
+ * Cache TTL is longer for production (data updates daily)
+ * Development mode uses shorter cache to avoid stale data
  */
 class DataCache {
   private cache = new Map<string, { data: any; timestamp: number }>();
-  private defaultTTL = 30000; // 30 seconds
+  private defaultTTL = 5 * 60 * 1000; // 5 minutes (data updates daily, so longer cache is fine)
+
+  // Check if we're in development mode
+  private isDev = import.meta.env.DEV;
 
   set(key: string, data: any, ttl: number = this.defaultTTL) {
-    this.cache.set(key, { data, timestamp: Date.now() + ttl });
+    // Shorter cache in dev mode to avoid stale data during development
+    const actualTTL = this.isDev ? Math.min(ttl, 60000) : ttl; // Max 1 min in dev
+    this.cache.set(key, { data, timestamp: Date.now() + actualTTL });
   }
 
   get(key: string): any | null {
@@ -245,7 +252,11 @@ function getDataFromHierarchy(
 }
 
 /**
- * Load root level data from API (with hierarchy fallback)
+ * Load root level data from API (optimized for first screen)
+ * Strategy:
+ * 1. Check hierarchy cache - if available, return immediately
+ * 2. Otherwise, load and return first level data immediately
+ * 3. Trigger background hierarchy preloading for future interactions
  */
 export async function loadRootData(
   activeDims: Dimension[],
@@ -254,13 +265,6 @@ export async function loadRootData(
   customStart?: Date,
   customEnd?: Date
 ): Promise<AdRow[]> {
-  // Try to load from hierarchy first (faster, one request)
-  const hierarchy = await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
-  if (hierarchy) {
-    return getDataFromHierarchy(hierarchy.hierarchy, activeDims, activeFilters, activeFilters.length);
-  }
-
-  // Fallback to regular API
   const { start, end } = getDateRange(selectedRange, customStart, customEnd);
   const currentLevel = activeFilters.length;
   if (currentLevel >= activeDims.length) {
@@ -270,12 +274,23 @@ export async function loadRootData(
   const primaryDim = activeDims[currentLevel];
   const cacheKeyVal = cacheKey('data', start, end, [primaryDim], activeFilters);
 
-  // Check cache
+  // Check cache first (could be from previous hierarchy preload)
   const cached = dataCache.get(cacheKeyVal);
   if (cached) {
     return cached;
   }
 
+  // Check if hierarchy is already cached
+  const hierarchyCacheKey = cacheKey('hierarchy', start, end, activeDims);
+  const cachedHierarchy = dataCache.get(hierarchyCacheKey);
+  if (cachedHierarchy) {
+    const result = getDataFromHierarchy(cachedHierarchy.hierarchy, activeDims, activeFilters, activeFilters.length);
+    // Also cache this level for faster access
+    dataCache.set(cacheKeyVal, result);
+    return result;
+  }
+
+  // Load first level data immediately (fastest first screen)
   try {
     const response = await dashboardApi.getData({
       startDate: start,
@@ -293,10 +308,41 @@ export async function loadRootData(
     }));
 
     dataCache.set(cacheKeyVal, result);
+
+    // Trigger background hierarchy preloading (don't wait for it)
+    preloadHierarchyInBackground(activeDims, selectedRange, customStart, customEnd);
+
     return result;
   } catch (error) {
     console.error('Error loading data:', error);
     throw error;
+  }
+}
+
+/**
+ * Preload hierarchy in background without blocking UI
+ */
+function preloadHierarchyInBackground(
+  activeDims: Dimension[],
+  selectedRange: string,
+  customStart?: Date,
+  customEnd?: Date
+) {
+  // Use requestIdleCallback or setTimeout to not block the main thread
+  const preloadFn = async () => {
+    try {
+      await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
+    } catch (error) {
+      // Silent fail - this is just optimization
+      console.debug('Background hierarchy preload failed:', error);
+    }
+  };
+
+  // Use setTimeout(0) to run after current render
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(() => preloadFn());
+  } else {
+    setTimeout(preloadFn, 0);
   }
 }
 
