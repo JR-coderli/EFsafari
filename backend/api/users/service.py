@@ -69,7 +69,7 @@ class UserService:
         try:
             alter_sql = f"""
                 ALTER TABLE {table_name}
-                MODIFY COLUMN role Enum('admin' = 1, 'ops' = 2, 'ops02' = 3, 'business' = 4)
+                MODIFY COLUMN role Enum('admin' = 1, 'ops' = 2, 'business' = 3, 'ops02' = 4)
             """
             client.command(alter_sql)
             logger.info(f"Table {table_name} role enum updated to include ops02")
