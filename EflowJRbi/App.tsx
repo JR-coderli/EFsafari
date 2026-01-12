@@ -1055,18 +1055,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         rawData = await apiLoadRootData(activeDims, activeFilters, selectedRange, customDateStart, customDateEnd);
       }
 
-      // Permission filtering based on adset (sub_campaign_name) keywords
-      if (currentUser.keywords && currentUser.keywords.length > 0) {
-        rawData = rawData.filter(row => {
-          if (row.dimensionType === 'sub_campaign_name') {
-            return currentUser.keywords.some(kw =>
-              row.name.toLowerCase().includes(kw.toLowerCase())
-            );
-          }
-          return true;
-        });
-      }
-
       setData(rawData);
       console.log('[API Debug] Loaded rows:', rawData.length, 'Dimension:', activeDims[currentLevel], 'Sample:', rawData.slice(0, 3));
     } catch (err) {
