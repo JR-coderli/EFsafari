@@ -48,21 +48,28 @@ def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Option
     """
     # Admin or empty keywords = no restriction
     if user_role == 'admin' or not user_keywords:
+        logger.debug(f"[Permission] No filtering: role={user_role}, keywords={user_keywords}")
         return None
 
     # Build keyword filter based on role (use actual ClickHouse column names)
     if user_role == 'ops':
         # Filter by Adset column
         keyword_conditions = [f"lower(Adset) LIKE lower('%{k}%')" for k in user_keywords]
-        return f"({' OR '.join(keyword_conditions)})"
+        filter_sql = f"({' OR '.join(keyword_conditions)})"
+        logger.debug(f"[Permission] ops role filter: {filter_sql}")
+        return filter_sql
     elif user_role == 'ops02':
         # Filter by Media column (platform dimension)
         keyword_conditions = [f"lower(Media) LIKE lower('%{k}%')" for k in user_keywords]
-        return f"({' OR '.join(keyword_conditions)})"
+        filter_sql = f"({' OR '.join(keyword_conditions)})"
+        logger.debug(f"[Permission] ops02 role filter: {filter_sql}")
+        return filter_sql
     elif user_role == 'business':
         # Filter by offer column
         keyword_conditions = [f"lower(offer) LIKE lower('%{k}%')" for k in user_keywords]
-        return f"({' OR '.join(keyword_conditions)})"
+        filter_sql = f"({' OR '.join(keyword_conditions)})"
+        logger.debug(f"[Permission] business role filter: {filter_sql}")
+        return filter_sql
 
     return None
 
@@ -215,6 +222,8 @@ async def get_aggregated_data(
         # Build permission filter based on user role
         user_role = current_user.get("role")
         user_keywords = current_user.get("keywords", [])
+        # IMPORTANT: Log user info for debugging
+        logger.info(f"[DATA API] User: id={current_user.get('id')}, role={user_role}, keywords={user_keywords}, group_by={dimensions}")
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
         # Build WHERE clause with permission filter
@@ -320,6 +329,8 @@ async def get_daily_breakdown(
         # Build permission filter based on user role
         user_role = current_user.get("role")
         user_keywords = current_user.get("keywords", [])
+        # IMPORTANT: Log user info for debugging
+        logger.info(f"[DAILY API] User: id={current_user.get('id')}, role={user_role}, keywords={user_keywords}, filters={filter_list}")
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
         # Build WHERE clause with permission filter
@@ -499,6 +510,8 @@ async def get_data_hierarchy(
         # Build permission filter
         user_role = current_user.get("role")
         user_keywords = current_user.get("keywords", [])
+        # IMPORTANT: Log user info for debugging
+        logger.info(f"[HIERARCHY API] User: id={current_user.get('id')}, role={user_role}, keywords={user_keywords}, dimensions={dim_list}")
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
         db = get_db()
@@ -533,8 +546,10 @@ async def get_data_hierarchy(
 
         # Build hierarchy structure
         hierarchy = {}
+        row_count = 0
 
         for row in result.named_results():
+            row_count += 1
             # Build nested path
             current_level = hierarchy
             for i, dim in enumerate(dim_list):
@@ -546,10 +561,10 @@ async def get_data_hierarchy(
                 # Create key for this level
                 level_key = value
 
-                if level_key not in current_level:
-                    # Last level - add metrics
-                    is_last = (i == len(dim_list) - 1)
+                is_last = (i == len(dim_list) - 1)
 
+                if level_key not in current_level:
+                    # Create new node with metrics
                     current_level[level_key] = {
                         "_metrics": {
                             "impressions": row.get("impressions", 0),
@@ -569,10 +584,36 @@ async def get_data_hierarchy(
                         "_dimension": dim,
                         "_children": {} if not is_last else None
                     }
+                else:
+                    # Node exists - accumulate metrics for aggregation
+                    existing_metrics = current_level[level_key]["_metrics"]
+                    existing_metrics["impressions"] = (existing_metrics.get("impressions", 0) or 0) + (row.get("impressions", 0) or 0)
+                    existing_metrics["clicks"] = (existing_metrics.get("clicks", 0) or 0) + (row.get("clicks", 0) or 0)
+                    existing_metrics["conversions"] = (existing_metrics.get("conversions", 0) or 0) + (row.get("conversions", 0) or 0)
+                    existing_metrics["spend"] = (existing_metrics.get("spend", 0) or 0) + (row.get("spend", 0) or 0)
+                    existing_metrics["revenue"] = (existing_metrics.get("revenue", 0) or 0) + (row.get("revenue", 0) or 0)
+                    existing_metrics["profit"] = (existing_metrics.get("revenue", 0) or 0) - (existing_metrics.get("spend", 0) or 0)
+                    existing_metrics["m_imp"] = (existing_metrics.get("m_imp", 0) or 0) + (row.get("m_imp", 0) or 0)
+                    existing_metrics["m_clicks"] = (existing_metrics.get("m_clicks", 0) or 0) + (row.get("m_clicks", 0) or 0)
+                    existing_metrics["m_conv"] = (existing_metrics.get("m_conv", 0) or 0) + (row.get("m_conv", 0) or 0)
+                    # Recalculate ratios
+                    imp = existing_metrics.get("impressions", 0) or 1
+                    clicks = existing_metrics.get("clicks", 0) or 1
+                    conversions = existing_metrics.get("conversions", 0) or 1
+                    spend = existing_metrics.get("spend", 0) or 1
+                    revenue = existing_metrics.get("revenue", 0) or 0
+                    existing_metrics["ctr"] = clicks / imp
+                    existing_metrics["cvr"] = conversions / clicks
+                    existing_metrics["roi"] = (revenue - spend) / spend
+                    existing_metrics["cpa"] = spend / conversions
 
                 # Move to next level
                 if not is_last and current_level[level_key].get("_children") is not None:
                     current_level = current_level[level_key]["_children"]
+
+        # Log hierarchy build results
+        top_level_count = len(hierarchy)
+        logger.info(f"[HIERARCHY BUILD] dim_list={dim_list}, total_rows={row_count}, top_level_nodes={top_level_count}, keys={list(hierarchy.keys())[:10]}")
 
         return {
             "dimensions": dim_list,

@@ -257,9 +257,10 @@ function getDataFromHierarchy(
 
   // Convert current level to AdRow format
   const maxLevel = activeDims.length - 1;
-  return Object.entries(currentLevel).map(([name, node]) =>
+  const result = Object.entries(currentLevel).map(([name, node]) =>
     hierarchyNodeToAdRow(name, node, level, maxLevel, activeFilters)
   );
+  return result;
 }
 
 /**
