@@ -711,8 +711,9 @@ const LoginPage: React.FC<{ onLogin: (user: UserPermission) => void }> = ({ onLo
     <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6 font-sans">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-10 border border-slate-100">
         <div className="flex flex-col items-center mb-10 text-center">
-          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white mb-6"><i className="fas fa-chart-line text-3xl"></i></div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">AdData AI</h1>
+          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white mb-6 font-bold text-2xl">EF</div>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">EFLOW</h1>
+          <p className="text-sm font-medium text-slate-500 mt-1">Safari System</p>
         </div>
         {error && <div className="mb-4 text-rose-500 text-sm font-bold text-center">{error}</div>}
         <form onSubmit={handleLogin} className="space-y-6">
@@ -1480,7 +1481,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       <aside className={`bg-[#1e293b] text-slate-400 flex flex-col shrink-0 transition-all ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-6 border-b border-slate-700/50 flex items-center gap-3">
           <div className="w-8 h-8 bg-indigo-500 rounded-lg text-white flex items-center justify-center font-bold"><i className="fas fa-layer-group text-sm"></i></div>
-          {isSidebarOpen && <span className="text-white font-black text-sm uppercase italic tracking-tighter">AD DATA AI</span>}
+          {isSidebarOpen && <span className="text-white font-black text-sm uppercase italic tracking-tighter">Data Insight</span>}
         </div>
         <nav className="flex-1 py-6">
           <button onClick={() => setCurrentPage('performance')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'performance' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
