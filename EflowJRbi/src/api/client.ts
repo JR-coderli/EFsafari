@@ -212,6 +212,17 @@ export const dashboardApi = {
   async getMetrics() {
     return request<{ metrics: Array<{ key: string; label: string; type: string; group: string }> }>('/dashboard/metrics');
   },
+
+  /**
+   * Get ETL status
+   */
+  async getEtlStatus() {
+    return request<{
+      last_update: string | null;
+      report_date: string | null;
+      all_success: boolean;
+    }>('/dashboard/etl-status');
+  },
 };
 
 /**

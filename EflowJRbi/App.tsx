@@ -5,12 +5,18 @@ import { AdRow, Dimension, MetricConfig, SavedView, UserPermission, DailyBreakdo
 import { generateMockReport } from './mockData';
 import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoadDailyData } from './src/api/hooks';
 import { authApi, usersApi, tokenManager } from './src/api/auth';
-import { dailyReportApi } from './src/api/client';
+import { dailyReportApi, dashboardApi } from './src/api/client';
 import { viewsApi } from './src/api/views';
 
 interface Filter {
   dimension: Dimension;
   value: string;
+}
+
+interface ETLStatus {
+  last_update: string | null;
+  report_date: string | null;
+  all_success: boolean;
 }
 
 const calculateMetrics = (data: { impressions: number; clicks: number; conversions: number; spend: number; revenue: number; m_imp: number; m_clicks: number }) => {
@@ -783,6 +789,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [hideZeroImpressions, setHideZeroImpressions] = useState(true);
   const [colorMode, setColorMode] = useState(false);
 
+  // ETL status state
+  const [etlStatus, setEtlStatus] = useState<ETLStatus | null>(null);
+
   // Column width state
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
     hierarchy: 300,
@@ -809,6 +818,26 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       setError(null);
     }
   }, [currentUser.id]);
+
+  // Load ETL status on mount and refresh periodically
+  useEffect(() => {
+    const loadEtlStatus = async () => {
+      try {
+        const status = await dashboardApi.getEtlStatus();
+        setEtlStatus(status);
+      } catch (err) {
+        console.error('Failed to load ETL status:', err);
+      }
+    };
+
+    // Initial load
+    loadEtlStatus();
+
+    // Refresh every 5 minutes
+    const interval = setInterval(loadEtlStatus, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Column resize handlers
   const handleResizeStart = (columnKey: string, e: React.MouseEvent) => {
@@ -1748,6 +1777,18 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                         <span className={`font-mono font-bold ${summaryData.roi > 0 ? 'text-emerald-600' : summaryData.roi < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{(summaryData.roi * 100).toFixed(2)}%</span>
                       </div>
                     </div>
+                    {/* ETL Status */}
+                    {etlStatus && etlStatus.last_update && (
+                      <div className="ml-auto flex items-center gap-2 shrink-0">
+                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${etlStatus.all_success ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${etlStatus.all_success ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                          <span className={`text-[10px] font-bold uppercase tracking-wider ${etlStatus.all_success ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {etlStatus.all_success ? 'All Updated' : 'Part Updated'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-medium">{etlStatus.last_update}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Pagination Bar */}

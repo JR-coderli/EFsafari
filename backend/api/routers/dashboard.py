@@ -638,3 +638,19 @@ async def get_data_hierarchy(
         logger.error(f"Error fetching hierarchy: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching hierarchy: {str(e)}")
 
+
+@router.get("/etl-status")
+async def get_etl_status():
+    """Get ETL status from Redis."""
+    from cache import get_cache
+
+    status = get_cache("etl:last_update")
+    if status:
+        return status
+
+    return {
+        "last_update": None,
+        "report_date": None,
+        "all_success": False
+    }
+

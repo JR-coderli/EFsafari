@@ -10,6 +10,10 @@ import io
 from datetime import datetime
 import argparse
 
+# Add api directory to path for Redis import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "api"))
+from cache import set_cache
+
 
 def run_clickflare_etl(date: str) -> tuple[bool, float]:
     """Run Clickflare ETL for the specified date. Returns (success, revenue_sum)."""
@@ -168,6 +172,17 @@ def main():
 
     # Only report overall success if ALL ETLs succeeded
     all_success = results["clickflare"]["success"] and results["mtg"]["success"]
+
+    # Save ETL status to Redis (24h TTL)
+    last_update = datetime.now().strftime("%Y-%m-%d %H:%M")
+    etl_status = {
+        "last_update": last_update,
+        "report_date": report_date,
+        "all_success": all_success
+    }
+    set_cache("etl:last_update", etl_status, ttl=24*3600)
+    print(f"ETL status saved to Redis: {last_update}")
+
     if all_success:
         print("ETL completed successfully!")
     else:
