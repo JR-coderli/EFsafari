@@ -898,7 +898,13 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       return results;
     };
 
-    return flatten(data);
+    const result = flatten(data);
+    // Debug logging
+    console.log('[Data Debug] Total rows:', data.length, 'Filtered rows:', result.length, 'hideZeroImpressions:', hideZeroImpressions, 'Dimensions:', activeDims);
+    if (data.length > 0 && result.length <= 1) {
+      console.log('[Data Debug] First row:', data[0], 'All rows:', data);
+    }
+    return result;
   }, [data, expandedDimRows, quickFilterText, hideZeroImpressions, sortColumn, sortOrder]);
 
   // Calculate summary data for all filtered rows
@@ -939,7 +945,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const paginatedData = useMemo(() => {
     const startIndex = (paginationPage - 1) * rowsPerPage;
     const endIndex = startIndex + rowsPerPage;
-    return filteredAndFlattenedData.slice(startIndex, endIndex);
+    const result = filteredAndFlattenedData.slice(startIndex, endIndex);
+    console.log('[Pagination Debug] Page:', paginationPage, 'Start:', startIndex, 'End:', endIndex, 'Paginated rows:', result.length, 'Total filtered:', filteredAndFlattenedData.length);
+    return result;
   }, [filteredAndFlattenedData, paginationPage, rowsPerPage]);
 
   const totalRows = filteredAndFlattenedData.length;
@@ -1060,6 +1068,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       }
 
       setData(rawData);
+      console.log('[API Debug] Loaded rows:', rawData.length, 'Dimension:', activeDims[currentLevel], 'Sample:', rawData.slice(0, 3));
     } catch (err) {
       console.error('Error loading data:', err);
       const errorMsg = err instanceof Error ? err.message : 'Failed to load data';
