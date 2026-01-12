@@ -45,23 +45,34 @@ cd "$PROJECT_DIR/EflowJRbi"
 npm install
 npm run build
 
-# 4. 重启服务
+# 4. 清除缓存
+log_info "清除 Redis 缓存..."
+redis-cli FLUSHDB || echo "Redis flush failed, continuing..."
+
+log_info "清除 Nginx 前端缓存..."
+sudo rm -rf /var/cache/nginx/*
+sudo systemctl reload nginx || sudo systemctl restart nginx
+
+# 5. 重启服务
 log_info "重启服务..."
 sudo systemctl restart bicode-api
-sudo systemctl reload nginx || sudo systemctl restart nginx
 
 # 等待服务启动
 sleep 3
 
 # 检查状态
 if systemctl is-active --quiet bicode-api; then
-    log_info "✓ 服务更新完成"
+    log_info "✓ 服务更新完成（缓存已清除）"
 else
     log_warn "✗ 后端服务异常，请检查日志"
     sudo journalctl -u bicode-api -n 20 --no-pager
 fi
 
 echo ""
-echo "访问地址:"
-echo "  子域名: http://safari.eflow-media.com"
-echo "  IP 地址: http://43.160.248.9"
+echo "=========================================="
+echo "  访问地址:"
+echo "    https://safari.eflow-media.com"
+echo "    http://43.160.248.9:8001"
+echo ""
+echo "  缓存已清除: Redis + Nginx"
+echo "=========================================="
