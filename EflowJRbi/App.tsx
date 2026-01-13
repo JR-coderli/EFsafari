@@ -8,6 +8,7 @@ import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoa
 import { authApi, usersApi, tokenManager } from './src/api/auth';
 import { dailyReportApi, dashboardApi } from './src/api/client';
 import { viewsApi } from './src/api/views';
+import DailyReport from './components/DailyReport';
 
 interface Filter {
   dimension: Dimension;
@@ -130,6 +131,8 @@ const getRangeInfo = (range: string, customStart?: Date, customEnd?: Date) => {
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
   const thirtyDaysAgo = new Date(today);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+  // This month: from 1st to today
+  const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
   switch (range) {
     case 'Today':
@@ -142,6 +145,8 @@ const getRangeInfo = (range: string, customStart?: Date, customEnd?: Date) => {
       return { label: 'Last 14 Days', dateString: formatRange(fourteenDaysAgo, today), start: fourteenDaysAgo, end: today };
     case 'Last 30 Days':
       return { label: 'Last 30 Days', dateString: formatRange(thirtyDaysAgo, today), start: thirtyDaysAgo, end: today };
+    case 'This Month':
+      return { label: 'This Month', dateString: formatRange(thisMonthStart, today), start: thisMonthStart, end: today };
     case 'Custom':
       if (customStart && customEnd) {
         return { label: 'Custom', dateString: formatRange(customStart, customEnd), start: customStart, end: customEnd };
@@ -281,7 +286,7 @@ const DatePicker: React.FC<{ onRangeChange: (range: string, start?: Date, end?: 
           {!showCalendar ? (
             <div className="p-2 w-48">
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Quick Select</div>
-              {['Today', 'Yesterday', 'Last 7 Days', 'Last 14 Days', 'Last 30 Days'].map(r => (
+              {['Today', 'Yesterday', 'Last 7 Days', 'Last 14 Days', 'Last 30 Days', 'This Month'].map(r => (
                 <button key={r} onClick={() => handleQuickSelect(r)} className={`w-full text-left px-3 py-2 text-[11px] font-bold rounded-xl ${currentRange === r ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-indigo-50'}`}>
                   {r}
                 </button>
@@ -295,372 +300,6 @@ const DatePicker: React.FC<{ onRangeChange: (range: string, start?: Date, end?: 
           ) : (
             <div className="w-72">{renderCalendar()}</div>
           )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Daily Report Page Component
-interface DailyReportPageProps {
-  selectedRange: string;
-  customDateStart: Date | undefined;
-  customDateEnd: Date | undefined;
-  onRangeChange: (range: string, start?: Date, end?: Date) => void;
-  currentUser: UserPermission;
-}
-
-const DailyReportPage: React.FC<DailyReportPageProps> = ({ selectedRange, customDateStart, customDateEnd, onRangeChange, currentUser }) => {
-  const [data, setData] = useState<Array<{
-    date: string;
-    media: string;
-    impressions: number;
-    clicks: number;
-    conversions: number;
-    revenue: number;
-    spend_original: number;
-    spend_manual: number;
-    spend_final: number;
-    m_imp: number;
-    m_clicks: number;
-    m_conv: number;
-    is_locked?: number;
-  }>>([]);
-  const [summary, setSummary] = useState<any>(null);
-  const [mediaList, setMediaList] = useState<Array<{ name: string }>>([]);
-  const [selectedMedia, setSelectedMedia] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [editingSpend, setEditingSpend] = useState<{ date: string; media: string } | null>(null);
-  const [lockedDates, setLockedDates] = useState<Set<string>>(new Set());
-  const [showSyncModal, setShowSyncModal] = useState(false);
-
-  // Calculate date range
-  const dateInfo = useMemo(() => getRangeInfo(selectedRange, customDateStart, customDateEnd), [selectedRange, customDateStart, customDateEnd]);
-  const startDate = dateInfo.start.toISOString().split('T')[0];
-  const endDate = dateInfo.end.toISOString().split('T')[0];
-
-  // Load data
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [dataResult, summaryResult, mediaResult] = await Promise.all([
-          dailyReportApi.getData({ startDate, endDate, media: selectedMedia || undefined }),
-          dailyReportApi.getSummary({ startDate, endDate, media: selectedMedia || undefined }),
-          dailyReportApi.getMediaList(),
-        ]);
-        setData(dataResult);
-        setSummary(summaryResult);
-        setMediaList(mediaResult.media);
-      } catch (err) {
-        console.error('Error loading daily report:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [startDate, endDate, selectedMedia]);
-
-  // Handle spend edit
-  const handleSpendClick = (row: typeof data[0]) => {
-    setEditingSpend({ date: row.date, media: row.media });
-  };
-
-  const handleSpendSave = async (newValue: string) => {
-    if (!editingSpend) return;
-    const spendValue = parseFloat(newValue);
-    if (isNaN(spendValue)) {
-      alert('Invalid value');
-      return;
-    }
-
-    try {
-      await dailyReportApi.updateSpend({
-        date: editingSpend.date,
-        media: editingSpend.media,
-        spend_value: spendValue,
-      });
-      // Reload data
-      const [dataResult, summaryResult] = await Promise.all([
-        dailyReportApi.getData({ startDate, endDate, media: selectedMedia || undefined }),
-        dailyReportApi.getSummary({ startDate, endDate, media: selectedMedia || undefined }),
-      ]);
-      setData(dataResult);
-      setSummary(summaryResult);
-      setEditingSpend(null);
-    } catch (err) {
-      alert('Failed to update spend: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    }
-  };
-
-  // Load locked dates
-  useEffect(() => {
-    const loadLockedDates = async () => {
-      try {
-        const result = await dailyReportApi.getLockedDates();
-        setLockedDates(new Set(result.locked_dates));
-      } catch (err) {
-        console.error('Error loading locked dates:', err);
-      }
-    };
-    loadLockedDates();
-  }, []);
-
-  // Handle sync data
-  const handleSyncData = async () => {
-    setSyncing(true);
-    try {
-      const result = await dailyReportApi.syncData({ startDate, endDate });
-      alert(result.message);
-      // Reload data
-      const [dataResult, summaryResult] = await Promise.all([
-        dailyReportApi.getData({ startDate, endDate, media: selectedMedia || undefined }),
-        dailyReportApi.getSummary({ startDate, endDate, media: selectedMedia || undefined }),
-      ]);
-      setData(dataResult);
-      setSummary(summaryResult);
-    } catch (err) {
-      alert('Sync failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setSyncing(false);
-      setShowSyncModal(false);
-    }
-  };
-
-  // Handle lock/unlock date
-  const handleToggleLock = async (date: string) => {
-    const isCurrentlyLocked = lockedDates.has(date);
-    const newLockState = !isCurrentlyLocked;
-
-    if (!confirm(`${newLockState ? 'Lock' : 'Unlock'} date ${date}?`)) return;
-
-    try {
-      await dailyReportApi.lockDate({ date, lock: newLockState });
-      // Update locked dates
-      if (newLockState) {
-        setLockedDates(prev => new Set(prev).add(date));
-      } else {
-        setLockedDates(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(date);
-          return newSet;
-        });
-      }
-    } catch (err) {
-      alert('Failed to toggle lock: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    }
-  };
-
-  // Calculate summary for filtered data
-  const filteredSummary = useMemo(() => {
-    const total = data.reduce((acc, row) => ({
-      impressions: acc.impressions + row.impressions,
-      clicks: acc.clicks + row.clicks,
-      conversions: acc.conversions + row.conversions,
-      spend: acc.spend + row.spend_final,
-      revenue: acc.revenue + row.revenue,
-    }), { impressions: 0, clicks: 0, conversions: 0, spend: 0, revenue: 0 });
-
-    return {
-      ...total,
-      ctr: total.clicks / (total.impressions || 1),
-      cvr: total.conversions / (total.clicks || 1),
-      roi: (total.revenue - total.spend) / (total.spend || 1),
-    };
-  }, [data]);
-
-  return (
-    <div className="flex-1 flex flex-col bg-white min-w-0">
-      {/* Summary Cards */}
-      <div className="px-8 py-6 border-b border-slate-100 bg-slate-50">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-4">
-            <h3 className="text-lg font-black uppercase italic tracking-tighter">Daily Report Summary</h3>
-            {(currentUser.role === 'admin' || currentUser.role === 'ops') && (
-              <button
-                onClick={() => setShowSyncModal(true)}
-                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold uppercase hover:bg-indigo-700 transition-all flex items-center gap-1"
-                disabled={syncing}
-              >
-                <i className={`fas ${syncing ? 'fa-spinner fa-spin' : 'fa-sync-alt'}`}></i>
-                {syncing ? 'Syncing...' : 'Sync Data'}
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedMedia}
-              onChange={(e) => setSelectedMedia(e.target.value)}
-              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
-            >
-              <option value="">All Media</option>
-              {mediaList.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="grid grid-cols-6 gap-4">
-          {[
-            { label: 'Impressions', value: filteredSummary.impressions, type: 'number' as const, color: 'indigo' },
-            { label: 'Clicks', value: filteredSummary.clicks, type: 'number' as const, color: 'blue' },
-            { label: 'Conversions', value: filteredSummary.conversions, type: 'number' as const, color: 'purple' },
-            { label: 'Spend', value: filteredSummary.spend, type: 'money' as const, color: 'rose' },
-            { label: 'Revenue', value: filteredSummary.revenue, type: 'money' as const, color: 'emerald' },
-            { label: 'ROI', value: filteredSummary.roi, type: 'percent' as const, color: 'amber' },
-          ].map((card) => (
-            <div key={card.label} className={`bg-${card.color}-50 border border-${card.color}-100 rounded-2xl p-4`}>
-              <div className={`text-[10px] font-black uppercase text-${card.color}-500 tracking-widest mb-1`}>{card.label}</div>
-              <div className={`text-xl font-black text-${card.color}-700`}>
-                <MetricValue value={card.value} type={card.type} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Data Table */}
-      <div className="flex-1 overflow-auto">
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-slate-400">Loading...</div>
-          </div>
-        ) : error ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-rose-500">{error}</div>
-          </div>
-        ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 sticky top-0 z-10">
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Media</th>
-                <th className="px-4 py-3 text-right">Impressions</th>
-                <th className="px-4 py-3 text-right">Clicks</th>
-                <th className="px-4 py-3 text-right">Conversions</th>
-                <th className="px-4 py-3 text-right">Spend (Editable)</th>
-                <th className="px-4 py-3 text-right">Revenue</th>
-                <th className="px-4 py-3 text-right">ROI</th>
-                {(currentUser.role === 'admin' || currentUser.role === 'ops') && (
-                  <th className="px-4 py-3 text-center">Lock</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {data.map((row, idx) => {
-                const isLocked = lockedDates.has(row.date);
-                return (
-                <tr key={`${row.date}-${row.media}`} className={`hover:bg-indigo-50/40 transition-colors ${isLocked ? 'bg-amber-50/30' : ''}`}>
-                  <td className="px-4 py-3 text-xs font-bold text-slate-600">{row.date}</td>
-                  <td className="px-4 py-3 text-xs font-bold text-slate-800">{row.media}</td>
-                  <td className="px-4 py-3 text-right"><MetricValue value={row.impressions} type="number" /></td>
-                  <td className="px-4 py-3 text-right"><MetricValue value={row.clicks} type="number" /></td>
-                  <td className="px-4 py-3 text-right"><MetricValue value={row.conversions} type="number" /></td>
-                  <td
-                    className="px-4 py-3 text-right cursor-pointer hover:bg-indigo-100 transition-colors group relative"
-                    onClick={() => handleSpendClick(row)}
-                  >
-                    {editingSpend?.date === row.date && editingSpend?.media === row.media ? (
-                      <input
-                        type="number"
-                        autoFocus
-                        defaultValue={row.spend_manual}
-                        onBlur={(e) => handleSpendSave(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSpendSave((e.target as HTMLInputElement).value);
-                          if (e.key === 'Escape') setEditingSpend(null);
-                        }}
-                        className="w-24 px-2 py-1 bg-white border border-indigo-500 rounded text-right text-xs font-bold outline-none"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <span className={row.spend_manual !== 0 ? 'text-amber-600 font-bold' : ''}>
-                        <MetricValue value={row.spend_final} type="money" />
-                      </span>
-                    )}
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></span>
-                  </td>
-                  <td className="px-4 py-3 text-right"><MetricValue value={row.revenue} type="money" /></td>
-                  <td className="px-4 py-3 text-right">
-                    {(() => {
-                      const roi = row.spend_final > 0 ? (row.revenue - row.spend_final) / row.spend_final : 0;
-                      const roiClass = roi > 0 ? 'text-emerald-600' : roi < 0 ? 'text-rose-600' : 'text-slate-700';
-                      return <span className={`font-mono font-bold text-[13px] ${roiClass}`}>{(roi * 100).toFixed(2)}%</span>;
-                    })()}
-                  </td>
-                  {(currentUser.role === 'admin' || currentUser.role === 'ops') && (
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => handleToggleLock(row.date)}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                          isLocked
-                            ? 'bg-amber-100 text-amber-600 hover:bg-amber-200'
-                            : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                        }`}
-                        title={isLocked ? 'Unlock this date' : 'Lock this date'}
-                      >
-                        <i className={`fas ${isLocked ? 'fa-lock' : 'fa-lock-open'} text-xs`}></i>
-                      </button>
-                    </td>
-                  )}
-                </tr>
-                );
-              })}
-            </tbody>
-            <tfoot className="bg-indigo-600 sticky bottom-0 z-10 border-t-2 border-indigo-700">
-              <tr>
-                <td className="px-4 py-3 font-bold text-white text-xs" colSpan={2}>
-                  <i className="fas fa-calculator mr-2"></i>TOTAL
-                </td>
-                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.impressions} type="number" /></td>
-                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.clicks} type="number" /></td>
-                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.conversions} type="number" /></td>
-                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.spend} type="money" /></td>
-                <td className="px-4 py-3 text-right bg-indigo-600 text-white"><MetricValue value={filteredSummary.revenue} type="money" /></td>
-                <td className="px-4 py-3 text-right bg-indigo-600 text-white">
-                  <span className={`font-mono font-bold ${filteredSummary.roi > 0 ? 'text-emerald-300' : filteredSummary.roi < 0 ? 'text-rose-300' : 'text-white'}`}>{(filteredSummary.roi * 100).toFixed(2)}%</span>
-                </td>
-                {(currentUser.role === 'admin' || currentUser.role === 'ops') && <td className="px-4 py-3 bg-indigo-600"></td>}
-              </tr>
-            </tfoot>
-          </table>
-        )}
-      </div>
-
-      {/* Sync Confirmation Modal */}
-      {showSyncModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowSyncModal(false)}></div>
-          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter mb-4">
-              <i className="fas fa-sync-alt mr-2 text-indigo-600"></i>Sync Data from Performance
-            </h3>
-            <p className="text-sm text-slate-600 mb-6">
-              将从 Performance 表同步数据到 Daily Report 表。<br />
-              <span className="text-amber-600 font-bold">注意：</span>已锁定的日期不会被覆盖。
-            </p>
-            <div className="bg-slate-50 rounded-xl p-4 mb-6">
-              <div className="text-xs text-slate-500 mb-2">同步范围：</div>
-              <div className="font-bold text-slate-700">{startDate} 至 {endDate}</div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowSyncModal(false)}
-                className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-slate-200 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSyncData}
-                disabled={syncing}
-                className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
-              >
-                {syncing ? 'Syncing...' : 'Confirm Sync'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
@@ -2017,7 +1656,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             </div>
           </>
         ) : currentPage === 'daily_report' ? (
-          <DailyReportPage
+          <DailyReport
             selectedRange={selectedRange}
             customDateStart={customDateStart}
             customDateEnd={customDateEnd}

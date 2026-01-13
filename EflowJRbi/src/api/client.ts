@@ -230,7 +230,59 @@ export const dashboardApi = {
  */
 export const dailyReportApi = {
   /**
-   * Get daily report data
+   * Get available dimensions (media and date only)
+   */
+  async getDimensions() {
+    return request<{ dimensions: Array<{ value: string; label: string }> }>('/daily-report/dimensions');
+  },
+
+  /**
+   * Get hierarchy data (media -> date structure)
+   */
+  async getHierarchy(params: {
+    startDate: string;
+    endDate: string;
+  }) {
+    const queryParams = buildQueryParams({
+      start_date: params.startDate,
+      end_date: params.endDate,
+    });
+
+    return request<{
+      dimensions: string[];
+      hierarchy: Record<string, {
+        _dimension: string;
+        _metrics: {
+          impressions: number;
+          clicks: number;
+          conversions: number;
+          spend: number;
+          revenue: number;
+          profit: number;
+          m_imp: number;
+          m_clicks: number;
+          m_conv: number;
+          ctr: number;
+          cvr: number;
+          roi: number;
+          cpa: number;
+          rpa: number;
+          epc: number;
+          epv: number;
+          m_epc: number;
+          m_epv: number;
+          m_cpc: number;
+          m_cpv: number;
+        };
+        _children: Record<string, unknown>;
+      }>;
+      startDate: string;
+      endDate: string;
+    }>(`/daily-report/hierarchy?${queryParams}`);
+  },
+
+  /**
+   * Get daily report data (with hierarchy support)
    */
   async getData(params: {
     startDate: string;
@@ -244,18 +296,33 @@ export const dailyReportApi = {
     });
 
     return request<Array<{
-      date: string;
-      media: string;
+      id: string;
+      name: string;
+      level: number;
+      dimensionType: string;
       impressions: number;
       clicks: number;
       conversions: number;
+      spend: number;
       revenue: number;
-      spend_original: number;
-      spend_manual: number;
-      spend_final: number;
+      profit: number;
       m_imp: number;
       m_clicks: number;
       m_conv: number;
+      ctr: number;
+      cvr: number;
+      roi: number;
+      cpa: number;
+      rpa: number;
+      epc: number;
+      epv: number;
+      m_epc: number;
+      m_epv: number;
+      m_cpc: number;
+      m_cpv: number;
+      hasChild: boolean;
+      filterPath: Array<{ dimension: string; value: string }>;
+      spend_manual: number;
     }>>(`/daily-report/data?${queryParams}`);
   },
 

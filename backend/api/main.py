@@ -69,12 +69,32 @@ app = FastAPI(
 )
 
 
-# Startup event - initialize Redis
+# Startup event - initialize Redis and start scheduler
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup."""
     redis_config = config.get("redis", {})
     init_redis(redis_config)
+
+    # Start the scheduler for daily data sync
+    try:
+        from api.tasks.scheduler import start_scheduler
+        start_scheduler()
+        logger.info("Daily report scheduler started successfully")
+    except ImportError:
+        logger.warning("APScheduler not installed - daily sync disabled")
+    except Exception as e:
+        logger.error(f"Failed to start scheduler: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown."""
+    try:
+        from api.tasks.scheduler import stop_scheduler
+        stop_scheduler()
+    except:
+        pass
 
 # Configure CORS
 # app.add_middleware(

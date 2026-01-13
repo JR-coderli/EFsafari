@@ -1,11 +1,11 @@
 """
 Daily Report API router.
 
-独立的日报功能，只按 media 维度展示，支持 spend 手动修正。
+独立的日报功能，支持 media + date 两层维度，支持 spend 手动修正。
 """
 from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import List, Optional
-from datetime import datetime, date
+from typing import List, Optional, Dict, Any
+from datetime import datetime, date, timedelta
 from pydantic import BaseModel
 import logging
 
@@ -18,31 +18,91 @@ router = APIRouter(prefix="/api/daily-report", tags=["daily-report"])
 
 # ==================== Schema Models ====================
 
-class DailyReportEntry(BaseModel):
-    """Daily Report 数据条目"""
-    date: str
-    media: str
+class DimensionItem(BaseModel):
+    """维度项"""
+    value: str
+    label: str
+
+
+class DimensionsResponse(BaseModel):
+    """可用维度响应（Daily Report 只有 media 和 date）"""
+    dimensions: List[DimensionItem]
+
+
+class HierarchyNodeMetrics(BaseModel):
+    """层级节点指标"""
     impressions: int = 0
     clicks: int = 0
     conversions: int = 0
+    spend: float = 0.0
     revenue: float = 0.0
-    spend_original: float = 0.0
-    spend_manual: float = 0.0
-    spend_final: float = 0.0
+    profit: float = 0.0
     m_imp: int = 0
     m_clicks: int = 0
     m_conv: int = 0
+    ctr: float = 0.0
+    cvr: float = 0.0
+    roi: float = 0.0
+    cpa: float = 0.0
+    rpa: float = 0.0
+    epc: float = 0.0
+    epv: float = 0.0
+    m_epc: float = 0.0
+    m_epv: float = 0.0
+    m_cpc: float = 0.0
+    m_cpv: float = 0.0
 
-    class Config:
-        from_attributes = True
+
+class HierarchyNode(BaseModel):
+    """层级节点"""
+    _dimension: str
+    _metrics: HierarchyNodeMetrics
+    _children: Optional[Dict[str, "HierarchyNode"]] = None
 
 
-class SpendCorrectionRequest(BaseModel):
-    """Spend 修正请求"""
-    date: str
-    media: str
-    correction_amount: float  # 正值表示增加，负值表示减少
-    reason: str = ""
+class HierarchyResponse(BaseModel):
+    """层级数据响应"""
+    dimensions: List[str]  # ["media", "date"]
+    hierarchy: Dict[str, Any]  # Changed from HierarchyNode to Any to avoid serialization issues
+    startDate: str
+    endDate: str
+
+
+class FilterPathItem(BaseModel):
+    """过滤路径项"""
+    dimension: str
+    value: str
+
+
+class DailyReportRow(BaseModel):
+    """Daily Report 数据行（带层级支持）"""
+    id: str
+    name: str
+    level: int
+    dimensionType: str
+    impressions: int = 0
+    clicks: int = 0
+    conversions: int = 0
+    spend: float = 0.0
+    revenue: float = 0.0
+    profit: float = 0.0
+    m_imp: int = 0
+    m_clicks: int = 0
+    m_conv: int = 0
+    ctr: float = 0.0
+    cvr: float = 0.0
+    roi: float = 0.0
+    cpa: float = 0.0
+    rpa: float = 0.0
+    epc: float = 0.0
+    epv: float = 0.0
+    m_epc: float = 0.0
+    m_epv: float = 0.0
+    m_cpc: float = 0.0
+    m_cpv: float = 0.0
+    hasChild: bool = True
+    filterPath: List[FilterPathItem] = []
+    spend_manual: float = 0.0  # 手动修正值（前端用于标识是否修改过）
 
 
 class SpendUpdateRequest(BaseModel):
@@ -59,6 +119,7 @@ class DailyReportSummary(BaseModel):
     conversions: int = 0
     revenue: float = 0.0
     spend: float = 0.0
+    profit: float = 0.0
     m_imp: int = 0
     m_clicks: int = 0
     m_conv: int = 0
@@ -66,6 +127,7 @@ class DailyReportSummary(BaseModel):
     cvr: float = 0.0
     roi: float = 0.0
     cpa: float = 0.0
+    rpa: float = 0.0
 
 
 class MediaItem(BaseModel):
@@ -76,6 +138,18 @@ class MediaItem(BaseModel):
 class MediaListResponse(BaseModel):
     """媒体列表响应"""
     media: List[MediaItem]
+
+
+class SyncDataRequest(BaseModel):
+    """数据同步请求"""
+    start_date: str  # YYYY-MM-DD
+    end_date: str  # YYYY-MM-DD
+
+
+class LockDateRequest(BaseModel):
+    """锁定日期请求"""
+    date: str  # YYYY-MM-DD
+    lock: bool = True  # True=锁定, False=解锁
 
 
 # ==================== Helper Functions ====================
@@ -92,19 +166,218 @@ def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Option
     return None
 
 
+def _calculate_metrics(row: Dict[str, Any]) -> Dict[str, float]:
+    """计算衍生指标"""
+    impressions = int(row.get("impressions", 0) or 0)
+    clicks = int(row.get("clicks", 0) or 0)
+    conversions = int(row.get("conversions", 0) or 0)
+    spend = float(row.get("spend_final", row.get("spend", 0)) or 0)
+    revenue = float(row.get("revenue", 0) or 0)
+    m_imp = int(row.get("m_imp", 0) or 0)
+    m_clicks = int(row.get("m_clicks", 0) or 0)
+
+    return {
+        "ctr": clicks / (impressions or 1),
+        "cvr": conversions / (clicks or 1),
+        "roi": (revenue - spend) / (spend or 1),
+        "cpa": spend / (conversions or 1),
+        "rpa": revenue / (conversions or 1),
+        "epc": revenue / (clicks or 1),
+        "epv": revenue / (impressions or 1),
+        "m_epc": revenue / (m_clicks or 1),
+        "m_epv": revenue / (m_imp or 1),
+        "m_cpc": spend / (m_clicks or 1),
+        "m_cpv": spend / (m_imp or 1),
+        "profit": revenue - spend,
+    }
+
+
+def _build_filter_path(media: str, date_value: str = None) -> List[FilterPathItem]:
+    """构建过滤路径"""
+    path = [FilterPathItem(dimension="media", value=media)]
+    if date_value:
+        path.append(FilterPathItem(dimension="date", value=date_value))
+    return path
+
+
 # ==================== API Endpoints ====================
 
-@router.get("/data", response_model=List[DailyReportEntry])
+@router.get("/dimensions", response_model=DimensionsResponse)
+async def get_dimensions():
+    """
+    获取 Daily Report 可用的维度。
+
+    固定返回 media 和 date 两个维度。
+    """
+    return DimensionsResponse(dimensions=[
+        DimensionItem(value="media", label="Media"),
+        DimensionItem(value="date", label="Date"),
+    ])
+
+
+@router.get("/hierarchy", response_model=HierarchyResponse)
+async def get_hierarchy(
+    start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取 Daily Report 层级数据。
+
+    返回 date -> media 的两层结构（日期在上，媒体在下）。
+    """
+    db = get_db()
+    try:
+        client = db.connect()
+
+        # 构建权限过滤
+        user_role = current_user.get("role", "")
+        user_keywords = current_user.get("keywords", [])
+        permission_filter = _build_permission_filter(user_role, user_keywords)
+
+        conditions = [
+            f"reportDate >= '{start_date}'",
+            f"reportDate <= '{end_date}'"
+        ]
+        if permission_filter:
+            conditions.append(permission_filter)
+        where_clause = " AND ".join(conditions)
+
+        # 查询所有数据
+        query = f"""
+            SELECT
+                formatDateTime(reportDate, '%Y-%m-%d') as date_str,
+                Media as media,
+                sum(impressions) as impressions,
+                sum(clicks) as clicks,
+                sum(conversions) as conversions,
+                sum(revenue) as revenue,
+                sum(spend_final) as spend,
+                sum(m_imp) as m_imp,
+                sum(m_clicks) as m_clicks,
+                sum(m_conv) as m_conv
+            FROM ad_platform.dwd_daily_report
+            WHERE {where_clause}
+            GROUP BY reportDate, Media
+            ORDER BY reportDate DESC, Media
+        """
+
+        result = client.query(query)
+
+        # 构建层级结构: date -> media
+        hierarchy: Dict[str, Any] = {}
+
+        for row in result.named_results():
+            date_str = row.get("date_str", "")
+            media_name = row.get("media", "Unknown")
+
+            # 创建 Date 层级节点
+            if date_str not in hierarchy:
+                hierarchy[date_str] = {
+                    "_dimension": "date",
+                    "_metrics": {
+                        "impressions": 0,
+                        "clicks": 0,
+                        "conversions": 0,
+                        "spend": 0.0,
+                        "revenue": 0.0,
+                        "profit": 0.0,
+                        "m_imp": 0,
+                        "m_clicks": 0,
+                        "m_conv": 0,
+                        "ctr": 0.0,
+                        "cvr": 0.0,
+                        "roi": 0.0,
+                        "cpa": 0.0,
+                        "rpa": 0.0,
+                        "epc": 0.0,
+                        "epv": 0.0,
+                        "m_epc": 0.0,
+                        "m_epv": 0.0,
+                        "m_cpc": 0.0,
+                        "m_cpv": 0.0,
+                    },
+                    "_children": {}
+                }
+
+            # 累加 Date 层级指标
+            date_node = hierarchy[date_str]
+            for key in ["impressions", "clicks", "conversions", "m_imp", "m_clicks", "m_conv"]:
+                date_node["_metrics"][key] += int(row.get(key, 0) or 0)
+            for key in ["spend", "revenue"]:
+                date_node["_metrics"][key] += float(row.get(key, 0) or 0)
+
+            # 创建 Media 子节点
+            metrics = _calculate_metrics(row)
+            media_node = {
+                "_dimension": "media",
+                "_metrics": {
+                    "impressions": int(row.get("impressions", 0) or 0),
+                    "clicks": int(row.get("clicks", 0) or 0),
+                    "conversions": int(row.get("conversions", 0) or 0),
+                    "spend": float(row.get("spend", 0) or 0),
+                    "revenue": float(row.get("revenue", 0) or 0),
+                    "profit": metrics["profit"],
+                    "m_imp": int(row.get("m_imp", 0) or 0),
+                    "m_clicks": int(row.get("m_clicks", 0) or 0),
+                    "m_conv": int(row.get("m_conv", 0) or 0),
+                    "ctr": metrics["ctr"],
+                    "cvr": metrics["cvr"],
+                    "roi": metrics["roi"],
+                    "cpa": metrics["cpa"],
+                    "rpa": metrics["rpa"],
+                    "epc": metrics["epc"],
+                    "epv": metrics["epv"],
+                    "m_epc": metrics["m_epc"],
+                    "m_epv": metrics["m_epv"],
+                    "m_cpc": metrics["m_cpc"],
+                    "m_cpv": metrics["m_cpv"],
+                },
+                "_children": {}  # 叶子节点
+            }
+            date_node["_children"][media_name] = media_node
+
+        # 计算 Date 层级的衍生指标
+        for date_str, date_node in hierarchy.items():
+            m = date_node["_metrics"]
+            m["profit"] = m["revenue"] - m["spend"]
+            m["ctr"] = m["clicks"] / (m["impressions"] or 1)
+            m["cvr"] = m["conversions"] / (m["clicks"] or 1)
+            m["roi"] = m["profit"] / (m["spend"] or 1)
+            m["cpa"] = m["spend"] / (m["conversions"] or 1)
+            m["rpa"] = m["revenue"] / (m["conversions"] or 1)
+            m["epc"] = m["revenue"] / (m["clicks"] or 1)
+            m["epv"] = m["revenue"] / (m["impressions"] or 1)
+            m["m_epc"] = m["revenue"] / (m["m_clicks"] or 1)
+            m["m_epv"] = m["revenue"] / (m["m_imp"] or 1)
+            m["m_cpc"] = m["spend"] / (m["m_clicks"] or 1)
+            m["m_cpv"] = m["spend"] / (m["m_imp"] or 1)
+
+        return HierarchyResponse(
+            dimensions=["date", "media"],
+            hierarchy=hierarchy,
+            startDate=start_date,
+            endDate=end_date,
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching hierarchy: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching hierarchy: {str(e)}")
+
+
+@router.get("/data", response_model=List[DailyReportRow])
 async def get_daily_report(
     start_date: str = Query(..., description="开始日期 YYYY-MM-DD"),
     end_date: str = Query(..., description="结束日期 YYYY-MM-DD"),
-    media: Optional[str] = Query(None, description="媒体筛选"),
+    media: Optional[str] = Query(None, description="媒体筛选（用于子层级查询）"),
     current_user: dict = Depends(get_current_user)
 ):
     """
     获取 Daily Report 数据。
 
-    只按 media 维度聚合，支持 spend 修正。
+    根据 media 参数返回不同层级：
+    - 无 media 参数：返回 Media 层级数据
+    - 有 media 参数：返回该 Media 下的 Date 层级数据
     """
     db = get_db()
     try:
@@ -129,43 +402,116 @@ async def get_daily_report(
 
         where_clause = " AND ".join(conditions)
 
-        query = f"""
-            SELECT
-                formatDateTime(reportDate, '%Y-%m-%d') as date,
-                Media as media,
-                impressions,
-                clicks,
-                conversions,
-                revenue,
-                spend_original,
-                spend_manual,
-                spend_final,
-                m_imp,
-                m_clicks,
-                m_conv
-            FROM ad_platform.dwd_daily_report
-            WHERE {where_clause}
-            ORDER BY reportDate DESC, Media
-        """
+        if media:
+            # 查询特定 Media 下的 Date 数据
+            query = f"""
+                SELECT
+                    formatDateTime(reportDate, '%Y-%m-%d') as date_str,
+                    Media as media,
+                    impressions,
+                    clicks,
+                    conversions,
+                    revenue,
+                    spend_final,
+                    spend_manual,
+                    m_imp,
+                    m_clicks,
+                    m_conv
+                FROM ad_platform.dwd_daily_report
+                WHERE {where_clause}
+                ORDER BY reportDate DESC
+            """
+        else:
+            # 聚合查询 Media 层级数据
+            query = f"""
+                SELECT
+                    Media as name,
+                    sum(impressions) as impressions,
+                    sum(clicks) as clicks,
+                    sum(conversions) as conversions,
+                    sum(revenue) as revenue,
+                    sum(spend_final) as spend,
+                    sum(m_imp) as m_imp,
+                    sum(m_clicks) as m_clicks,
+                    sum(m_conv) as m_conv
+                FROM ad_platform.dwd_daily_report
+                WHERE {where_clause}
+                GROUP BY Media
+                ORDER BY Media
+            """
 
         result = client.query(query)
 
         data = []
         for row in result.named_results():
-            data.append({
-                "date": row.get("date", ""),
-                "media": row.get("media", ""),
-                "impressions": int(row.get("impressions", 0) or 0),
-                "clicks": int(row.get("clicks", 0) or 0),
-                "conversions": int(row.get("conversions", 0) or 0),
-                "revenue": float(row.get("revenue", 0) or 0),
-                "spend_original": float(row.get("spend_original", 0) or 0),
-                "spend_manual": float(row.get("spend_manual", 0) or 0),
-                "spend_final": float(row.get("spend_final", 0) or 0),
-                "m_imp": int(row.get("m_imp", 0) or 0),
-                "m_clicks": int(row.get("m_clicks", 0) or 0),
-                "m_conv": int(row.get("m_conv", 0) or 0),
-            })
+            metrics = _calculate_metrics(row)
+
+            if media:
+                # Date 层级行
+                date_str = row.get("date_str", "")
+                filter_path = _build_filter_path(media, date_str)
+                data.append({
+                    "id": f"{media}|{date_str}",
+                    "name": date_str,
+                    "level": 1,
+                    "dimensionType": "date",
+                    "impressions": int(row.get("impressions", 0) or 0),
+                    "clicks": int(row.get("clicks", 0) or 0),
+                    "conversions": int(row.get("conversions", 0) or 0),
+                    "spend": float(row.get("spend_final", 0) or 0),
+                    "revenue": float(row.get("revenue", 0) or 0),
+                    "profit": metrics["profit"],
+                    "m_imp": int(row.get("m_imp", 0) or 0),
+                    "m_clicks": int(row.get("m_clicks", 0) or 0),
+                    "m_conv": int(row.get("m_conv", 0) or 0),
+                    "ctr": metrics["ctr"],
+                    "cvr": metrics["cvr"],
+                    "roi": metrics["roi"],
+                    "cpa": metrics["cpa"],
+                    "rpa": metrics["rpa"],
+                    "epc": metrics["epc"],
+                    "epv": metrics["epv"],
+                    "m_epc": metrics["m_epc"],
+                    "m_epv": metrics["m_epv"],
+                    "m_cpc": metrics["m_cpc"],
+                    "m_cpv": metrics["m_cpv"],
+                    "hasChild": False,  # Date 是叶子节点
+                    "filterPath": [p.dict() for p in filter_path],
+                    "spend_manual": float(row.get("spend_manual", 0) or 0),
+                })
+            else:
+                # Media 层级行
+                media_name = row.get("name", "")
+                filter_path = _build_filter_path(media_name)
+                data.append({
+                    "id": media_name,
+                    "name": media_name,
+                    "level": 0,
+                    "dimensionType": "media",
+                    "impressions": int(row.get("impressions", 0) or 0),
+                    "clicks": int(row.get("clicks", 0) or 0),
+                    "conversions": int(row.get("conversions", 0) or 0),
+                    "spend": float(row.get("spend", 0) or 0),
+                    "revenue": float(row.get("revenue", 0) or 0),
+                    "profit": metrics["profit"],
+                    "m_imp": int(row.get("m_imp", 0) or 0),
+                    "m_clicks": int(row.get("m_clicks", 0) or 0),
+                    "m_conv": int(row.get("m_conv", 0) or 0),
+                    "ctr": metrics["ctr"],
+                    "cvr": metrics["cvr"],
+                    "roi": metrics["roi"],
+                    "cpa": metrics["cpa"],
+                    "rpa": metrics["rpa"],
+                    "epc": metrics["epc"],
+                    "epv": metrics["epv"],
+                    "m_epc": metrics["m_epc"],
+                    "m_epv": metrics["m_epv"],
+                    "m_cpc": metrics["m_cpc"],
+                    "m_cpv": metrics["m_cpv"],
+                    "hasChild": True,  # Media 有 Date 子节点
+                    "filterPath": [p.dict() for p in filter_path],
+                    "spend_manual": 0.0,
+                })
 
         return data
 
@@ -319,11 +665,13 @@ async def get_daily_report_summary(
             cvr = conversions / (clicks or 1)
             roi = (revenue - spend) / (spend or 1) if spend > 0 else 0
             cpa = spend / (conversions or 1)
+            rpa = revenue / (conversions or 1)
+            profit = revenue - spend
         else:
             impressions = clicks = conversions = 0
-            revenue = spend = 0.0
+            revenue = spend = profit = 0.0
             m_imp = m_clicks = m_conv = 0
-            ctr = cvr = roi = cpa = 0.0
+            ctr = cvr = roi = cpa = rpa = 0.0
 
         return DailyReportSummary(
             impressions=impressions,
@@ -331,6 +679,7 @@ async def get_daily_report_summary(
             conversions=conversions,
             revenue=revenue,
             spend=spend,
+            profit=profit,
             m_imp=m_imp,
             m_clicks=m_clicks,
             m_conv=m_conv,
@@ -338,6 +687,7 @@ async def get_daily_report_summary(
             cvr=cvr,
             roi=roi,
             cpa=cpa,
+            rpa=rpa,
         )
 
     except Exception as e:
@@ -380,26 +730,6 @@ async def get_media_list(current_user: dict = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Error fetching media list: {e}")
         return MediaListResponse(media=[])
-
-
-@router.get("/health", response_model=dict)
-async def health_check():
-    """健康检查端点。"""
-    return {"status": "ok", "service": "daily-report"}
-
-
-# ==================== 新增：数据同步和锁定功能 ====================
-
-class SyncDataRequest(BaseModel):
-    """数据同步请求"""
-    start_date: str  # YYYY-MM-DD
-    end_date: str  # YYYY-MM-DD
-
-
-class LockDateRequest(BaseModel):
-    """锁定日期请求"""
-    date: str  # YYYY-MM-DD
-    lock: bool = True  # True=锁定, False=解锁
 
 
 @router.post("/sync")
@@ -465,6 +795,7 @@ async def sync_data_from_performance(
             WHERE reportDate >= '{request.start_date}'
             AND reportDate <= '{request.end_date}'
             GROUP BY reportDate, Media
+            SETTINGS max_memory_usage=2000000000, max_threads=4
         """
         client.command(insert_query)
 
@@ -567,3 +898,9 @@ async def get_locked_dates(current_user: dict = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Error fetching locked dates: {e}")
         return {"locked_dates": []}
+
+
+@router.get("/health", response_model=dict)
+async def health_check():
+    """健康检查端点。"""
+    return {"status": "ok", "service": "daily-report"}

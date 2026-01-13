@@ -41,7 +41,15 @@
       "Bash(uvicorn:*)",
       "Bash(npm run build)",
       "Bash(ls:*)",
-      "Bash(sshpass:*)"
+      "Bash(sshpass:*)",
+      "Bash(if:*)",
+      "Bash(then echo \"Directory exists\")",
+      "Bash(else echo \"Directory NOT exists\")",
+      "Bash(fi:*)",
+      "Bash(ping:*)",
+      "Bash(dir:*)",
+      "Bash(xargs:*)",
+      "Bash(do taskkill:*)"
     ]
   }
 }

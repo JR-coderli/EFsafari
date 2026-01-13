@@ -112,6 +112,10 @@ function getDateRange(range: string, customStart?: Date, customEnd?: Date): { st
       const thirtyDaysAgo = new Date(today);
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
       return { start: formatDate(thirtyDaysAgo), end: formatDate(today) };
+    case 'This Month':
+      // This month: from 1st to today
+      const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { start: formatDate(thisMonthStart), end: formatDate(today) };
     default:
       return { start: formatDate(yesterday), end: formatDate(today) };
   }
