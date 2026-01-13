@@ -822,6 +822,17 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   // Load ETL status on mount and refresh periodically
   useEffect(() => {
     const loadEtlStatus = async () => {
+      // Development: use mock data directly
+      if (import.meta.env.DEV) {
+        setEtlStatus({
+          last_update: '2026.01.13 09:00',
+          report_date: new Date().toISOString().split('T')[0],
+          all_success: true
+        });
+        return;
+      }
+
+      // Production: call API
       try {
         const status = await dashboardApi.getEtlStatus();
         setEtlStatus(status);
@@ -1556,7 +1567,14 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             {currentPage === 'performance' && (
               <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold ${useMock ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                 <span className={`w-2 h-2 rounded-full ${useMock ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}></span>
-                {useMock ? 'Mock Data' : 'Live API'}
+                <span>{useMock ? 'Mock Data' : 'Live API'}</span>
+                <span className="w-px h-3 bg-current opacity-30"></span>
+                <span className="font-normal">
+                  {etlStatus?.last_update
+                    ? `${etlStatus.all_success ? 'all update' : 'part update'} ${etlStatus.last_update}`
+                    : 'null'
+                  }
+                </span>
               </div>
             )}
           </div>
@@ -1777,18 +1795,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                         <span className={`font-mono font-bold ${summaryData.roi > 0 ? 'text-emerald-600' : summaryData.roi < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{(summaryData.roi * 100).toFixed(2)}%</span>
                       </div>
                     </div>
-                    {/* ETL Status */}
-                    {etlStatus && etlStatus.last_update && (
-                      <div className="ml-auto flex items-center gap-2 shrink-0">
-                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${etlStatus.all_success ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${etlStatus.all_success ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider ${etlStatus.all_success ? 'text-emerald-700' : 'text-amber-700'}`}>
-                            {etlStatus.all_success ? 'All Updated' : 'Part Updated'}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-500 font-medium">{etlStatus.last_update}</span>
-                      </div>
-                    )}
                   </div>
 
                   {/* Pagination Bar */}

@@ -642,11 +642,14 @@ async def get_data_hierarchy(
 @router.get("/etl-status")
 async def get_etl_status():
     """Get ETL status from Redis."""
-    from cache import get_cache
+    from api.cache import get_cache as redis_get_cache
 
-    status = get_cache("etl:last_update")
-    if status:
-        return status
+    try:
+        status = redis_get_cache("etl:last_update")
+        if status:
+            return status
+    except Exception as e:
+        logger.error(f"Error getting ETL status from cache: {e}")
 
     return {
         "last_update": None,

@@ -69,6 +69,8 @@ export interface AdRow {
   campaign_id?: string;
   adset_id?: string;
   ads_id?: string;
+  // Filter path for this row (used to load daily breakdown data)
+  filterPath?: Array<{ dimension: Dimension; value: string }>;
 }
 
 export interface MetricConfig {
