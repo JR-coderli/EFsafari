@@ -1,6 +1,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { AdRow, Dimension, MetricConfig, SavedView, UserPermission, DailyBreakdown } from './types';
 import { generateMockReport } from './mockData';
 import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoadDailyData } from './src/api/hooks';
@@ -762,6 +763,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [error, setError] = useState<string | null>(null);
   const [useMock, setUseMock] = useState(false);  // Fallback to mock if API fails
   const [activeDims, setActiveDims] = useState<Dimension[]>(['platform', 'offer']);
+  const [editingDimIndex, setEditingDimIndex] = useState<number | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
   const [currentPage, setCurrentPage] = useState<'performance' | 'permissions' | 'daily_report'>('performance');
   const [activeFilters, setActiveFilters] = useState<Filter[]>([]);
@@ -886,6 +889,54 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   };
 
   const closeContextMenu = () => setContextMenu(null);
+
+  // Dimension replacement
+  const replaceDimension = (index: number, newDim: Dimension) => {
+    if (activeDims.includes(newDim)) return; // Prevent duplicates
+    setActiveDims(prev => {
+      const updated = [...prev];
+      updated[index] = newDim;
+      return updated;
+    });
+    setEditingDimIndex(null);
+    setDropdownPosition(null);
+  };
+
+  // Open dropdown and calculate position
+  const openDimDropdown = (idx: number, e: React.MouseEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    // Find the table header to account for its height
+    const tableHeader = document.querySelector('thead');
+    const headerHeight = tableHeader ? tableHeader.getBoundingClientRect().height : 0;
+    // Position below the clicked element, accounting for sticky header
+    setDropdownPosition({
+      top: Math.max(rect.bottom + 4, headerHeight + 4),
+      left: rect.left
+    });
+    setEditingDimIndex(idx);
+  };
+
+  // Close dropdown on click outside (using event delegation)
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      // Check if click is outside any dimension dropdown
+      const dropdowns = document.querySelectorAll('[data-dim-dropdown]');
+      let clickedInside = false;
+      dropdowns.forEach(dropdown => {
+        if (dropdown.contains(target)) clickedInside = true;
+      });
+      if (!clickedInside) {
+        setEditingDimIndex(null);
+        setDropdownPosition(null);
+      }
+    };
+    if (editingDimIndex !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [editingDimIndex]);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -1672,20 +1723,56 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
               <div className="flex items-center gap-4 overflow-x-auto no-scrollbar pb-1">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Pivot Layout:</span>
                 <div className="flex items-center gap-2">
-                  {activeDims.map((dim, idx) => (
-                    <div
-                      key={dim}
-                      draggable
-                      onDragStart={(e) => handleDimDragStart(e, idx)}
-                      onDragOver={(e) => handleDimDragOver(e)}
-                      onDrop={(e) => handleDimDrop(e, idx)}
-                      className="flex items-center bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl gap-2 shadow-sm animate-in fade-in slide-in-from-left-2 cursor-move hover:bg-indigo-100 transition-colors"
-                    >
-                      <i className="fas fa-grip-vertical text-indigo-300 text-xs"></i>
-                      <span className="text-xs font-black text-indigo-700">{ALL_DIMENSIONS.find(d => d.value === dim)?.label}</span>
-                      <button onClick={() => toggleDimension(dim)} className="ml-1 text-indigo-200 hover:text-rose-500 transition-colors"><i className="fas fa-times-circle text-xs"></i></button>
+                  {activeDims.map((dim, idx) => {
+                    const dimLabel = ALL_DIMENSIONS.find(d => d.value === dim)?.label;
+                    return (
+                    <div key={dim} className="relative" data-dim-dropdown="true">
+                      <div
+                        draggable
+                        onDragStart={(e) => handleDimDragStart(e, idx)}
+                        onDragOver={(e) => handleDimDragOver(e)}
+                        onDrop={(e) => handleDimDrop(e, idx)}
+                        className="flex items-center bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl gap-2 shadow-sm animate-in fade-in slide-in-from-left-2 cursor-move hover:bg-indigo-100 transition-colors"
+                      >
+                        <i className="fas fa-grip-vertical text-indigo-300 text-xs"></i>
+                        <span
+                          onClick={(e) => openDimDropdown(idx, e)}
+                          className="text-xs font-black text-indigo-700 cursor-pointer hover:text-indigo-900 underline decoration-dotted underline-offset-2"
+                        >
+                          {dimLabel}
+                        </span>
+                        <button onClick={(e) => { e.stopPropagation(); toggleDimension(dim); }} className="ml-1 text-indigo-200 hover:text-rose-500 transition-colors"><i className="fas fa-times-circle text-xs"></i></button>
+                      </div>
+                      {/* Dimension replacement dropdown - using Portal to render to body */}
+                      {editingDimIndex === idx && dropdownPosition && createPortal(
+                        <div
+                          className="fixed z-[99999] bg-white rounded-xl shadow-2xl border border-slate-200 py-2 min-w-[180px] animate-in fade-in zoom-in duration-150"
+                          style={{
+                            top: `${dropdownPosition.top}px`,
+                            left: `${dropdownPosition.left}px`
+                          }}
+                          data-dim-dropdown="true"
+                        >
+                          <div className="px-3 py-2 border-b border-slate-100">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Replace <span className="text-indigo-600">{dimLabel}</span> with:</div>
+                          </div>
+                          {ALL_DIMENSIONS.filter(d => d.value !== dim).map(d => (
+                            <button
+                              key={d.value}
+                              onClick={(e) => { e.stopPropagation(); replaceDimension(idx, d.value); }}
+                              className={`w-full px-4 py-2 text-left text-xs font-medium hover:bg-indigo-50 transition-colors flex items-center gap-2 ${activeDims.includes(d.value) ? 'text-slate-300 cursor-not-allowed' : 'text-slate-700 hover:text-indigo-700'}`}
+                            >
+                              <i className={`fas fa-circle text-[6px] ${activeDims.includes(d.value) ? 'text-slate-300' : 'text-indigo-400'}`}></i>
+                              {d.label}
+                              {activeDims.includes(d.value) && <span className="ml-auto text-[9px] text-slate-400">(active)</span>}
+                            </button>
+                          ))}
+                        </div>,
+                        document.body
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                   <div className="h-4 w-px bg-slate-200 mx-2"></div>
                   {ALL_DIMENSIONS.filter(d => !activeDims.includes(d.value)).map(d => (
                     <button key={d.value} onClick={() => toggleDimension(d.value)} className="px-3 py-1.5 border border-dashed border-slate-300 text-slate-400 rounded-xl text-[10px] font-bold hover:border-indigo-400 hover:text-indigo-500 transition-colors">+ {d.label}</button>
@@ -1700,10 +1787,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                         <button onClick={() => setActiveFilters(prev => prev.slice(0, i))} className="text-indigo-300 hover:text-rose-500"><i className="fas fa-times text-[9px]"></i></button>
                      </div>
                    )) : <span className="text-[10px] text-slate-400 italic">Drill down by clicking rows</span>}
-                  <label className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
-                    <input type="checkbox" checked={hideZeroImpressions} onChange={(e) => setHideZeroImpressions(e.target.checked)} className="w-3 h-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                    <span className="text-[10px] font-bold text-slate-600">Hide Zero Impressions</span>
-                  </label>
                   <label className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
                     <input type="checkbox" checked={colorMode} onChange={(e) => setColorMode(e.target.checked)} className="w-3 h-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                     <span className="text-[10px] font-bold text-slate-600">Color Mode</span>
@@ -1850,8 +1933,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                           else value = 0;
 
                           // Format display based on metric type
-                          if (m.type === 'money') {
-                            displayValue = <span className={`font-mono tracking-tight leading-none text-[14px] font-bold ${m.key === 'profit' ? (value > 0 ? 'text-emerald-600' : value < 0 ? 'text-rose-600' : '') : m.key === 'spend' ? 'text-rose-600' : m.key === 'revenue' ? 'text-amber-600' : ''}`}>${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+                          if (m.type === 'money' || m.type === 'profit') {
+                            displayValue = <span className={`font-mono tracking-tight leading-none text-[14px] font-bold ${m.key === 'profit' || m.type === 'profit' ? (value > 0 ? 'text-emerald-600' : value < 0 ? 'text-rose-600' : '') : m.key === 'spend' ? 'text-rose-600' : m.key === 'revenue' ? 'text-amber-600' : ''}`}>${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
                           } else if (m.type === 'percent') {
                             const colorForValue = (v: number) => {
                               if (m.key === 'roi') return v > 0 ? 'text-emerald-600' : v < 0 ? 'text-rose-600' : '';
