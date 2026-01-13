@@ -249,6 +249,7 @@ async def get_aggregated_data(
             GROUP BY {group_clause}
             ORDER BY total_revenue DESC
             LIMIT {limit}
+            SETTINGS max_memory_usage=2000000000, max_threads=4
         """
 
         logger.info(f"Executing query: {query[:200]}...")
@@ -379,6 +380,7 @@ async def get_available_dimensions():
         {"value": "campaign_name", "label": "Campaign"},
         {"value": "sub_campaign_name", "label": "Adset"},
         {"value": "creative_name", "label": "Ads"},
+        {"value": "date", "label": "Date"},
     ]
     return {"dimensions": dimensions}
 

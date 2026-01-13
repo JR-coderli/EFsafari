@@ -137,8 +137,16 @@ npm run dev
 
 ## 服务器信息
 
-### SSH 登接
+### SSH 连接
 
+**本地 SSH Config 别名**: `houtai01`
+
+```bash
+# 使用别名直接连接（已配置免密登录）
+ssh houtai01
+```
+
+**服务器信息**:
 ```yaml
 IP: 43.160.248.9
 用户: root

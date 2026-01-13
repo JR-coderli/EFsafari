@@ -13,7 +13,8 @@ DimensionType = Literal[
     "offer",
     "campaign_name",
     "sub_campaign_name",
-    "creative_name"
+    "creative_name",
+    "date"
 ]
 
 # Frontend dimension name to ClickHouse column mapping
@@ -24,6 +25,7 @@ DIMENSION_COLUMN_MAP = {
     "campaign_name": "Campaign",
     "sub_campaign_name": "Adset",
     "creative_name": "Ads",
+    "date": "reportDate",
 }
 
 

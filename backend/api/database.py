@@ -132,6 +132,8 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
     # Build unique ID from filter values + current dimension value
     filter_values = filter_values or []
     dim_value = row.get(f"group_{dimension_type}", "Unknown")
+    # Convert dim_value to string (handles datetime.date for 'date' dimension)
+    dim_value = str(dim_value) if dim_value is not None else "Unknown"
     row_id = "|".join(filter_values + [dim_value]) if filter_values else dim_value
 
     # Get metrics

@@ -1,13 +1,14 @@
 
 export type UserRole = 'admin' | 'ops' | 'ops02' | 'business';
 
-export type Dimension = 
-  | 'platform' 
+export type Dimension =
+  | 'platform'
   | 'advertiser'
   | 'offer'
-  | 'campaign_name' 
-  | 'sub_campaign_name' 
-  | 'creative_name';
+  | 'campaign_name'
+  | 'sub_campaign_name'
+  | 'creative_name'
+  | 'date';
 
 export interface DailyBreakdown {
   date: string;

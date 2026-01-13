@@ -38,7 +38,10 @@
       "Bash(ss:*)",
       "Bash(ssh:*)",
       "Bash(tree:*)",
-      "Bash(uvicorn:*)"
+      "Bash(uvicorn:*)",
+      "Bash(npm run build)",
+      "Bash(ls:*)",
+      "Bash(sshpass:*)"
     ]
   }
 }

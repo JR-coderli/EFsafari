@@ -42,6 +42,7 @@ const ALL_DIMENSIONS: { value: Dimension; label: string }[] = [
   { value: 'campaign_name', label: 'Campaign' },
   { value: 'sub_campaign_name', label: 'Adset' },
   { value: 'creative_name', label: 'Ads' },
+  { value: 'date', label: 'Date' },
 ];
 
 const DEFAULT_METRICS: MetricConfig[] = [
@@ -817,7 +818,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   // Reset mock mode when currentUser changes (user just logged in)
   useEffect(() => {
     if (useMock) {
-      console.log('User logged in, switching back to live API');
       setUseMock(false);
       setError(null);
     }
@@ -1161,7 +1161,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       setError(errorMsg);
 
       // Auto-fallback to mock on other API errors
-      console.log('API unavailable, falling back to mock data');
       setUseMock(true);
       setLoading(false);
       return;
@@ -1384,10 +1383,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   };
 
   const toggleDimExpansion = async (e: React.MouseEvent, row: AdRow) => {
-    console.log('[toggleDimExpansion] CALLED - row.id:', row.id, 'row.level:', row.level, 'row.hasChild:', row.hasChild);
     e.preventDefault(); e.stopPropagation();
     if (!row.hasChild) {
-      console.log('[toggleDimExpansion] Returning early because hasChild is false');
       return;
     }
     const nextExpanded = new Set(expandedDimRows);
@@ -1405,11 +1402,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           value: v
         }));
 
-        console.log('[toggleDimExpansion] row.id:', row.id, 'row.level:', row.level, 'rowFilters:', rowFilters);
-        console.log('[toggleDimExpansion] row.filterPath:', row.filterPath);
-        console.log('[toggleDimExpansion] activeDims:', activeDims);
-        console.log('[toggleDimExpansion] activeDims.length:', activeDims.length, 'row.level + 1:', row.level + 1);
-
         if (useMock) {
           // Use mock data
           children = generateMockReport(
@@ -1424,10 +1416,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           try {
             // Pass row's filterPath to load child data
             children = await loadChildData(activeDims, rowFilters, selectedRange, row.id, customDateStart, customDateEnd);
-            console.log('[toggleDimExpansion] children loaded:', children);
-            if (children.length > 0) {
-              console.log('[toggleDimExpansion] first child:', children[0]);
-            }
           } catch (err) {
             console.error('Error loading child data:', err);
             children = [];
@@ -1448,21 +1436,14 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
         setData(prev => {
           const update = (rows: AdRow[], depth = 0): AdRow[] => {
-            const indent = '  '.repeat(depth);
-            console.log(`[update] Depth ${depth}: checking ${rows.length} rows, looking for id:`, row.id);
             return rows.map(r => {
               const match = r.id === row.id;
-              if (match) {
-                console.log(`[update] FOUND MATCH at depth ${depth}: ${r.id} -> setting children with ${children.length} items`);
-              }
               return match
                 ? { ...r, children }
                 : (r.children ? { ...r, children: update(r.children, depth + 1) } : r);
             });
           };
           const updated = update(prev);
-          console.log('[setData] Updated data, row.id:', row.id, 'children.length:', children.length);
-          console.log('[setData] First child hasChild:', children[0]?.hasChild, 'first child id:', children[0]?.id);
           return updated;
         });
       }
@@ -1473,26 +1454,16 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   // Load daily data for a specific row - works for both parent and child rows
   const toggleDailyBreakdown = async (e: React.MouseEvent, row: AdRow) => {
     e.preventDefault(); e.stopPropagation();
-    console.log('[toggleDailyBreakdown] row.id:', row.id, 'row.filterPath:', row.filterPath);
     const next = new Set(expandedDailyRows);
     if (next.has(row.id)) {
       next.delete(row.id);
     } else {
       next.add(row.id);
-      // Check if data is already loaded
-      console.log('[toggleDailyBreakdown] dailyDataMap.has(row.id):', dailyDataMap.has(row.id));
       if (!dailyDataMap.has(row.id) && row.filterPath) {
         // Use filterPath from the row - this works for both parent and child rows
-        console.log('[toggleDailyBreakdown] using filterPath:', row.filterPath);
         // Load daily data (last 7 days)
         apiLoadDailyData(row.filterPath, 'Last 7 Days', 7).then(dailyData => {
-          console.log('[toggleDailyBreakdown] dailyData loaded:', dailyData);
-          setDailyDataMap(prev => {
-            const newMap = new Map(prev).set(row.id, dailyData);
-            console.log('[toggleDailyBreakdown] dailyDataMap size after set:', newMap.size);
-            console.log('[toggleDailyBreakdown] dailyDataMap.get(row.id):', newMap.get(row.id));
-            return newMap;
-          });
+          setDailyDataMap(prev => new Map(prev).set(row.id, dailyData));
         }).catch(err => {
           console.error('Error loading daily data:', err);
         });
@@ -1828,7 +1799,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                         </tr>
                         {expandedDailyRows.has(row.id) && (() => {
                           const dailyData = dailyDataMap.get(row.id);
-                          console.log('[Render] row.id:', row.id, 'expandedDailyRows.has:', expandedDailyRows.has(row.id), 'dailyData:', dailyData);
                           return dailyData?.slice(0, 7).map((day, dayIdx) => (
                           <tr key={day.date} className="bg-slate-50 hover:bg-amber-50">
                             <td className="px-4 py-2 sticky left-0 bg-slate-50 z-10 border-l-4 border-indigo-600/60 border-r border-slate-50" style={{ paddingLeft: `${row.level * 20 + 72}px`, width: columnWidths.hierarchy }}><span className="text-[12px] font-bold text-slate-500">{day.date}</span></td>

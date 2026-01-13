@@ -281,7 +281,6 @@ function getDataFromHierarchy(
   const result = Object.entries(currentLevel).map(([name, node]) =>
     hierarchyNodeToAdRow(name, node, actualLevel, maxLevel, activeFilters)
 );
-  console.log("[getDataFromHierarchy] result:", result.length, "level:", result[0]?.level, "first dimensionType:", result[0]?.dimensionType);
   return result;
 }
 
