@@ -166,9 +166,27 @@ export const authApi = {
 
   /**
    * Logout
+   * SECURITY: Clears all cached data to prevent data leakage between users
    */
   logout(): void {
     tokenManager.clear();
+    // Clear any in-memory data cache
+    try {
+      // Dynamic import to avoid circular dependency
+      import('./hooks').then(({ clearDataCache }) => {
+        clearDataCache();
+      }).catch(() => {
+        // Ignore if hooks module not available
+      });
+    } catch (e) {
+      // Ignore errors during cleanup
+    }
+    // Clear all localStorage items with our prefix
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('addata_')) {
+        localStorage.removeItem(key);
+      }
+    });
   },
 
   /**

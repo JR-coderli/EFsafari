@@ -7,8 +7,20 @@ import { AdRow, DailyBreakdown, Dimension } from '../types';
 import dashboardApi from './client';
 
 /**
+ * Get current user ID for cache key isolation (security: prevent data leakage between users)
+ */
+function getCurrentUserId(): string {
+  const token = localStorage.getItem('addata_access_token');
+  // Simple hash of token as user identifier - ensures cache isolation per user session
+  if (!token) return 'anonymous';
+  // Use first 8 chars of token as user session identifier
+  return `user_${token.substring(0, 8)}`;
+}
+
+/**
  * In-memory cache for API responses
  * Cache is disabled in development mode, enabled in production
+ * IMPORTANT: Cache is isolated per user to prevent data leakage
  */
 class DataCache {
   private cache = new Map<string, { data: any; timestamp: number }>();
@@ -52,9 +64,11 @@ const dataCache = new DataCache();
 
 /**
  * Generate cache key from parameters
+ * SECURITY: Includes user ID to prevent cache data leakage between users
  */
 function cacheKey(prefix: string, ...args: any[]): string {
-  const keyParts = [prefix, ...args.map(a => JSON.stringify(a))];
+  const userId = getCurrentUserId();
+  const keyParts = [userId, prefix, ...args.map(a => JSON.stringify(a))];
   return keyParts.join(':');
 }
 

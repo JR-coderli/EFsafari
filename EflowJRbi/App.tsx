@@ -854,6 +854,24 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     return () => clearInterval(interval);
   }, []);
 
+  // Get row text for copy
+  const getRowText = (row: RowData): string => {
+    const parts: string[] = [];
+    // Name and dimension
+    parts.push(`${row.name} (${ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label || row.dimensionType})`);
+    // Metrics
+    visibleMetrics.forEach(m => {
+      const value = row[m.key] as number;
+      if (value !== undefined && value !== null) {
+        const formatted = m.type === 'currency' ? `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                     : m.type === 'percent' ? `${(value * 100).toFixed(1)}%`
+                     : value.toLocaleString('en-US');
+        parts.push(`${m.label}: ${formatted}`);
+      }
+    });
+    return parts.join(' | ');
+  };
+
   // Context menu handlers
   const handleContextMenu = (e: React.MouseEvent, text: string) => {
     e.preventDefault();
@@ -1791,7 +1809,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                       const borderClass = isChild ? 'border-l-4 border-indigo-300' : '';
                       return (
                       <React.Fragment key={row.id}>
-                        <tr className="group">
+                        <tr className="group" onContextMenu={(e) => handleContextMenu(e, getRowText(row))}>
                           <td className={`px-4 sticky left-0 z-10 border-r border-slate-200 group-hover:bg-amber-50 transition-colors ${cellBgClass} ${pyClass} ${borderClass}`} style={{ paddingLeft: `${row.level * 20 + 32}px`, width: columnWidths.hierarchy }}>
                             <div className="flex items-center gap-2 cursor-pointer" onClick={() => {
                               const nextFilters = row.filterPath || row.id.split('|').map((v, i) => ({ dimension: activeDims[i], value: v }));
@@ -1801,7 +1819,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                               <button onClick={(e) => { e.stopPropagation(); toggleDailyBreakdown(e, row); }} className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${expandedDailyRows.has(row.id) ? 'bg-indigo-600 shadow-sm' : 'bg-slate-100'}`}><div className={`w-1.5 h-1.5 rounded-full ${expandedDailyRows.has(row.id) ? 'bg-white' : 'bg-slate-400'}`}></div></button>
                               {row.hasChild && <button onClick={(e) => { e.stopPropagation(); toggleDimExpansion(e, row); }} className={`w-6 h-6 rounded flex items-center justify-center transition-all bg-slate-50 border border-slate-100 text-slate-400 ${isExpanded ? 'rotate-90' : ''}`}><i className="fas fa-chevron-right text-[10px]"></i></button>}
                               <div className="flex flex-col min-w-0">
-                                <span className={`${nameClass} truncate group-hover:text-indigo-600`} onContextMenu={(e) => handleContextMenu(e, row.name)}>{row.name}</span>
+                                <span className={`${nameClass} truncate group-hover:text-indigo-600`}>{row.name}</span>
                                 <span className={labelClass}>{ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label}</span>
                               </div>
                             </div>
@@ -2119,7 +2137,8 @@ const App: React.FC = () => {
     setUser(null);
   };
   if (!user) return <LoginPage onLogin={setUser} />;
-  return <Dashboard currentUser={user} onLogout={handleLogout} />;
+  // Use key to force component remount on user change (security: prevents data leakage)
+  return <Dashboard key={user.id} currentUser={user} onLogout={handleLogout} />;
 };
 
 export default App;
