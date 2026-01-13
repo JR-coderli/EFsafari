@@ -12,21 +12,21 @@ import { AdRow, MetricConfig, UserPermission } from '../types';
 // Metric configuration
 const DAILY_METRICS: MetricConfig[] = [
   { key: 'spend', label: 'Spend', visible: true, type: 'money', group: 'Basic' },
-  { key: 'conversions', label: 'Conversions', visible: true, type: 'number', group: 'Basic' },
   { key: 'revenue', label: 'Revenue', visible: true, type: 'money', group: 'Basic' },
   { key: 'profit', label: 'Profit', visible: true, type: 'profit' as const, group: 'Basic' },
+  { key: 'roi', label: 'ROI', visible: true, type: 'percent', group: 'Calculated' },
+  { key: 'conversions', label: 'Conversions', visible: true, type: 'number', group: 'Basic' },
+  { key: 'cpa', label: 'CPA', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'epa', label: 'EPA', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'epv', label: 'EPV', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'ctr', label: 'CTR', visible: true, type: 'percent', group: 'Calculated' },
+  { key: 'cvr', label: 'CVR', visible: true, type: 'percent', group: 'Calculated' },
   { key: 'impressions', label: 'Impressions', visible: true, type: 'number', group: 'Basic' },
   { key: 'clicks', label: 'Clicks', visible: true, type: 'number', group: 'Basic' },
   { key: 'm_imp', label: 'm_imp', visible: true, type: 'number', group: 'Basic' },
   { key: 'm_clicks', label: 'm_clicks', visible: true, type: 'number', group: 'Basic' },
   { key: 'm_conv', label: 'm_conv', visible: true, type: 'number', group: 'Basic' },
-  { key: 'ctr', label: 'CTR', visible: true, type: 'percent', group: 'Calculated' },
-  { key: 'cvr', label: 'CVR', visible: true, type: 'percent', group: 'Calculated' },
-  { key: 'roi', label: 'ROI', visible: true, type: 'percent', group: 'Calculated' },
-  { key: 'cpa', label: 'CPA', visible: true, type: 'money', group: 'Calculated' },
-  { key: 'epa', label: 'EPA', visible: true, type: 'money', group: 'Calculated' },
-  { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
-  { key: 'epv', label: 'EPV', visible: true, type: 'money', group: 'Calculated' },
 ];
 
 // Metric value display component
@@ -213,6 +213,39 @@ interface DailyHierarchyResponse {
 
 type HierarchyOrder = 'date-media' | 'media-date';
 
+interface LockConfirmState {
+  date: string;
+  displayName: string;
+  currentLocked: boolean;
+}
+
+// Date Badge Component
+const DateBadge: React.FC<{
+  dateValue: string;
+  isLocked: boolean;
+  onClick: (date: string) => void;
+}> = ({ dateValue, isLocked, onClick }) => {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        console.log('Date badge clicked:', dateValue, 'locked:', isLocked);
+        onClick(dateValue);
+      }}
+      className={`text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors ${
+        isLocked
+          ? 'text-emerald-700 bg-emerald-100 hover:bg-emerald-200 cursor-pointer'
+          : 'text-slate-400 bg-slate-100 hover:bg-slate-200 cursor-pointer'
+      }`}
+      title={isLocked ? '点击解锁 (数据已锁定)' : '点击锁定 (防止自动同步覆盖)'}
+    >
+      {isLocked && <i className="fas fa-lock text-[8px]"></i>}
+      Date
+    </button>
+  );
+};
+
 const DailyReport: React.FC<DailyReportProps> = ({
   selectedRange,
   customDateStart,
@@ -230,6 +263,9 @@ const DailyReport: React.FC<DailyReportProps> = ({
   const [spendInputValue, setSpendInputValue] = useState('');
   const [quickFilterText, setQuickFilterText] = useState('');
   const [hierarchyOrder, setHierarchyOrder] = useState<HierarchyOrder>('date-media');
+  const [lockedDates, setLockedDates] = useState<Set<string>>(new Set());
+  const [lockConfirm, setLockConfirm] = useState<LockConfirmState | null>(null);
+  const [lockingInProgress, setLockingInProgress] = useState(false);
   const spendInputRef = React.useRef<HTMLInputElement>(null);
 
   const rangeInfo = useMemo(() => getRangeInfo(selectedRange, customDateStart, customDateEnd), [selectedRange, customDateStart, customDateEnd]);
@@ -267,6 +303,68 @@ const DailyReport: React.FC<DailyReportProps> = ({
     return await response.json();
   };
 
+  const loadLockedDates = async () => {
+    const token = localStorage.getItem('addata_access_token');
+    try {
+      const response = await fetch('/api/daily-report/locked-dates', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setLockedDates(new Set(data.locked_dates || []));
+      }
+    } catch (error) {
+      console.error('Error loading locked dates:', error);
+    }
+  };
+
+  const handleDateBadgeClick = (dateValue: string, displayName: string) => {
+    const isLocked = lockedDates.has(dateValue);
+    setLockConfirm({ date: dateValue, displayName, currentLocked: isLocked });
+  };
+
+  const confirmLock = async () => {
+    if (!lockConfirm) return;
+    setLockingInProgress(true);
+
+    const token = localStorage.getItem('addata_access_token');
+    const newLockState = !lockConfirm.currentLocked;
+
+    try {
+      const response = await fetch('/api/daily-report/lock-date', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          date: lockConfirm.date,
+          lock: newLockState
+        })
+      });
+
+      if (response.ok) {
+        // Update locked dates state
+        setLockedDates(prev => {
+          const newSet = new Set(prev);
+          if (newLockState) {
+            newSet.add(lockConfirm.date);
+          } else {
+            newSet.delete(lockConfirm.date);
+          }
+          return newSet;
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling lock:', error);
+    } finally {
+      setLockingInProgress(false);
+      setLockConfirm(null);
+    }
+  };
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -290,6 +388,10 @@ const DailyReport: React.FC<DailyReportProps> = ({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    loadLockedDates();
+  }, []);
 
   useEffect(() => {
     if (editingSpend && spendInputRef.current) {
@@ -465,8 +567,12 @@ const DailyReport: React.FC<DailyReportProps> = ({
           mNode.m_clicks += mediaNode._metrics.m_clicks;
           mNode.m_conv += mediaNode._metrics.m_conv;
 
-          // Add date as child of media
-          mediaHierarchy[media]._children![date] = mediaNode;
+          // Add date as child of media (create a proper date node)
+          mediaHierarchy[media]._children![date] = {
+            _dimension: 'date',
+            _metrics: { ...mediaNode._metrics },
+            _children: undefined
+          };
         }
       }
 
@@ -663,14 +769,6 @@ const DailyReport: React.FC<DailyReportProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-black text-slate-800 tracking-tight">Daily Report</h1>
-            <button
-              onClick={() => setHierarchyOrder(hierarchyOrder === 'date-media' ? 'media-date' : 'date-media')}
-              className="text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1"
-              title="Click to switch hierarchy"
-            >
-              {hierarchyOrder === 'date-media' ? 'Date → Media' : 'Media → Date'}
-              <i className="fas fa-exchange-alt text-[9px]"></i>
-            </button>
           </div>
           <div className="flex gap-2 items-center">
             <DatePicker
@@ -682,21 +780,30 @@ const DailyReport: React.FC<DailyReportProps> = ({
         </div>
 
         <div className="flex justify-between items-center">
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-col gap-2 items-start">
+            <button
+              onClick={() => setHierarchyOrder(hierarchyOrder === 'date-media' ? 'media-date' : 'date-media')}
+              className="text-[15px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+              title="Click to switch hierarchy"
+            >
+              {hierarchyOrder === 'date-media' ? 'Date ⇄ Media' : 'Media ⇄ Date'}
+            </button>
+          </div>
+          <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
               <input type="checkbox" checked={colorMode} onChange={(e) => setColorMode(e.target.checked)} className="w-3 h-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
               <span className="text-[10px] font-bold text-slate-600">Color Mode</span>
             </label>
-          </div>
-          <div className="flex items-center gap-2">
-            <i className="fas fa-search text-slate-400 text-xs"></i>
-            <input
-              type="text"
-              placeholder="Quick filter..."
-              value={quickFilterText}
-              onChange={(e) => setQuickFilterText(e.target.value)}
-              className="w-40 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-medium text-slate-600 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
+            <div className="flex items-center gap-2">
+              <i className="fas fa-search text-slate-400 text-xs"></i>
+              <input
+                type="text"
+                placeholder="Quick filter..."
+                value={quickFilterText}
+                onChange={(e) => setQuickFilterText(e.target.value)}
+                className="w-40 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-medium text-slate-600 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -723,7 +830,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
               {/* Summary Row */}
               {summary && (
                 <tr className="bg-gradient-to-r from-slate-50 to-slate-100">
-                  <th className="left-0 bg-gradient-to-r from-slate-50 to-slate-100 z-30 px-3 py-2 text-left border-b border-slate-200 w-48">
+                  <th className="left-0 bg-gradient-to-r from-slate-50 to-slate-100 z-30 px-3 py-2 text-left border-b border-slate-200">
                     <div className="flex items-center gap-2">
                       <i className="fas fa-calculator text-indigo-500 text-xs"></i>
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Summary</span>
@@ -743,7 +850,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
               )}
               {/* Header Row */}
               <tr>
-                <th className="left-0 bg-white z-30 px-3 py-2 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 w-48">
+                <th className="left-0 bg-white z-30 px-3 py-2 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">
                   Dimension
                 </th>
                 {visibleMetrics.map(metric => (
@@ -766,26 +873,33 @@ const DailyReport: React.FC<DailyReportProps> = ({
                   <tr
                     key={row.id}
                     className={`hover:bg-slate-50 transition-colors ${row.level === 1 ? 'bg-slate-50/50' : ''}`}
-                    style={{ paddingLeft: `${row.level * 16}px` }}
                   >
                     <td className={`left-0 bg-white z-10 px-3 py-2 border-b border-slate-200 font-medium text-slate-700 text-xs ${row.level === 0 ? 'font-bold' : ''} ${row.level === 1 ? 'text-indigo-600' : ''}`}>
-                      <div className="flex items-center gap-2">
-                        {row.hasChild && (
-                          <button
-                            onClick={() => toggleRowExpansion(row.id)}
-                            className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 transition-colors"
-                          >
-                            <i className={`fas fa-chevron-right text-[10px] text-slate-400 transition-transform ${row.isExpanded ? 'rotate-90' : ''}`}></i>
-                          </button>
-                        )}
-                        {!row.hasChild && <span className="w-5"></span>}
-                        <span>{row.name}</span>
-                        {row.dimensionType === 'media' && (
-                          <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Media</span>
-                        )}
-                        {row.dimensionType === 'date' && (
-                          <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Date</span>
-                        )}
+                      <div className={`flex items-center gap-2 ${row.level === 1 ? 'justify-between w-full' : ''}`}>
+                        <div className="flex items-center gap-2 flex-1">
+                          {row.hasChild && (
+                            <button
+                              onClick={() => toggleRowExpansion(row.id)}
+                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 transition-colors"
+                            >
+                              <i className={`fas fa-chevron-right text-[10px] text-slate-400 transition-transform ${row.isExpanded ? 'rotate-90' : ''}`}></i>
+                            </button>
+                          )}
+                          {!row.hasChild && <span className="w-5"></span>}
+                          <span className={row.level === 1 ? 'flex-1' : ''}>{row.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {row.dimensionType === 'media' && (
+                            <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Media</span>
+                          )}
+                          {row.dimensionType === 'date' && (
+                            <DateBadge
+                              dateValue={row.name}
+                              isLocked={lockedDates.has(row.name)}
+                              onClick={handleDateBadgeClick}
+                            />
+                          )}
+                        </div>
                       </div>
                     </td>
                     {visibleMetrics.map(metric => {
@@ -833,6 +947,48 @@ const DailyReport: React.FC<DailyReportProps> = ({
           </table>
         )}
       </div>
+
+      {/* Lock Confirmation Modal */}
+      {lockConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-96">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">
+              {lockConfirm.currentLocked ? '解锁日期' : '锁定日期'}
+            </h3>
+            <p className="text-sm text-slate-600 mb-4">
+              {lockConfirm.currentLocked
+                ? `确定要解锁 ${lockConfirm.displayName} 吗？解锁后，该日期的数据可能会被自动同步覆盖。`
+                : `确定要锁定 ${lockConfirm.displayName} 吗？锁定后，该日期的数据将以手动修正为准，不会被自动同步覆盖。`
+              }
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setLockConfirm(null)}
+                disabled={lockingInProgress}
+                className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmLock}
+                disabled={lockingInProgress}
+                className={`px-4 py-2 text-sm font-bold text-white rounded-xl transition-colors disabled:opacity-50 ${
+                  lockConfirm.currentLocked
+                    ? 'bg-amber-500 hover:bg-amber-600'
+                    : 'bg-emerald-500 hover:bg-emerald-600'
+                }`}
+              >
+                {lockingInProgress
+                  ? '处理中...'
+                  : lockConfirm.currentLocked
+                    ? '解锁'
+                    : '锁定'
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

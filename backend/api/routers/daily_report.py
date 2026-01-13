@@ -106,10 +106,10 @@ class DailyReportRow(BaseModel):
 
 
 class SpendUpdateRequest(BaseModel):
-    """Spend 直接设置值请求"""
+    """Spend 最终值设置请求"""
     date: str
     media: str
-    spend_value: float  # 直接设置 spend_manual 的值
+    spend_value: float  # 最终 spend 值 (spend_final)，系统自动计算 spend_manual = spend_final - spend_original
 
 
 class DailyReportSummary(BaseModel):
@@ -526,9 +526,10 @@ async def update_spend(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    直接设置指定日期和媒体的 spend_manual 值。
+    设置指定日期和媒体的最终 spend 值（spend_final）。
 
-    spend_value: 直接设置 spend_manual 的值（spend_final = spend_original + spend_manual）
+    spend_value: 用户填写的最终花费值（spend_final）
+                 系统自动计算: spend_manual = spend_final - spend_original
     """
     db = get_db()
     try:
@@ -560,6 +561,7 @@ async def update_spend(
 
         if not existing_rows:
             # 记录不存在，创建新记录
+            # 用户填的是最终值 spend_final，spend_original 默认为 0
             insert_query = f"""
                 INSERT INTO ad_platform.dwd_daily_report
                 (reportDate, Media, spend_manual, spend_final, spend_original,
@@ -574,13 +576,15 @@ async def update_spend(
             client.command(insert_query)
         else:
             # 更新现有记录
+            # 用户填的是 spend_final（最终值），需要计算 spend_manual
             current_spend_original = float(existing_rows[0].get("spend_original", 0) or 0)
-            new_spend_final = current_spend_original + request.spend_value
+            new_spend_final = request.spend_value
+            new_spend_manual = new_spend_final - current_spend_original
 
             update_query = f"""
                 ALTER TABLE ad_platform.dwd_daily_report
                 UPDATE
-                    spend_manual = {request.spend_value},
+                    spend_manual = {new_spend_manual},
                     spend_final = {new_spend_final},
                     updated_at = now(),
                     last_modified_by = '{username}'
