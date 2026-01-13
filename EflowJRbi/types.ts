@@ -72,6 +72,8 @@ export interface AdRow {
   ads_id?: string;
   // Filter path for this row (used to load daily breakdown data)
   filterPath?: Array<{ dimension: Dimension; value: string }>;
+  // Spend manual adjustment (non-zero if manually edited)
+  spend_manual?: number;
 }
 
 export interface MetricConfig {

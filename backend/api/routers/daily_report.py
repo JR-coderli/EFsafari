@@ -253,6 +253,7 @@ async def get_hierarchy(
                 sum(conversions) as conversions,
                 sum(revenue) as revenue,
                 sum(spend_final) as spend,
+                sum(spend_manual) as spend_manual,
                 sum(m_imp) as m_imp,
                 sum(m_clicks) as m_clicks,
                 sum(m_conv) as m_conv
@@ -332,6 +333,7 @@ async def get_hierarchy(
                     "m_epv": metrics["m_epv"],
                     "m_cpc": metrics["m_cpc"],
                     "m_cpv": metrics["m_cpv"],
+                    "spend_manual": float(row.get("spend_manual", 0) or 0),
                 },
                 "_children": {}  # 叶子节点
             }
@@ -580,6 +582,7 @@ async def update_spend(
             current_spend_original = float(existing_rows[0].get("spend_original", 0) or 0)
             new_spend_final = request.spend_value
             new_spend_manual = new_spend_final - current_spend_original
+            logger.info(f"UPDATE SPEND: date={request.date}, media={request.media}, spend_original={current_spend_original}, new_spend_final={new_spend_final}, new_spend_manual={new_spend_manual}")
 
             update_query = f"""
                 ALTER TABLE ad_platform.dwd_daily_report
@@ -591,6 +594,11 @@ async def update_spend(
                 WHERE reportDate = '{request.date}' AND Media = '{escaped_media}'
             """
             client.command(update_query)
+
+            # 等待 mutation 完成（ClickHouse UPDATE 是异步的）
+            # 使用 SYSTEM STOP / START MERGES 或等待一小段时间
+            import time
+            time.sleep(1)
 
         return {
             "success": True,

@@ -36,8 +36,17 @@ const MetricValue: React.FC<{
   isSub?: boolean;
   colorMode?: boolean;
   metricKey?: string;
-}> = ({ value, type, isSub, colorMode, metricKey }) => {
+  isManualEdited?: boolean;
+}> = ({ value, type, isSub, colorMode, metricKey, isManualEdited }) => {
   const displayValue = isFinite(value) ? value : 0;
+
+  // 手动编辑的值使用琥珀色
+  if (isManualEdited) {
+    const sizeClass = isSub ? 'text-[13px]' : 'text-[14px]';
+    if (type === 'money' || type === 'profit') return <span className={`font-mono tracking-tight leading-none font-bold text-amber-600 ${sizeClass}`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+    if (type === 'percent') return <span className={`font-mono tracking-tight leading-none font-bold text-amber-600 ${sizeClass}`}>{(displayValue * 100).toFixed(2)}%</span>;
+    return <span className={`font-mono tracking-tight leading-none font-bold text-amber-600 ${sizeClass}`}>{Math.floor(displayValue).toLocaleString()}</span>;
+  }
 
   if (type === 'profit') {
     const colorClass = displayValue > 0 ? 'text-emerald-600' : displayValue < 0 ? 'text-rose-600' : 'text-slate-800';
@@ -200,6 +209,7 @@ interface DailyDataNode {
     m_epv: number;
     m_cpc: number;
     m_cpv: number;
+    spend_manual?: number;  // 手动修正值（非零表示已编辑）
   };
   _children?: Record<string, DailyDataNode>;
 }
@@ -531,6 +541,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
       isExpanded: false,
       children: [],
       filterPath: [{ dimension: node._dimension, value: name }],
+      spend_manual: metrics.spend_manual ?? 0,
     };
   };
 
@@ -762,6 +773,8 @@ const DailyReport: React.FC<DailyReportProps> = ({
           mediaNode._metrics = { ...mediaNode._metrics };
           mediaNode._metrics.spend = newValue;
           mediaNode._metrics.profit = mediaNode._metrics.revenue - newValue;
+          // Mark as manually edited (累加差值到 spend_manual)
+          mediaNode._metrics.spend_manual = (mediaNode._metrics.spend_manual || 0) + spendDiff;
 
           // Recalculate derived metrics for media node
           const m = mediaNode._metrics;
@@ -933,9 +946,9 @@ const DailyReport: React.FC<DailyReportProps> = ({
                 return (
                   <tr
                     key={row.id}
-                    className={`hover:bg-slate-50 transition-colors ${row.level === 1 ? 'bg-slate-50/50' : ''}`}
+                    className={`group hover:bg-slate-50 transition-colors ${row.level === 1 ? 'bg-slate-50/50' : ''}`}
                   >
-                    <td className={`left-0 bg-white z-10 px-3 py-2 border-b border-slate-200 font-medium text-slate-700 text-xs ${row.level === 0 ? 'font-bold' : ''} ${row.level === 1 ? 'text-indigo-600' : ''} min-w-max`}>
+                    <td className={`left-0 bg-white z-10 px-3 py-2 border-b border-slate-200 font-medium text-slate-700 text-xs transition-colors ${row.level === 0 ? 'font-bold' : ''} ${row.level === 1 ? 'text-indigo-600 group-hover:!text-purple-600' : 'group-hover:text-purple-600'} min-w-max`}>
                       <div className={`flex items-center gap-2 ${row.level === 1 ? 'justify-between w-full' : ''}`}>
                         <div className="flex items-center gap-2 flex-1">
                           {row.hasChild && (
@@ -969,8 +982,9 @@ const DailyReport: React.FC<DailyReportProps> = ({
                       const value = row[metric.key as keyof AdRow] as number || 0;
 
                       if (metric.key === 'spend' && canEditSpend) {
+                        const isManualEdited = row.spend_manual !== undefined && row.spend_manual !== 0;
                         return (
-                          <td key={metric.key} className="px-3 py-2 text-right border-b border-slate-200">
+                          <td key={metric.key} className="px-3 py-2 text-right border-b border-slate-200 group-hover:text-purple-600 [&_*]:group-hover:!text-purple-600 transition-colors">
                             {isEditingSpend ? (
                               <input
                                 ref={spendInputRef}
@@ -985,10 +999,10 @@ const DailyReport: React.FC<DailyReportProps> = ({
                             ) : (
                               <button
                                 onClick={() => handleSpendClick(row)}
-                                className="hover:text-indigo-600 transition-colors cursor-pointer"
-                                title="Click to edit spend"
+                                className={`transition-colors cursor-pointer ${isManualEdited ? 'border-b border-dashed border-amber-500 text-amber-600 font-bold' : 'hover:text-indigo-600'}`}
+                                title={isManualEdited ? "已手动编辑 (点击修改)" : "Click to edit spend"}
                               >
-                                <MetricValue value={value} type={config.type} metricKey={config.key as any} />
+                                <MetricValue value={value} type={config.type} metricKey={config.key as any} isManualEdited={isManualEdited} />
                               </button>
                             )}
                           </td>
@@ -996,7 +1010,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
                       }
 
                       return (
-                        <td key={metric.key} className="px-3 py-2 text-right border-b border-slate-200">
+                        <td key={metric.key} className="px-3 py-2 text-right border-b border-slate-200 group-hover:text-purple-600 [&_*]:group-hover:!text-purple-600 transition-colors">
                           <MetricValue value={value} type={config.type} isSub={row.level === 1} colorMode={colorMode} metricKey={config.key as any} />
                         </td>
                       );
