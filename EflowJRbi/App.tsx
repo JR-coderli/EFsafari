@@ -66,21 +66,21 @@ const DEFAULT_METRICS: MetricConfig[] = [
 const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number' | 'profit'; isSub?: boolean; colorMode?: boolean; metricKey?: string }> = ({ value, type, isSub, colorMode, metricKey }) => {
   const displayValue = isFinite(value) ? value : 0;
 
-  // Profit always has color (positive=green, negative=red)
-  if (!isSub && type === 'profit') {
-    if (displayValue > 0) return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-emerald-600">${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
-    else if (displayValue < 0) return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-rose-600">${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
-    else return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-slate-800">${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+  // Profit always has color (positive=green, negative=red) - regardless of isSub
+  if (type === 'profit') {
+    const colorClass = displayValue > 0 ? 'text-emerald-600' : displayValue < 0 ? 'text-rose-600' : 'text-slate-800';
+    const sizeClass = isSub ? 'text-[13px]' : 'text-[14px]';
+    return <span className={`font-mono tracking-tight leading-none font-bold ${colorClass} ${sizeClass}`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
   }
 
-  // ROI always has color (positive=green, negative=red)
-  if (!isSub && metricKey === 'roi') {
-    if (displayValue > 0) return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-emerald-600">{(displayValue * 100).toFixed(2)}%</span>;
-    else if (displayValue < 0) return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-rose-600">{(displayValue * 100).toFixed(2)}%</span>;
-    else return <span className="font-mono tracking-tight leading-none text-[13px] font-bold text-slate-800">{(displayValue * 100).toFixed(2)}%</span>;
+  // ROI always has color (positive=green, negative=red) - regardless of isSub
+  if (metricKey === 'roi') {
+    const colorClass = displayValue > 0 ? 'text-emerald-600' : displayValue < 0 ? 'text-rose-600' : 'text-slate-800';
+    const sizeClass = isSub ? 'text-[13px]' : 'text-[14px]';
+    return <span className={`font-mono tracking-tight leading-none font-bold ${colorClass} ${sizeClass}`}>{(displayValue * 100).toFixed(2)}%</span>;
   }
 
-  // Color mode for specific metrics
+  // Color mode for specific metrics (only for parent rows)
   let colorClasses = '';
   if (colorMode && !isSub) {
     if (metricKey === 'revenue') colorClasses = 'text-amber-500';      // 黄色
@@ -91,7 +91,7 @@ const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number
     else if (metricKey === 'epv') colorClasses = 'text-amber-500';     // 黄色
   }
 
-  const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[12px] text-slate-500 font-medium' : `text-[13px] ${colorClasses} font-bold`}`;
+  const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[13px] text-slate-500 font-medium' : `text-[14px] ${colorClasses} font-bold`}`;
 
   if (type === 'money' || type === 'profit') return <span className={baseClasses}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
   if (type === 'percent') return <span className={baseClasses}>{(displayValue * 100).toFixed(2)}%</span>;
@@ -777,6 +777,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [showViewList, setShowViewList] = useState(false);
   const viewsDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; text: string } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
   // Pagination state
   const [paginationPage, setPaginationPage] = useState(1);
   const [rowsPerPage] = useState(20);
@@ -849,6 +853,32 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
     return () => clearInterval(interval);
   }, []);
+
+  // Context menu handlers
+  const handleContextMenu = (e: React.MouseEvent, text: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, text });
+  };
+
+  const handleCopyText = () => {
+    if (contextMenu) {
+      navigator.clipboard.writeText(contextMenu.text);
+      setContextMenu(null);
+    }
+  };
+
+  const closeContextMenu = () => setContextMenu(null);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        closeContextMenu();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [contextMenu]);
 
   // Column resize handlers
   const handleResizeStart = (columnKey: string, e: React.MouseEvent) => {
@@ -1522,6 +1552,22 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
   return (
     <div className="flex h-screen bg-white overflow-hidden text-slate-900 font-sans">
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-[9999] bg-white rounded-lg shadow-xl border border-slate-200 py-1 min-w-[150px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            onClick={handleCopyText}
+            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+          >
+            <i className="fas fa-copy text-slate-400"></i>
+            复制文本
+          </button>
+        </div>
+      )}
       <aside className={`bg-[#1e293b] text-slate-400 flex flex-col shrink-0 transition-all ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-6 border-b border-slate-700/50 flex items-center gap-3">
           <div className="w-8 h-8 bg-indigo-500 rounded-lg text-white flex items-center justify-center font-bold text-xs">EF</div>
@@ -1705,7 +1751,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                         ></div>
                       </th>
                       {visibleMetrics.map(m => (
-                        <th key={m.key} className="px-4 py-4 text-right relative group" style={{ width: columnWidths[m.key] || 120 }}>
+                        <th key={m.key} className="px-4 py-4 text-right relative group" style={{ width: columnWidths[m.key] || 90 }}>
                           <div className="flex items-center justify-end gap-1 cursor-pointer hover:text-indigo-600" onClick={() => handleSort(m.key as SortColumn)}>
                             <span>{m.label}</span>
                             <span className="inline-flex w-3">{getSortIcon(m.key as SortColumn)}</span>
@@ -1719,13 +1765,35 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {paginatedData.map((row, idx) => {
+                    {(() => {
+                      // 计算每个行的斑马纹状态（按层级独立）
+                      const dataWithStripe = paginatedData.map((row, idx) => {
+                        let isEvenRow = false;
+                        if (row.level === 0) {
+                          // 父级：按全局索引
+                          isEvenRow = idx % 2 === 0;
+                        } else {
+                          // 子级：全部使用白色（无斑马纹）
+                          isEvenRow = false;
+                        }
+                        return { ...row, isEvenRow };
+                      });
+
+                      return dataWithStripe.map((row) => {
                       const isExpanded = expandedDimRows.has(row.id);
+                      const isEvenRow = row.isEvenRow;
+                      const isChild = row.level > 0;
+                      const cellBgClass = isEvenRow ? 'bg-slate-100' : 'bg-white';
+                      // 子级样式：紧凑行、不加粗、左边框作为区域边界
+                      const pyClass = isChild ? 'py-1.5' : 'py-3';
+                      const nameClass = isChild ? 'text-[12px] font-medium text-slate-600' : 'text-[13px] font-black text-slate-800';
+                      const labelClass = isChild ? 'text-[8px] text-slate-400 uppercase tracking-wider' : 'text-[9px] text-slate-400 font-bold uppercase tracking-wider';
+                      const borderClass = isChild ? 'border-l-4 border-indigo-300' : '';
                       return (
                       <React.Fragment key={row.id}>
-                        <tr className="hover:bg-indigo-50/40 transition-all cursor-pointer group">
-                          <td className="px-4 py-3 sticky left-0 bg-white z-10 border-r border-slate-50" style={{ paddingLeft: `${row.level * 20 + 32}px`, width: columnWidths.hierarchy }}>
-                            <div className="flex items-center gap-2" onClick={() => {
+                        <tr className="group">
+                          <td className={`px-4 sticky left-0 z-10 border-r border-slate-200 group-hover:bg-amber-50 transition-colors ${cellBgClass} ${pyClass} ${borderClass}`} style={{ paddingLeft: `${row.level * 20 + 32}px`, width: columnWidths.hierarchy }}>
+                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => {
                               const nextFilters = row.filterPath || row.id.split('|').map((v, i) => ({ dimension: activeDims[i], value: v }));
                               setActiveFilters(nextFilters);
                               setQuickFilterText('');
@@ -1733,72 +1801,93 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                               <button onClick={(e) => { e.stopPropagation(); toggleDailyBreakdown(e, row); }} className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${expandedDailyRows.has(row.id) ? 'bg-indigo-600 shadow-sm' : 'bg-slate-100'}`}><div className={`w-1.5 h-1.5 rounded-full ${expandedDailyRows.has(row.id) ? 'bg-white' : 'bg-slate-400'}`}></div></button>
                               {row.hasChild && <button onClick={(e) => { e.stopPropagation(); toggleDimExpansion(e, row); }} className={`w-6 h-6 rounded flex items-center justify-center transition-all bg-slate-50 border border-slate-100 text-slate-400 ${isExpanded ? 'rotate-90' : ''}`}><i className="fas fa-chevron-right text-[10px]"></i></button>}
                               <div className="flex flex-col min-w-0">
-                                <span className="text-[13px] font-black text-slate-800 truncate group-hover:text-indigo-600">{row.name}</span>
-                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label}</span>
+                                <span className={`${nameClass} truncate group-hover:text-indigo-600`} onContextMenu={(e) => handleContextMenu(e, row.name)}>{row.name}</span>
+                                <span className={labelClass}>{ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label}</span>
                               </div>
                             </div>
                           </td>
-                          {visibleMetrics.map(m => <td key={m.key} className="px-4 py-3 text-right" style={{ width: columnWidths[m.key] || 120 }}><MetricValue value={row[m.key] as number} type={m.type} colorMode={colorMode} metricKey={m.key as string} /></td>)}
+                          {visibleMetrics.map(m => <td key={m.key} className={`px-4 ${pyClass} text-right group-hover:bg-amber-50 transition-colors ${cellBgClass}`} style={{ width: columnWidths[m.key] || 90 }}><MetricValue value={row[m.key] as number} type={m.type} colorMode={colorMode} metricKey={m.key as string} isSub={isChild} /></td>)}
                         </tr>
                         {expandedDailyRows.has(row.id) && (() => {
                           const dailyData = dailyDataMap.get(row.id);
                           console.log('[Render] row.id:', row.id, 'expandedDailyRows.has:', expandedDailyRows.has(row.id), 'dailyData:', dailyData);
-                          return dailyData?.slice(0, 7).map(day => (
-                          <tr key={day.date} className="bg-slate-50/50">
+                          return dailyData?.slice(0, 7).map((day, dayIdx) => (
+                          <tr key={day.date} className="bg-slate-50 hover:bg-amber-50">
                             <td className="px-4 py-2 sticky left-0 bg-slate-50 z-10 border-l-4 border-indigo-600/60 border-r border-slate-50" style={{ paddingLeft: `${row.level * 20 + 72}px`, width: columnWidths.hierarchy }}><span className="text-[12px] font-bold text-slate-500">{day.date}</span></td>
-                            {visibleMetrics.map(m => <td key={m.key} className="px-4 py-2 text-right opacity-80" style={{ width: columnWidths[m.key] || 120 }}><MetricValue value={day[m.key as keyof DailyBreakdown] as number || 0} type={m.type} isSub colorMode={colorMode} metricKey={m.key as string} /></td>)}
+                            {visibleMetrics.map(m => <td key={m.key} className="px-4 py-2 text-right opacity-80 bg-slate-50" style={{ width: columnWidths[m.key] || 90 }}><MetricValue value={day[m.key as keyof DailyBreakdown] as number || 0} type={m.type} isSub colorMode={colorMode} metricKey={m.key as string} /></td>)}
                           </tr>
                           ));
                         })()}
                       </React.Fragment>
                       );
-                    })}
+                    });
+                    })()}
                   </tbody>
                 </table>
+
+                {/* Fixed Summary Row at bottom of scrollable area */}
+                {totalRows > 0 && (
+                  <table className="w-full text-left border-collapse sticky bottom-0 bg-white z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]" style={{ minWidth: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 200 }}>
+                    <tbody>
+                      <tr className="bg-slate-100 border-t-2 border-slate-300">
+                        <td className="px-4 py-2 sticky left-0 bg-slate-100 z-10 border-r border-slate-300" style={{ width: columnWidths.hierarchy }}>
+                          <span className="text-[11px] font-black uppercase text-slate-500 tracking-widest">Summary</span>
+                        </td>
+                        {visibleMetrics.map(m => {
+                          let value: number;
+                          let displayValue: React.ReactNode;
+
+                          // Calculate summary value for each metric
+                          if (m.key === 'impressions') value = summaryData.impressions;
+                          else if (m.key === 'clicks') value = summaryData.clicks;
+                          else if (m.key === 'conversions') value = summaryData.conversions;
+                          else if (m.key === 'spend') value = summaryData.spend;
+                          else if (m.key === 'revenue') value = summaryData.revenue;
+                          else if (m.key === 'profit') value = summaryData.profit;
+                          else if (m.key === 'ctr') value = summaryData.ctr * 100;
+                          else if (m.key === 'cvr') value = summaryData.cvr * 100;
+                          else if (m.key === 'roi') value = summaryData.roi * 100;
+                          else if (m.key === 'cpa') value = summaryData.cpa;
+                          else if (m.key === 'epa') value = summaryData.rpa;
+                          else if (m.key === 'rpa') value = summaryData.rpa;
+                          else if (m.key === 'epc') value = summaryData.epc;
+                          else if (m.key === 'epv') value = summaryData.epv;
+                          else if (m.key === 'm_epc') value = summaryData.m_epc;
+                          else if (m.key === 'm_epv') value = summaryData.m_epv;
+                          else if (m.key === 'm_cpc') value = summaryData.m_cpc;
+                          else if (m.key === 'm_cpv') value = summaryData.m_cpv;
+                          else if (m.key === 'm_imp') value = summaryData.m_imp;
+                          else if (m.key === 'm_clicks') value = summaryData.m_clicks;
+                          else if (m.key === 'm_conv') value = summaryData.m_conv;
+                          else value = 0;
+
+                          // Format display based on metric type
+                          if (m.type === 'money') {
+                            displayValue = <span className={`font-mono tracking-tight leading-none text-[14px] font-bold ${m.key === 'profit' ? (value > 0 ? 'text-emerald-600' : value < 0 ? 'text-rose-600' : '') : m.key === 'spend' ? 'text-rose-600' : m.key === 'revenue' ? 'text-amber-600' : ''}`}>${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+                          } else if (m.type === 'percent') {
+                            const colorForValue = (v: number) => {
+                              if (m.key === 'roi') return v > 0 ? 'text-emerald-600' : v < 0 ? 'text-rose-600' : '';
+                              return '';
+                            };
+                            displayValue = <span className={`font-mono tracking-tight leading-none text-[14px] font-bold ${colorForValue(value)}`}>{value.toFixed(2)}%</span>;
+                          } else {
+                            displayValue = <span className="font-mono tracking-tight leading-none text-[14px] font-bold text-slate-700">{Math.floor(value).toLocaleString()}</span>;
+                          }
+
+                          return (
+                            <td key={m.key} className="px-4 py-2 text-right" style={{ width: columnWidths[m.key] || 90 }}>
+                              {displayValue}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
               </div>
 
-              {/* Summary Row - Integrated with Pagination */}
-              {totalRows > 0 && (
-                <>
-                  {/* Summary Bar */}
-                  <div className="border-t border-slate-200 bg-slate-50 px-6 py-2 flex items-center gap-6 shrink-0 overflow-x-auto">
-                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest shrink-0">Summary:</span>
-                    <div className="flex items-center gap-4 text-xs">
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-400 font-bold">Imp:</span>
-                        <span className="font-mono font-bold text-slate-700">{Math.floor(summaryData.impressions).toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-400 font-bold">Click:</span>
-                        <span className="font-mono font-bold text-slate-700">{Math.floor(summaryData.clicks).toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-400 font-bold">Conv:</span>
-                        <span className="font-mono font-bold text-slate-700">{Math.floor(summaryData.conversions).toLocaleString()}</span>
-                      </div>
-                      <div className="w-px h-4 bg-slate-200"></div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-400 font-bold">Spend:</span>
-                        <span className="font-mono font-bold text-slate-700">${summaryData.spend.toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-400 font-bold">Rev:</span>
-                        <span className="font-mono font-bold text-slate-700">${summaryData.revenue.toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-400 font-bold">Profit:</span>
-                        <span className={`font-mono font-bold ${summaryData.profit > 0 ? 'text-emerald-600' : summaryData.profit < 0 ? 'text-rose-600' : 'text-slate-700'}`}>${summaryData.profit.toFixed(2)}</span>
-                      </div>
-                      <div className="w-px h-4 bg-slate-200"></div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-400 font-bold">ROI:</span>
-                        <span className={`font-mono font-bold ${summaryData.roi > 0 ? 'text-emerald-600' : summaryData.roi < 0 ? 'text-rose-600' : 'text-slate-700'}`}>{(summaryData.roi * 100).toFixed(2)}%</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pagination Bar */}
-                  <div className="border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between shrink-0">
+              {/* Pagination Bar */}
+              <div className="border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between shrink-0">
                     <div className="text-[11px] text-slate-500">
                       Showing <span className="font-bold text-slate-700">{Math.min((paginationPage - 1) * rowsPerPage + 1, totalRows)}</span> to <span className="font-bold text-slate-700">{Math.min(paginationPage * rowsPerPage, totalRows)}</span> of <span className="font-bold text-slate-700">{totalRows}</span> rows
                     </div>
@@ -1854,8 +1943,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     </button>
                   </div>
                 </div>
-                </>
-              )}
             </div>
           </>
         ) : currentPage === 'daily_report' ? (
