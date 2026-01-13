@@ -219,6 +219,12 @@ interface LockConfirmState {
   currentLocked: boolean;
 }
 
+interface SyncModalState {
+  isOpen: boolean;
+  startDate: Date;
+  endDate: Date;
+}
+
 // Date Badge Component
 const DateBadge: React.FC<{
   dateValue: string;
@@ -266,6 +272,13 @@ const DailyReport: React.FC<DailyReportProps> = ({
   const [lockedDates, setLockedDates] = useState<Set<string>>(new Set());
   const [lockConfirm, setLockConfirm] = useState<LockConfirmState | null>(null);
   const [lockingInProgress, setLockingInProgress] = useState(false);
+  const [syncModal, setSyncModal] = useState<SyncModalState>({
+    isOpen: false,
+    startDate: new Date(),
+    endDate: new Date()
+  });
+  const [syncInProgress, setSyncInProgress] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
   const spendInputRef = React.useRef<HTMLInputElement>(null);
 
   const rangeInfo = useMemo(() => getRangeInfo(selectedRange, customDateStart, customDateEnd), [selectedRange, customDateStart, customDateEnd]);
@@ -362,6 +375,46 @@ const DailyReport: React.FC<DailyReportProps> = ({
     } finally {
       setLockingInProgress(false);
       setLockConfirm(null);
+    }
+  };
+
+  const handleSyncData = async () => {
+    setSyncInProgress(true);
+    setSyncResult(null);
+
+    const token = localStorage.getItem('addata_access_token');
+    const startDate = formatDateForApi(syncModal.startDate);
+    const endDate = formatDateForApi(syncModal.endDate);
+
+    try {
+      const response = await fetch('/api/daily-report/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          start_date: startDate,
+          end_date: endDate
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSyncResult(`成功同步 ${data.row_count} 条数据 (${startDate} ~ ${endDate})`);
+        // Reload data after sync
+        await loadData();
+        // Reload locked dates
+        await loadLockedDates();
+      } else {
+        const error = await response.json();
+        setSyncResult(`同步失败: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error syncing data:', error);
+      setSyncResult(`同步失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setSyncInProgress(false);
     }
   };
 
@@ -788,6 +841,14 @@ const DailyReport: React.FC<DailyReportProps> = ({
             >
               {hierarchyOrder === 'date-media' ? 'Date ⇄ Media' : 'Media ⇄ Date'}
             </button>
+            <button
+              onClick={() => setSyncModal({ ...syncModal, isOpen: true })}
+              className="text-[11px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+              title="从 Performance 表同步数据"
+            >
+              <i className="fas fa-sync-alt text-[10px]"></i>
+              同步数据
+            </button>
           </div>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
@@ -830,7 +891,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
               {/* Summary Row */}
               {summary && (
                 <tr className="bg-gradient-to-r from-slate-50 to-slate-100">
-                  <th className="left-0 bg-gradient-to-r from-slate-50 to-slate-100 z-30 px-3 py-2 text-left border-b border-slate-200">
+                  <th className="left-0 bg-gradient-to-r from-slate-50 to-slate-100 z-30 px-3 py-2 text-left border-b border-slate-200 min-w-max">
                     <div className="flex items-center gap-2">
                       <i className="fas fa-calculator text-indigo-500 text-xs"></i>
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Summary</span>
@@ -850,7 +911,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
               )}
               {/* Header Row */}
               <tr>
-                <th className="left-0 bg-white z-30 px-3 py-2 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200">
+                <th className="left-0 bg-white z-30 px-3 py-2 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 min-w-max">
                   Dimension
                 </th>
                 {visibleMetrics.map(metric => (
@@ -874,7 +935,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
                     key={row.id}
                     className={`hover:bg-slate-50 transition-colors ${row.level === 1 ? 'bg-slate-50/50' : ''}`}
                   >
-                    <td className={`left-0 bg-white z-10 px-3 py-2 border-b border-slate-200 font-medium text-slate-700 text-xs ${row.level === 0 ? 'font-bold' : ''} ${row.level === 1 ? 'text-indigo-600' : ''}`}>
+                    <td className={`left-0 bg-white z-10 px-3 py-2 border-b border-slate-200 font-medium text-slate-700 text-xs ${row.level === 0 ? 'font-bold' : ''} ${row.level === 1 ? 'text-indigo-600' : ''} min-w-max`}>
                       <div className={`flex items-center gap-2 ${row.level === 1 ? 'justify-between w-full' : ''}`}>
                         <div className="flex items-center gap-2 flex-1">
                           {row.hasChild && (
@@ -985,6 +1046,143 @@ const DailyReport: React.FC<DailyReportProps> = ({
                     : '锁定'
                 }
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sync Data Modal */}
+      {syncModal.isOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-[480px]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-800">从 Performance 同步数据</h3>
+              <button
+                onClick={() => {
+                  setSyncModal({ ...syncModal, isOpen: false });
+                  setSyncResult(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Date Range Selection */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">开始日期</label>
+                  <input
+                    type="date"
+                    value={formatDateForApi(syncModal.startDate)}
+                    onChange={(e) => setSyncModal({ ...syncModal, startDate: new Date(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">结束日期</label>
+                  <input
+                    type="date"
+                    value={formatDateForApi(syncModal.endDate)}
+                    onChange={(e) => setSyncModal({ ...syncModal, endDate: new Date(e.target.value) })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Select Buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    setSyncModal({ ...syncModal, startDate: today, endDate: today });
+                  }}
+                  className="text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-lg transition-colors"
+                >
+                  今天
+                </button>
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    const yesterday = new Date(today);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    setSyncModal({ ...syncModal, startDate: yesterday, endDate: today });
+                  }}
+                  className="text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-lg transition-colors"
+                >
+                  最近2天
+                </button>
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    const sevenDaysAgo = new Date(today);
+                    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+                    setSyncModal({ ...syncModal, startDate: sevenDaysAgo, endDate: today });
+                  }}
+                  className="text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-lg transition-colors"
+                >
+                  最近7天
+                </button>
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+                    setSyncModal({ ...syncModal, startDate: thisMonthStart, endDate: today });
+                  }}
+                  className="text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-lg transition-colors"
+                >
+                  本月
+                </button>
+              </div>
+
+              {/* Sync Result Message */}
+              {syncResult && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  syncResult.includes('成功')
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-rose-50 text-rose-700'
+                }`}>
+                  {syncResult}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setSyncModal({ ...syncModal, isOpen: false });
+                    setSyncResult(null);
+                  }}
+                  disabled={syncInProgress}
+                  className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSyncData}
+                  disabled={syncInProgress}
+                  className="px-4 py-2 text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {syncInProgress ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      同步中...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-sync-alt text-xs"></i>
+                      开始同步
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Warning Note */}
+              <div className="text-[10px] text-slate-400 bg-amber-50 px-3 py-2 rounded-lg">
+                <i className="fas fa-exclamation-triangle text-amber-400 mr-1"></i>
+                注意：同步会覆盖未锁定的日期数据，已锁定的日期不会受影响
+              </div>
             </div>
           </div>
         </div>
