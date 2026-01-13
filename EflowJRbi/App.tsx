@@ -411,7 +411,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [expandedDimRows, setExpandedDimRows] = useState<Set<string>>(new Set());
   // Store daily data separately to avoid reference issues with flattened data
   const [dailyDataMap, setDailyDataMap] = useState<Map<string, DailyBreakdown[]>>(new Map());
-  const [selectedRange, setSelectedRange] = useState('Yesterday');
+  const [selectedRange, setSelectedRange] = useState('This Month');
   const [customDateStart, setCustomDateStart] = useState<Date | undefined>(undefined);
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(undefined);
   const [quickFilterText, setQuickFilterText] = useState('');
