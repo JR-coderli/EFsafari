@@ -11,8 +11,9 @@ from datetime import datetime
 import argparse
 
 # Add api directory to path for Redis import
+import yaml
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "api"))
-from cache import set_cache
+from cache import set_cache, init_redis
 
 
 def run_clickflare_etl(date: str) -> tuple[bool, float]:
@@ -122,6 +123,13 @@ def run_mtg_etl(date: str) -> tuple[bool, float]:
 
 
 def main():
+    # Initialize Redis for ETL status
+    config_path = os.path.join(os.path.dirname(__file__), "api", "config.yaml")
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+    redis_config = config.get("redis", {})
+    init_redis(redis_config)
+
     parser = argparse.ArgumentParser(description="Unified ETL Runner")
     parser.add_argument(
         "-d", "--date",
