@@ -11,6 +11,7 @@ import logging
 
 from api.database import get_db
 from api.auth import get_current_user
+from api.cache import set_cache, get_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/daily-report", tags=["daily-report"])
@@ -821,6 +822,17 @@ async def sync_data_from_performance(
         count_result = client.query(count_query)
         row_count = count_result.first_row[0]
 
+        # Update sync timestamp in Redis
+        sync_status = {
+            "last_update": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "start_date": request.start_date,
+            "end_date": request.end_date,
+            "row_count": row_count,
+            "synced_by": current_user.get("username", "system")
+        }
+        set_cache("daily_report:last_update", sync_status, ttl=30*24*3600)  # 30 days TTL
+        logger.info(f"Daily Report sync status updated: {sync_status}")
+
         return {
             "success": True,
             "message": f"Synced {row_count} rows from {request.start_date} to {request.end_date}",
@@ -832,6 +844,41 @@ async def sync_data_from_performance(
     except Exception as e:
         logger.error(f"Error syncing data: {e}")
         raise HTTPException(status_code=500, detail=f"Error syncing data: {str(e)}")
+
+
+@router.get("/sync-status")
+async def get_sync_status():
+    """
+    获取 Daily Report 最后同步状态。
+
+    返回最后同步的时间和相关信息。
+    """
+    try:
+        status = get_cache("daily_report:last_update")
+        if status:
+            return {
+                "last_update": status.get("last_update"),
+                "start_date": status.get("start_date"),
+                "end_date": status.get("end_date"),
+                "row_count": status.get("row_count"),
+                "synced_by": status.get("synced_by")
+            }
+        return {
+            "last_update": None,
+            "start_date": None,
+            "end_date": None,
+            "row_count": None,
+            "synced_by": None
+        }
+    except Exception as e:
+        logger.error(f"Error getting sync status: {e}")
+        return {
+            "last_update": None,
+            "start_date": None,
+            "end_date": None,
+            "row_count": None,
+            "synced_by": None
+        }
 
 
 @router.post("/lock-date")

@@ -289,6 +289,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
   });
   const [syncInProgress, setSyncInProgress] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<{ last_update: string | null }>({ last_update: null });
   const spendInputRef = React.useRef<HTMLInputElement>(null);
 
   const rangeInfo = useMemo(() => getRangeInfo(selectedRange, customDateStart, customDateEnd), [selectedRange, customDateStart, customDateEnd]);
@@ -340,6 +341,23 @@ const DailyReport: React.FC<DailyReportProps> = ({
       }
     } catch (error) {
       console.error('Error loading locked dates:', error);
+    }
+  };
+
+  const loadSyncStatus = async () => {
+    const token = localStorage.getItem('addata_access_token');
+    try {
+      const response = await fetch('/api/daily-report/sync-status', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSyncStatus(data);
+      }
+    } catch (error) {
+      console.error('Error loading sync status:', error);
     }
   };
 
@@ -416,6 +434,8 @@ const DailyReport: React.FC<DailyReportProps> = ({
         await loadData();
         // Reload locked dates
         await loadLockedDates();
+        // Reload sync status
+        await loadSyncStatus();
       } else {
         const error = await response.json();
         setSyncResult(`同步失败: ${error.detail || 'Unknown error'}`);
@@ -454,6 +474,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
 
   useEffect(() => {
     loadLockedDates();
+    loadSyncStatus();
   }, []);
 
   useEffect(() => {
@@ -862,6 +883,11 @@ const DailyReport: React.FC<DailyReportProps> = ({
               <i className="fas fa-sync-alt text-[10px]"></i>
               同步数据
             </button>
+            {syncStatus.last_update && (
+              <span className="text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
+                Update {syncStatus.last_update}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
