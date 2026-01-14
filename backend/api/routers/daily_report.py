@@ -805,16 +805,15 @@ async def sync_data_from_performance(
                 now() as updated_at,
                 '{current_user.get("username", "system")}' as last_modified_by
             FROM ad_platform.dwd_marketing_report_daily AS src
-            LEFT JOIN (
-                SELECT reportDate, Media
-                FROM ad_platform.dwd_daily_report
-                WHERE reportDate >= '{request.start_date}'
-                AND reportDate <= '{request.end_date}'
-                AND is_locked = 1  -- 只排除已锁定的记录
-            ) AS locked ON src.reportDate = locked.reportDate AND src.Media = locked.Media
             WHERE src.reportDate >= '{request.start_date}'
             AND src.reportDate <= '{request.end_date}'
-            AND locked.reportDate IS NULL  -- 只插入未被锁定的组合
+            AND NOT EXISTS (
+                SELECT 1
+                FROM ad_platform.dwd_daily_report AS locked
+                WHERE locked.reportDate = src.reportDate
+                AND locked.Media = src.Media
+                AND locked.is_locked = 1
+            )
             GROUP BY src.reportDate, src.Media
             SETTINGS max_memory_usage=2000000000, max_threads=4
         """
