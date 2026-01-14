@@ -781,7 +781,7 @@ async def sync_data_from_performance(
         """
         client.command(delete_query)
 
-        # 从源表聚合数据并插入（排除已存在的记录，避免重复）
+        # 从源表聚合数据并插入（只排除已锁定的记录）
         insert_query = f"""
             INSERT INTO ad_platform.dwd_daily_report
             (reportDate, Media, impressions, clicks, conversions, revenue, spend_original,
@@ -810,10 +810,11 @@ async def sync_data_from_performance(
                 FROM ad_platform.dwd_daily_report
                 WHERE reportDate >= '{request.start_date}'
                 AND reportDate <= '{request.end_date}'
-            ) AS existing ON src.reportDate = existing.reportDate AND src.Media = existing.Media
+                AND is_locked = 1  -- 只排除已锁定的记录
+            ) AS locked ON src.reportDate = locked.reportDate AND src.Media = locked.Media
             WHERE src.reportDate >= '{request.start_date}'
             AND src.reportDate <= '{request.end_date}'
-            AND existing.reportDate IS NULL  -- 只插入不存在的记录
+            AND locked.reportDate IS NULL  -- 只插入未被锁定的组合
             GROUP BY src.reportDate, src.Media
             SETTINGS max_memory_usage=2000000000, max_threads=4
         """
