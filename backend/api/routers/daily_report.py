@@ -781,33 +781,40 @@ async def sync_data_from_performance(
         """
         client.command(delete_query)
 
-        # 从源表聚合数据并插入
+        # 从源表聚合数据并插入（排除已存在的记录，避免重复）
         insert_query = f"""
             INSERT INTO ad_platform.dwd_daily_report
             (reportDate, Media, impressions, clicks, conversions, revenue, spend_original,
              spend_manual, spend_final, m_imp, m_clicks, m_conv, is_locked,
              created_at, updated_at, last_modified_by)
             SELECT
-                reportDate,
-                Media,
-                sum(impressions) as impressions,
-                sum(clicks) as clicks,
-                sum(conversions) as conversions,
-                sum(revenue) as revenue,
-                sum(spend) as spend_original,
+                src.reportDate,
+                src.Media,
+                sum(src.impressions) as impressions,
+                sum(src.clicks) as clicks,
+                sum(src.conversions) as conversions,
+                sum(src.revenue) as revenue,
+                sum(src.spend) as spend_original,
                 toDecimal64(0, 4) as spend_manual,
-                sum(spend) as spend_final,
-                sum(m_imp) as m_imp,
-                sum(m_clicks) as m_clicks,
-                sum(m_conv) as m_conv,
+                sum(src.spend) as spend_final,
+                sum(src.m_imp) as m_imp,
+                sum(src.m_clicks) as m_clicks,
+                sum(src.m_conv) as m_conv,
                 0 as is_locked,
                 now() as created_at,
                 now() as updated_at,
                 '{current_user.get("username", "system")}' as last_modified_by
-            FROM ad_platform.dwd_marketing_report_daily
-            WHERE reportDate >= '{request.start_date}'
-            AND reportDate <= '{request.end_date}'
-            GROUP BY reportDate, Media
+            FROM ad_platform.dwd_marketing_report_daily AS src
+            LEFT JOIN (
+                SELECT reportDate, Media
+                FROM ad_platform.dwd_daily_report
+                WHERE reportDate >= '{request.start_date}'
+                AND reportDate <= '{request.end_date}'
+            ) AS existing ON src.reportDate = existing.reportDate AND src.Media = existing.Media
+            WHERE src.reportDate >= '{request.start_date}'
+            AND src.reportDate <= '{request.end_date}'
+            AND existing.reportDate IS NULL  -- 只插入不存在的记录
+            GROUP BY src.reportDate, src.Media
             SETTINGS max_memory_usage=2000000000, max_threads=4
         """
         client.command(insert_query)
