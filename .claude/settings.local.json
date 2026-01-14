@@ -49,7 +49,9 @@
       "Bash(ping:*)",
       "Bash(dir:*)",
       "Bash(xargs:*)",
-      "Bash(do taskkill:*)"
+      "Bash(do taskkill:*)",
+      "Bash(cmd //c \"powershell -Command \"\"Get-NetTCPConnection -LocalPort 8000 -State Listen | Select-Object OwningProcess\"\"\")",
+      "Bash(PORT=8001 python:*)"
     ]
   }
 }

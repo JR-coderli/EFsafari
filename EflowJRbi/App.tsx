@@ -411,9 +411,14 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [expandedDimRows, setExpandedDimRows] = useState<Set<string>>(new Set());
   // Store daily data separately to avoid reference issues with flattened data
   const [dailyDataMap, setDailyDataMap] = useState<Map<string, DailyBreakdown[]>>(new Map());
-  const [selectedRange, setSelectedRange] = useState('This Month');
+  // Performance page: default to Yesterday
+  const [selectedRange, setSelectedRange] = useState('Yesterday');
   const [customDateStart, setCustomDateStart] = useState<Date | undefined>(undefined);
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(undefined);
+  // Daily Report page: default to This Month
+  const [dailyReportRange, setDailyReportRange] = useState('This Month');
+  const [dailyReportStart, setDailyReportStart] = useState<Date | undefined>(undefined);
+  const [dailyReportEnd, setDailyReportEnd] = useState<Date | undefined>(undefined);
   const [quickFilterText, setQuickFilterText] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showColumnEditor, setShowColumnEditor] = useState(false);
@@ -447,10 +452,13 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [resizingColumn, setResizingColumn] = useState<string | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
 
-  // Computed display string for the date picker
+  // Computed display string for the date picker - varies by page
   const dateDisplayString = useMemo(() => {
+    if (currentPage === 'daily_report') {
+      return getRangeInfo(dailyReportRange, dailyReportStart, dailyReportEnd).dateString;
+    }
     return getRangeInfo(selectedRange, customDateStart, customDateEnd).dateString;
-  }, [selectedRange, customDateStart, customDateEnd]);
+  }, [currentPage, selectedRange, customDateStart, customDateEnd, dailyReportRange, dailyReportStart, dailyReportEnd]);
 
   // Reset pagination when filters or data changes
   useEffect(() => {
@@ -1286,7 +1294,21 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
               {currentPage === 'performance' ? 'Analytics Data' : currentPage === 'daily_report' ? 'Daily Report' : 'Permissions'}
             </h2>
             {(currentPage === 'performance' || currentPage === 'daily_report') && (
-              <DatePicker onRangeChange={(range, start, end) => { setSelectedRange(range); setCustomDateStart(start); setCustomDateEnd(end); }} currentDisplay={dateDisplayString} currentRange={selectedRange} />
+              <DatePicker
+                onRangeChange={(range, start, end) => {
+                  if (currentPage === 'daily_report') {
+                    setDailyReportRange(range);
+                    setDailyReportStart(start);
+                    setDailyReportEnd(end);
+                  } else {
+                    setSelectedRange(range);
+                    setCustomDateStart(start);
+                    setCustomDateEnd(end);
+                  }
+                }}
+                currentDisplay={dateDisplayString}
+                currentRange={currentPage === 'daily_report' ? dailyReportRange : selectedRange}
+              />
             )}
             {/* Data source indicator */}
             {currentPage === 'performance' && (
@@ -1657,13 +1679,13 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           </>
         ) : currentPage === 'daily_report' ? (
           <DailyReport
-            selectedRange={selectedRange}
-            customDateStart={customDateStart}
-            customDateEnd={customDateEnd}
+            selectedRange={dailyReportRange}
+            customDateStart={dailyReportStart}
+            customDateEnd={dailyReportEnd}
             onRangeChange={(range, start, end) => {
-              setSelectedRange(range);
-              setCustomDateStart(start);
-              setCustomDateEnd(end);
+              setDailyReportRange(range);
+              setDailyReportStart(start);
+              setDailyReportEnd(end);
             }}
             currentUser={currentUser}
           />
