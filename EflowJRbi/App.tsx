@@ -25,7 +25,7 @@ const calculateMetrics = (data: { impressions: number; clicks: number; conversio
   return {
     ctr: data.clicks / (data.impressions || 1),
     cvr: data.conversions / (data.clicks || 1),
-    roi: (data.revenue - data.spend) / (data.spend || 1),
+    roi: data.spend > 0 ? (data.revenue - data.spend) / data.spend : 0,
     cpa: data.spend / (data.conversions || 1),
     rpa: data.revenue / (data.conversions || 1),
     epc: data.revenue / (data.clicks || 1),
@@ -712,7 +712,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       ...summary,
       ctr: summary.clicks / (summary.impressions || 1),
       cvr: summary.conversions / (summary.clicks || 1),
-      roi: summary.revenue > 0 ? (summary.revenue - summary.spend) / (summary.spend || 1) : 0,
+      roi: summary.spend > 0 ? (summary.revenue - summary.spend) / summary.spend : 0,
       cpa: summary.spend / (summary.conversions || 1),
       rpa: summary.revenue / (summary.conversions || 1),
       epc: summary.revenue / (summary.clicks || 1),

@@ -14,7 +14,7 @@ const calcMetrics = (data: { impressions: number; clicks: number; conversions: n
   return {
     ctr: data.clicks / (data.impressions || 1),
     cvr: data.conversions / (data.clicks || 1),
-    roi: (data.revenue - data.spend) / (data.spend || 1),
+    roi: data.spend > 0 ? (data.revenue - data.spend) / data.spend : 0,
     cpa: data.spend / (data.conversions || 1),
     rpa: data.revenue / (data.conversions || 1),
     epc: data.revenue / (data.clicks || 1),

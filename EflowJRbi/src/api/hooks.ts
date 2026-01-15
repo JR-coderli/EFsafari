@@ -240,7 +240,7 @@ function hierarchyNodeToAdRow(
     m_conv,
     ctr: Number(node._metrics.ctr) || 0,
     cvr: Number(node._metrics.cvr) || 0,
-    roi: Number(node._metrics.roi) || 0,
+    roi: spend > 0 ? (revenue - spend) / spend : 0,
     cpa: Number(node._metrics.cpa) || 0,
     rpa: revenue / (conversions || 1),
     epa: revenue / (conversions || 1),  // Earnings Per Action
@@ -367,7 +367,7 @@ export async function loadRootData(
         m_conv,
         ctr: Number(row.ctr) || 0,
         cvr: Number(row.cvr) || 0,
-        roi: Number(row.roi) || 0,
+        roi: spend > 0 ? (revenue - spend) / spend : 0,
         cpa: Number(row.cpa) || 0,
         rpa: Number(row.rpa) || 0,
         epa: Number(row.rpa) || 0,  // Earnings Per Action (same as rpa)
@@ -493,7 +493,7 @@ export async function loadChildData(
         m_conv,
         ctr: Number(row.ctr) || 0,
         cvr: Number(row.cvr) || 0,
-        roi: Number(row.roi) || 0,
+        roi: spend > 0 ? (revenue - spend) / spend : 0,
         cpa: Number(row.cpa) || 0,
         rpa: Number(row.rpa) || 0,
         epa: Number(row.rpa) || 0,  // Earnings Per Action (same as rpa)
@@ -567,7 +567,7 @@ export async function loadDailyData(
         // Calculated metrics
         ctr: clicks / (impressions || 1),
         cvr: conversions / (clicks || 1),
-        roi: (revenue - spend) / (spend || 1),
+        roi: spend > 0 ? (revenue - spend) / spend : 0,
         cpa: spend / (conversions || 1),
         epa: revenue / (conversions || 1),  // Earnings Per Action
         epc: revenue / (clicks || 1),       // Earnings Per Click
