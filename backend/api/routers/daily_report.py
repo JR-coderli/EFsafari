@@ -180,7 +180,7 @@ def _calculate_metrics(row: Dict[str, Any]) -> Dict[str, float]:
     return {
         "ctr": clicks / (impressions or 1),
         "cvr": conversions / (clicks or 1),
-        "roi": (revenue - spend) / (spend or 1),
+        "roi": (revenue - spend) / spend if spend > 0 else 0,
         "cpa": spend / (conversions or 1),
         "rpa": revenue / (conversions or 1),
         "epc": revenue / (clicks or 1),
@@ -346,7 +346,7 @@ async def get_hierarchy(
             m["profit"] = m["revenue"] - m["spend"]
             m["ctr"] = m["clicks"] / (m["impressions"] or 1)
             m["cvr"] = m["conversions"] / (m["clicks"] or 1)
-            m["roi"] = m["profit"] / (m["spend"] or 1)
+            m["roi"] = m["profit"] / m["spend"] if m["spend"] > 0 else 0
             m["cpa"] = m["spend"] / (m["conversions"] or 1)
             m["rpa"] = m["revenue"] / (m["conversions"] or 1)
             m["epc"] = m["revenue"] / (m["clicks"] or 1)

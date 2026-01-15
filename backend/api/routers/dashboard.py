@@ -460,7 +460,7 @@ async def get_aggregate_summary(
             # Calculate computed metrics
             ctr = clicks / (impressions or 1)
             cvr = conversions / (clicks or 1)
-            roi = (revenue - spend) / (spend or 1)
+            roi = (revenue - spend) / spend if spend > 0 else 0
             cpa = spend / (conversions or 1)
         else:
             impressions = clicks = conversions = spend = revenue = 0
@@ -582,7 +582,7 @@ async def get_data_hierarchy(
                             "m_conv": row.get("m_conv", 0),
                             "ctr": (row.get("clicks", 0) or 0) / (row.get("impressions", 0) or 1),
                             "cvr": (row.get("conversions", 0) or 0) / (row.get("clicks", 0) or 1),
-                            "roi": ((row.get("revenue", 0) or 0) - (row.get("spend", 0) or 0)) / (row.get("spend", 0) or 1),
+                            "roi": ((row.get("revenue", 0) or 0) - (row.get("spend", 0) or 0)) / (row.get("spend", 0) or 0) if (row.get("spend", 0) or 0) > 0 else 0,
                             "cpa": (row.get("spend", 0) or 0) / (row.get("conversions", 0) or 1),
                         },
                         "_dimension": dim,
@@ -604,11 +604,11 @@ async def get_data_hierarchy(
                     imp = existing_metrics.get("impressions", 0) or 1
                     clicks = existing_metrics.get("clicks", 0) or 1
                     conversions = existing_metrics.get("conversions", 0) or 1
-                    spend = existing_metrics.get("spend", 0) or 1
+                    spend = existing_metrics.get("spend", 0) or 0
                     revenue = existing_metrics.get("revenue", 0) or 0
                     existing_metrics["ctr"] = clicks / imp
                     existing_metrics["cvr"] = conversions / clicks
-                    existing_metrics["roi"] = (revenue - spend) / spend
+                    existing_metrics["roi"] = (revenue - spend) / spend if spend > 0 else 0
                     existing_metrics["cpa"] = spend / conversions
 
                 # Move to next level
