@@ -410,7 +410,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [data, setData] = useState<AdRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [useMock, setUseMock] = useState(false);  // Fallback to mock if API fails
-  const [activeDims, setActiveDims] = useState<Dimension[]>(['platform', 'offer']);
+  // 初始不设置维度，等待默认视图加载完成后才设置
+  const [activeDims, setActiveDims] = useState<Dimension[]>([]);
   const [editingDimIndex, setEditingDimIndex] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
@@ -462,6 +463,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   });
   const [resizingColumn, setResizingColumn] = useState<string | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+
+  // 追踪初始化是否完成（用于防止初始化期间重复请求）
+  const [isInitialized, setIsInitialized] = useState(false);
+  const hasLoadedDataAfterInit = useRef(false);
 
   // Computed display string for the date picker - varies by page
   const dateDisplayString = useMemo(() => {
@@ -814,6 +819,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
   const loadRootData = useCallback(async () => {
     if (currentPage !== 'performance') return;
+    // 等待初始化完成
+    if (!isInitialized) return;
+    // activeDims 为空说明还在初始化
+    if (activeDims.length === 0) return;
 
     setLoading(true);
     setError(null);
@@ -875,11 +884,15 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         setLoading(false);
       }
     }
-  }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentUser, useMock, currentPage]);
+  }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentUser, useMock, currentPage, isInitialized]);
 
-  // Trigger when currentPage changes or when loadRootData dependencies change
-  // Note: loadRootData internally checks currentPage and returns early if not 'performance'
-  useEffect(() => { if (currentPage === 'performance') loadRootData(); }, [loadRootData, currentPage]);
+  // Trigger loadRootData when dependencies change（初始化完成后）
+  useEffect(() => {
+    if (currentPage !== 'performance') return;
+    // 如果还没初始化，不执行（初始化完成后会手动触发）
+    if (!hasLoadedDataAfterInit.current) return;
+    loadRootData();
+  }, [loadRootData, currentPage]);
 
   // 从后端加载保存的视图列表
   useEffect(() => {
@@ -905,6 +918,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
   // 加载默认视图（只在首次登录时执行）
   const hasLoadedDefaultView = useRef(false);
+  const loadRootDataRef = useRef(loadRootData);
+
+  // Keep the ref updated
+  useEffect(() => {
+    loadRootDataRef.current = loadRootData;
+  }, [loadRootData]);
 
   useEffect(() => {
     const loadDefaultView = async () => {
@@ -924,6 +943,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         // 降级：应用预设的初始视图
         setActiveDims(['platform', 'sub_campaign_name']);
       }
+      // 所有维度设置完成后，标记为已初始化
+      setIsInitialized(true);
+      // 标记初始化后数据已加载
+      hasLoadedDataAfterInit.current = true;
+      // 手动触发一次数据加载
+      loadRootDataRef.current();
     };
     loadDefaultView();
   }, []);
