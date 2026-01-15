@@ -813,6 +813,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   });
 
   const loadRootData = useCallback(async () => {
+    if (currentPage !== 'performance') return;
+
     setLoading(true);
     setError(null);
     setExpandedDailyRows(new Set());
@@ -873,8 +875,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         setLoading(false);
       }
     }
-  }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentUser, useMock]);
+  }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentUser, useMock, currentPage]);
 
+  // Trigger when currentPage changes or when loadRootData dependencies change
+  // Note: loadRootData internally checks currentPage and returns early if not 'performance'
   useEffect(() => { if (currentPage === 'performance') loadRootData(); }, [loadRootData, currentPage]);
 
   // 从后端加载保存的视图列表
@@ -900,39 +904,28 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   }, [currentUser.id]);
 
   // 加载默认视图（只在首次登录时执行）
+  const hasLoadedDefaultView = useRef(false);
+
   useEffect(() => {
     const loadDefaultView = async () => {
+      if (hasLoadedDefaultView.current) return;
+      hasLoadedDefaultView.current = true;
+
       try {
         const defaultView = await viewsApi.getDefaultView();
         if (defaultView) {
           applyView(defaultView);
         } else {
           // 新用户没有默认视图，应用预设的初始视图
-          // 维度：media, adset
           setActiveDims(['platform', 'sub_campaign_name']);
         }
       } catch (error) {
         console.error('Failed to load default view:', error);
         // 降级：应用预设的初始视图
         setActiveDims(['platform', 'sub_campaign_name']);
-        // 降级：从 localStorage 读取
-        const userKey = getUserStorageKey(currentUser.id);
-        const saved = localStorage.getItem(userKey);
-        if (saved) {
-          const views: SavedView[] = JSON.parse(saved);
-          const defaultView = views.find(v => v.isDefault);
-          if (defaultView) {
-            applyView(defaultView);
-          }
-        }
       }
     };
-    // 只在组件挂载时加载一次（使用 ref 确保只执行一次）
-    const hasLoadedDefault = { current: false };
-    if (!hasLoadedDefault.current) {
-      hasLoadedDefault.current = true;
-      loadDefaultView();
-    }
+    loadDefaultView();
   }, []);
 
   useEffect(() => {
@@ -994,6 +987,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     setShowViewList(false);
     setActiveFilters([]);
     setQuickFilterText('');
+    // Don't need to manually call loadRootData - the useEffect will handle it
   };
 
   const deleteView = async (e: React.MouseEvent, id: string) => {
