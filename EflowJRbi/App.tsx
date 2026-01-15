@@ -515,22 +515,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     return () => clearInterval(interval);
   }, []);
 
-  // Get row text for copy
+  // Get row text for copy - only return the dimension name
   const getRowText = (row: RowData): string => {
-    const parts: string[] = [];
-    // Name and dimension
-    parts.push(`${row.name} (${ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label || row.dimensionType})`);
-    // Metrics
-    visibleMetrics.forEach(m => {
-      const value = row[m.key] as number;
-      if (value !== undefined && value !== null) {
-        const formatted = m.type === 'currency' ? `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                     : m.type === 'percent' ? `${(value * 100).toFixed(1)}%`
-                     : value.toLocaleString('en-US');
-        parts.push(`${m.label}: ${formatted}`);
-      }
-    });
-    return parts.join(' | ');
+    return row.name;
   };
 
   // Context menu handlers
