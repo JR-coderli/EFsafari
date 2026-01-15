@@ -1620,14 +1620,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                       );
                     });
                     })()}
-                  </tbody>
-                </table>
 
-                {/* Fixed Summary Row at bottom of scrollable area */}
-                {totalRows > 0 && (
-                  <table className="w-full text-left border-collapse sticky bottom-0 bg-white z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]" style={{ minWidth: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 200 }}>
-                    <tbody>
-                      <tr className="bg-slate-100 border-t-2 border-slate-300">
+                    {/* Summary Row - same table for perfect column alignment */}
+                    {totalRows > 0 && (
+                      <tr className="bg-slate-100 border-t-2 border-slate-300 sticky bottom-0 z-40 shadow-[0_-2px_4px_rgba(0,0,0,0.1)]">
                         <td className="px-4 py-2 sticky left-0 bg-slate-100 z-10 border-r border-slate-300 border-l-4 border-slate-400" style={{ paddingLeft: '52px', width: columnWidths.hierarchy }}>
                           <span className="text-[11px] font-black uppercase text-slate-500 tracking-widest">Summary</span>
                         </td>
@@ -1681,9 +1677,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                           );
                         })}
                       </tr>
-                    </tbody>
-                  </table>
-                )}
+                    )}
+                  </tbody>
+                </table>
               </div>
 
               {/* Pagination Bar */}
