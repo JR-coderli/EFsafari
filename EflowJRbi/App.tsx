@@ -94,7 +94,7 @@ const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number
     else if (metricKey === 'epv') colorClasses = 'text-amber-500';     // 黄色
   }
 
-  const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[13px] text-slate-500 font-medium' : `text-[14px] ${colorClasses} font-bold`}`;
+  const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[14px] text-slate-700 font-bold' : `text-[14px] ${colorClasses} font-bold`}`;
 
   if (type === 'money' || type === 'profit') return <span className={baseClasses}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
   if (type === 'percent') return <span className={baseClasses}>{(displayValue * 100).toFixed(2)}%</span>;
@@ -1547,14 +1547,16 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                   <tbody className="divide-y divide-slate-50">
                     {(() => {
                       // 计算每个行的斑马纹状态（按层级独立）
+                      let childIndex = 0; // 子级行独立计数器
                       const dataWithStripe = paginatedData.map((row, idx) => {
                         let isEvenRow = false;
                         if (row.level === 0) {
                           // 父级：按全局索引
                           isEvenRow = idx % 2 === 0;
                         } else {
-                          // 子级：全部使用白色（无斑马纹）
-                          isEvenRow = false;
+                          // 子级：独立计数计算斑马纹
+                          isEvenRow = childIndex % 2 === 1; // 1,3,5...为true（黄色）
+                          childIndex++;
                         }
                         return { ...row, isEvenRow };
                       });
@@ -1563,16 +1565,17 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                       const isExpanded = expandedDimRows.has(row.id);
                       const isEvenRow = row.isEvenRow;
                       const isChild = row.level > 0;
-                      const cellBgClass = isEvenRow ? 'bg-slate-100' : 'bg-white';
+                      // 子级维度行：奇数用浅黄色，偶数用白色
+                      const cellBgClass = isChild ? (isEvenRow ? 'bg-white' : 'bg-yellow-50') : (isEvenRow ? 'bg-slate-100' : 'bg-white');
                       // 子级样式：紧凑行、不加粗、左边框作为区域边界
                       const pyClass = isChild ? 'py-1.5' : 'py-3';
-                      const nameClass = isChild ? 'text-[12px] font-medium text-slate-600' : 'text-[13px] font-black text-slate-800';
+                      const nameClass = isChild ? 'text-[12px] font-semibold text-slate-800' : 'text-[13px] font-black text-slate-800';
                       const labelClass = isChild ? 'text-[8px] text-slate-400 uppercase tracking-wider' : 'text-[9px] text-slate-400 font-bold uppercase tracking-wider';
                       const borderClass = isChild ? 'border-l-4 border-indigo-300' : '';
                       return (
                       <React.Fragment key={row.id}>
                         <tr className="group" onContextMenu={(e) => handleContextMenu(e, getRowText(row))}>
-                          <td className={`px-4 sticky left-0 z-10 border-r border-slate-200 group-hover:bg-amber-50 transition-colors ${cellBgClass} ${pyClass} ${borderClass}`} style={{ paddingLeft: `${row.level * 20 + 32}px`, width: columnWidths.hierarchy }}>
+                          <td className={`px-4 sticky left-0 z-10 border-r border-slate-200 group-hover:bg-violet-50 transition-colors ${cellBgClass} ${pyClass} ${borderClass}`} style={{ paddingLeft: `${row.level * 20 + 32}px`, width: columnWidths.hierarchy }}>
                             <div className="flex items-center gap-2 cursor-pointer" onClick={() => {
                               const nextFilters = row.filterPath || row.id.split('|').map((v, i) => ({ dimension: activeDims[i], value: v }));
                               setActiveFilters(nextFilters);
@@ -1604,14 +1607,14 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                               </div>
                             </div>
                           </td>
-                          {visibleMetrics.map(m => <td key={m.key} className={`px-4 ${pyClass} text-right group-hover:bg-amber-50 transition-colors ${cellBgClass}`} style={{ width: columnWidths[m.key] || 90 }}><MetricValue value={row[m.key] as number} type={m.type} colorMode={colorMode} metricKey={m.key as string} isSub={isChild} /></td>)}
+                          {visibleMetrics.map(m => <td key={m.key} className={`px-4 ${pyClass} text-right group-hover:bg-violet-50 transition-colors ${cellBgClass}`} style={{ width: columnWidths[m.key] || 90 }}><MetricValue value={row[m.key] as number} type={m.type} colorMode={colorMode} metricKey={m.key as string} isSub={isChild} /></td>)}
                         </tr>
                         {expandedDailyRows.has(row.id) && (() => {
                           const dailyData = dailyDataMap.get(row.id);
                           return dailyData?.slice(0, 7).map((day, dayIdx) => (
-                          <tr key={day.date} className="bg-slate-50 hover:bg-amber-50">
-                            <td className="px-4 py-2 sticky left-0 bg-slate-50 z-10 border-l-4 border-indigo-600/60 border-r border-slate-50" style={{ paddingLeft: `${row.level * 20 + 72}px`, width: columnWidths.hierarchy }}><span className="text-[12px] font-bold text-slate-500">{day.date}</span></td>
-                            {visibleMetrics.map(m => <td key={m.key} className="px-4 py-2 text-right opacity-80 bg-slate-50" style={{ width: columnWidths[m.key] || 90 }}><MetricValue value={day[m.key as keyof DailyBreakdown] as number || 0} type={m.type} isSub colorMode={colorMode} metricKey={m.key as string} /></td>)}
+                          <tr key={day.date} className="bg-violet-50 hover:bg-violet-100">
+                            <td className="px-4 py-2 sticky left-0 bg-violet-50 z-10 border-l-4 border-indigo-600/60 border-r border-violet-100" style={{ paddingLeft: `${row.level * 20 + 72}px`, width: columnWidths.hierarchy }}><span className="text-[12px] font-bold text-violet-700">{day.date}</span></td>
+                            {visibleMetrics.map(m => <td key={m.key} className="px-4 py-2 text-right opacity-80 bg-violet-50" style={{ width: columnWidths[m.key] || 90 }}><MetricValue value={day[m.key as keyof DailyBreakdown] as number || 0} type={m.type} isSub colorMode={colorMode} metricKey={m.key as string} /></td>)}
                           </tr>
                           ));
                         })()}
