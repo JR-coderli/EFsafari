@@ -540,11 +540,17 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   // Dimension replacement
   const replaceDimension = (index: number, newDim: Dimension) => {
     if (activeDims.includes(newDim)) return; // Prevent duplicates
-    setActiveDims(prev => {
-      const updated = [...prev];
-      updated[index] = newDim;
-      return updated;
+    const newDims = [...activeDims];
+    newDims[index] = newDim;
+
+    // 清理无效的 filters：只保留那些在新维度顺序中仍然处于正确位置的 filters
+    const validFilters = activeFilters.filter((filter, filterIndex) => {
+      // filter的dimension必须在新维度顺序的对应位置上
+      return newDims[filterIndex] === filter.dimension;
     });
+
+    setActiveDims(newDims);
+    setActiveFilters(validFilters);
     setEditingDimIndex(null);
     setDropdownPosition(null);
   };
@@ -1063,8 +1069,16 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     const [removed] = newDims.splice(dragIdx, 1);
     newDims.splice(dropIdx, 0, removed);
 
+    // 保留有效的 filters：只保留那些在新维度顺序中仍然处于正确位置的 filters
+    // 例如：原层级 platform->sub_campaign->offer，当前filter [{platform: Facebook}, {sub_campaign: AdSet1}]
+    // 调换后 platform->offer->sub_campaign，则只保留 [{platform: Facebook}]，因为offer层级没有filter
+    const validFilters = activeFilters.filter((filter, index) => {
+      // filter的dimension必须在新维度顺序的对应位置上
+      return newDims[index] === filter.dimension;
+    });
+
     setActiveDims(newDims);
-    setActiveFilters([]);
+    setActiveFilters(validFilters);
     draggedDimIndex.current = null;
   };
 
