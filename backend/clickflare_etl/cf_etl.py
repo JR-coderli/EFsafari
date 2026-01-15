@@ -27,6 +27,8 @@ class ClickflareETL:
         "offerID": "offerID",
         "advertiser": "affiliateNetworkName",
         "advertiserID": "affiliateNetworkID",
+        "lander": "landingName",
+        "landerID": "landingID",
         "Campaign": "trackingField2",
         "CampaignID": "trackingField2",
         "Adset": "trackingField6",
@@ -168,6 +170,8 @@ class ClickflareETL:
             offer_id = raw_row.get("offerID", "")
             affiliate_network_name = raw_row.get("affiliateNetworkName", "")
             affiliate_network_id = raw_row.get("affiliateNetworkID", "")
+            landing_name = raw_row.get("landingName", "")
+            landing_id = raw_row.get("landingID", "")
 
             # Get tracking field values
             tracking_field_1 = raw_row.get("trackingField1", "")
@@ -198,6 +202,8 @@ class ClickflareETL:
                 "offerID": offer_id if offer_id else "",
                 "advertiser": affiliate_network_name if affiliate_network_name else "",
                 "advertiserID": affiliate_network_id if affiliate_network_id else "",
+                "lander": landing_name if landing_name else "",
+                "landerID": landing_id if landing_id else "",
                 "Campaign": tracking_field_2 if tracking_field_2 else "",
                 "CampaignID": tracking_field_2 if tracking_field_2 else "",
                 "Adset": tracking_field_6 if tracking_field_6 else "",
@@ -307,8 +313,8 @@ class ClickflareETL:
 
             # Column names in our data (must match ClickHouse table columns)
             columns = ['reportDate', 'dataSource', 'Media', 'MediaID', 'offer', 'offerID',
-                       'advertiser', 'advertiserID', 'Campaign', 'CampaignID',
-                       'Adset', 'AdsetID', 'Ads', 'AdsID',
+                       'advertiser', 'advertiserID', 'lander', 'landerID',
+                       'Campaign', 'CampaignID', 'Adset', 'AdsetID', 'Ads', 'AdsID',
                        'impressions', 'clicks', 'conversions', 'revenue',
                        'spend', 'm_imp', 'm_clicks', 'm_conv']
 

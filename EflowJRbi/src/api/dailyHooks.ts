@@ -83,6 +83,8 @@ interface DailyHierarchyNode {
     m_epv: number;
     m_cpc: number;
     m_cpv: number;
+    m_cpa: number;
+    m_epa: number;
   };
   _children?: Record<string, DailyHierarchyNode>;
 }
@@ -161,6 +163,8 @@ function hierarchyNodeToAdRow(
     m_epv: metrics.m_epv,
     m_cpc: metrics.m_cpc,
     m_cpv: metrics.m_cpv,
+    m_cpa: metrics.spend / (metrics.m_conv || 1),
+    m_epa: metrics.revenue / (metrics.m_conv || 1),
     hasChild: level < maxLevel,
     isExpanded: false,
     children: [],

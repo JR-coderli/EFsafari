@@ -21,7 +21,7 @@ interface ETLStatus {
   all_success: boolean;
 }
 
-const calculateMetrics = (data: { impressions: number; clicks: number; conversions: number; spend: number; revenue: number; m_imp: number; m_clicks: number }) => {
+const calculateMetrics = (data: { impressions: number; clicks: number; conversions: number; spend: number; revenue: number; m_imp: number; m_clicks: number; m_conv: number }) => {
   return {
     ctr: data.clicks / (data.impressions || 1),
     cvr: data.conversions / (data.clicks || 1),
@@ -33,7 +33,9 @@ const calculateMetrics = (data: { impressions: number; clicks: number; conversio
     m_epc: data.revenue / (data.m_clicks || 1),
     m_epv: data.revenue / (data.m_imp || 1),
     m_cpc: data.spend / (data.m_clicks || 1),
-    m_cpv: data.spend / (data.m_imp || 1)
+    m_cpv: data.spend / (data.m_imp || 1),
+    m_cpa: data.spend / (data.m_conv || 1),
+    m_epa: data.revenue / (data.m_conv || 1)
   };
 };
 
@@ -41,6 +43,7 @@ const ALL_DIMENSIONS: { value: Dimension; label: string }[] = [
   { value: 'platform', label: 'Media' },
   { value: 'advertiser', label: 'Advertiser' },
   { value: 'offer', label: 'Offer' },
+  { value: 'lander', label: 'Lander' },
   { value: 'campaign_name', label: 'Campaign' },
   { value: 'sub_campaign_name', label: 'Adset' },
   { value: 'creative_name', label: 'Ads' },
@@ -64,6 +67,10 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { key: 'epa', label: 'EPA', visible: true, type: 'money', group: 'Calculated' },
   { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
   { key: 'epv', label: 'EPV', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'm_epc', label: 'm_EPC', visible: false, type: 'money', group: 'Calculated' },
+  { key: 'm_epv', label: 'm_EPV', visible: false, type: 'money', group: 'Calculated' },
+  { key: 'm_cpa', label: 'm_CPA', visible: false, type: 'money', group: 'Calculated' },
+  { key: 'm_epa', label: 'm_EPA', visible: false, type: 'money', group: 'Calculated' },
 ];
 
 const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number' | 'profit'; isSub?: boolean; colorMode?: boolean; metricKey?: string }> = ({ value, type, isSub, colorMode, metricKey }) => {
@@ -92,6 +99,8 @@ const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number
     else if (metricKey === 'epa') colorClasses = 'text-amber-500';     // 黄色
     else if (metricKey === 'epc') colorClasses = 'text-amber-500';     // 黄色
     else if (metricKey === 'epv') colorClasses = 'text-amber-500';     // 黄色
+    else if (metricKey === 'm_cpa') colorClasses = 'text-blue-500';    // 蓝色
+    else if (metricKey === 'm_epa') colorClasses = 'text-amber-500';   // 黄色
   }
 
   const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[14px] text-slate-700 font-bold' : `text-[14px] ${colorClasses} font-bold`}`;
@@ -436,7 +445,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [rowsPerPage] = useState(20);
 
   // Sort state
-  type SortColumn = 'revenue' | 'spend' | 'impressions' | 'clicks' | 'conversions' | 'ctr' | 'cvr' | 'roi' | 'cpa' | 'rpa' | 'epc' | 'epv' | 'm_epc' | 'm_epv' | 'm_cpc' | 'm_cpv' | 'm_imp' | 'm_clicks' | 'm_conv';
+  type SortColumn = 'revenue' | 'spend' | 'impressions' | 'clicks' | 'conversions' | 'ctr' | 'cvr' | 'roi' | 'cpa' | 'rpa' | 'epc' | 'epv' | 'm_epc' | 'm_epv' | 'm_cpc' | 'm_cpv' | 'm_cpa' | 'm_epa' | 'm_imp' | 'm_clicks' | 'm_conv';
   type SortOrder = 'asc' | 'desc' | null;
   const [sortColumn, setSortColumn] = useState<SortColumn>('revenue');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -729,6 +738,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       m_epv: summary.revenue / (summary.m_imp || 1),
       m_cpc: summary.spend / (summary.m_clicks || 1),
       m_cpv: summary.spend / (summary.m_imp || 1),
+      m_cpa: summary.spend / (summary.m_conv || 1),
+      m_epa: summary.revenue / (summary.m_conv || 1),
     };
   }, [filteredAndFlattenedData]);
 
@@ -1656,6 +1667,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                           else if (m.key === 'm_epv') value = summaryData.m_epv;
                           else if (m.key === 'm_cpc') value = summaryData.m_cpc;
                           else if (m.key === 'm_cpv') value = summaryData.m_cpv;
+                          else if (m.key === 'm_cpa') value = summaryData.m_cpa;
+                          else if (m.key === 'm_epa') value = summaryData.m_epa;
                           else if (m.key === 'm_imp') value = summaryData.m_imp;
                           else if (m.key === 'm_clicks') value = summaryData.m_clicks;
                           else if (m.key === 'm_conv') value = summaryData.m_conv;

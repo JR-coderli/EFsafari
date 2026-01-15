@@ -377,6 +377,7 @@ async def get_available_dimensions():
         {"value": "platform", "label": "Media"},
         {"value": "advertiser", "label": "Advertiser"},
         {"value": "offer", "label": "Offer"},
+        {"value": "lander", "label": "Lander"},
         {"value": "campaign_name", "label": "Campaign"},
         {"value": "sub_campaign_name", "label": "Adset"},
         {"value": "creative_name", "label": "Ads"},

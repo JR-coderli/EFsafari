@@ -5,6 +5,7 @@ export type Dimension =
   | 'platform'
   | 'advertiser'
   | 'offer'
+  | 'lander'
   | 'campaign_name'
   | 'sub_campaign_name'
   | 'creative_name'
@@ -33,6 +34,8 @@ export interface DailyBreakdown {
   m_epv: number;
   m_cpc: number;
   m_cpv: number;
+  m_cpa: number;  // Mobile CPA
+  m_epa: number;  // Mobile EPA
 }
 
 export interface AdRow {
@@ -62,6 +65,8 @@ export interface AdRow {
   m_epv: number;
   m_cpc: number;
   m_cpv: number;
+  m_cpa: number;  // Mobile CPA
+  m_epa: number;  // Mobile EPA
 
   hasChild: boolean;
   isExpanded?: boolean;

@@ -250,6 +250,8 @@ function hierarchyNodeToAdRow(
     m_epv: (revenue * 0.4) / (m_imp || 1),
     m_cpc: (spend * 0.4) / (m_clicks || 1),
     m_cpv: (spend * 0.4) / (m_imp || 1),
+    m_cpa: spend / (m_conv || 1),
+    m_epa: revenue / (m_conv || 1),
     hasChild: level < maxLevel,
     isExpanded: false,
     children: [],
@@ -377,6 +379,8 @@ export async function loadRootData(
         m_epv: Number(row.m_epv) || 0,
         m_cpc: Number(row.m_cpc) || 0,
         m_cpv: Number(row.m_cpv) || 0,
+        m_cpa: spend / (m_conv || 1),
+        m_epa: revenue / (m_conv || 1),
         hasChild: currentLevel < activeDims.length - 1,
         filterPath: rowFilterPath,
       };
@@ -503,6 +507,8 @@ export async function loadChildData(
         m_epv: Number(row.m_epv) || 0,
         m_cpc: Number(row.m_cpc) || 0,
         m_cpv: Number(row.m_cpv) || 0,
+        m_cpa: spend / (m_conv || 1),
+        m_epa: revenue / (m_conv || 1),
         hasChild: currentLevel + 1 < activeDims.length,
         filterPath: rowFilterPath,
       };
@@ -576,6 +582,8 @@ export async function loadDailyData(
         m_epv: revenue / (m_imp || 1),
         m_cpc: spend / (m_clicks || 1),
         m_cpv: spend / (m_imp || 1),
+        m_cpa: spend / (m_conv || 1),
+        m_epa: revenue / (m_conv || 1),
       };
     });
 
