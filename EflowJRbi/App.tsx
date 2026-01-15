@@ -408,6 +408,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [currentPage, setCurrentPage] = useState<'performance' | 'permissions' | 'daily_report'>('performance');
   const [activeFilters, setActiveFilters] = useState<Filter[]>([]);
   const [expandedDailyRows, setExpandedDailyRows] = useState<Set<string>>(new Set());
+  const [loadingDailyRows, setLoadingDailyRows] = useState<Set<string>>(new Set());
+  const [loadingDimRows, setLoadingDimRows] = useState<Set<string>>(new Set());
   const [expandedDimRows, setExpandedDimRows] = useState<Set<string>>(new Set());
   // Store daily data separately to avoid reference issues with flattened data
   const [dailyDataMap, setDailyDataMap] = useState<Map<string, DailyBreakdown[]>>(new Map());
@@ -1101,10 +1103,17 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     }
     const nextExpanded = new Set(expandedDimRows);
     if (nextExpanded.has(row.id)) {
+      // Collapsing - just remove from expanded
       nextExpanded.delete(row.id);
+      setExpandedDimRows(nextExpanded);
     } else {
+      // Expanding - add to expanded and load data if needed
       nextExpanded.add(row.id);
+      setExpandedDimRows(nextExpanded);
       if (!row.children || row.children.length === 0) {
+        // Add to loading state
+        setLoadingDimRows(prev => new Set(prev).add(row.id));
+
         const nextLevel = row.level + 1;
         let children: AdRow[];
 
@@ -1123,6 +1132,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             activeDims.slice(nextLevel + 1),
             selectedRange
           );
+          // Remove from loading state immediately for mock data
+          setLoadingDimRows(prev => {
+            const nextLoading = new Set(prev);
+            nextLoading.delete(row.id);
+            return nextLoading;
+          });
         } else {
           // Use real API
           try {
@@ -1131,6 +1146,13 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           } catch (err) {
             console.error('Error loading child data:', err);
             children = [];
+          } finally {
+            // Remove from loading state
+            setLoadingDimRows(prev => {
+              const nextLoading = new Set(prev);
+              nextLoading.delete(row.id);
+              return nextLoading;
+            });
           }
         }
 
@@ -1160,7 +1182,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         });
       }
     }
-    setExpandedDimRows(nextExpanded);
   };
 
   // Load daily data for a specific row - works for both parent and child rows
@@ -1168,20 +1189,32 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     e.preventDefault(); e.stopPropagation();
     const next = new Set(expandedDailyRows);
     if (next.has(row.id)) {
+      // Collapsing - just remove from expanded
       next.delete(row.id);
+      setExpandedDailyRows(next);
     } else {
+      // Expanding - add to expanded and load data if needed
       next.add(row.id);
+      setExpandedDailyRows(next);
       if (!dailyDataMap.has(row.id) && row.filterPath) {
+        // Add to loading state
+        setLoadingDailyRows(prev => new Set(prev).add(row.id));
         // Use filterPath from the row - this works for both parent and child rows
         // Load daily data (last 7 days)
         apiLoadDailyData(row.filterPath, 'Last 7 Days', 7).then(dailyData => {
           setDailyDataMap(prev => new Map(prev).set(row.id, dailyData));
         }).catch(err => {
           console.error('Error loading daily data:', err);
+        }).finally(() => {
+          // Remove from loading state
+          setLoadingDailyRows(prev => {
+            const nextLoading = new Set(prev);
+            nextLoading.delete(row.id);
+            return nextLoading;
+          });
         });
       }
     }
-    setExpandedDailyRows(next);
   };
 
   // User CRUD
@@ -1545,8 +1578,26 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                               setActiveFilters(nextFilters);
                               setQuickFilterText('');
                             }}>
-                              <button onClick={(e) => { e.stopPropagation(); toggleDailyBreakdown(e, row); }} className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${expandedDailyRows.has(row.id) ? 'bg-indigo-600 shadow-sm' : 'bg-slate-100'}`}><div className={`w-1.5 h-1.5 rounded-full ${expandedDailyRows.has(row.id) ? 'bg-white' : 'bg-slate-400'}`}></div></button>
-                              {row.hasChild && <button onClick={(e) => { e.stopPropagation(); toggleDimExpansion(e, row); }} className={`w-6 h-6 rounded flex items-center justify-center transition-all bg-slate-50 border border-slate-100 text-slate-400 ${isExpanded ? 'rotate-90' : ''}`}><i className="fas fa-chevron-right text-[10px]"></i></button>}
+                              <button onClick={(e) => { e.stopPropagation(); toggleDailyBreakdown(e, row); }} className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${expandedDailyRows.has(row.id) ? 'bg-indigo-600 shadow-sm' : loadingDailyRows.has(row.id) ? 'bg-amber-400' : 'bg-slate-100'}`}>
+                                {loadingDailyRows.has(row.id) ? (
+                                  <svg className="animate-spin h-2.5 w-2.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : (
+                                  <div className={`w-1.5 h-1.5 rounded-full ${expandedDailyRows.has(row.id) ? 'bg-white' : 'bg-slate-400'}`}></div>
+                                )}
+                              </button>
+                              {row.hasChild && <button onClick={(e) => { e.stopPropagation(); toggleDimExpansion(e, row); }} className={`w-6 h-6 rounded flex items-center justify-center transition-all ${loadingDimRows.has(row.id) ? 'bg-amber-100 border-amber-200' : 'bg-slate-50 border border-slate-100'} ${loadingDimRows.has(row.id) ? '' : isExpanded ? 'rotate-90' : ''}`}>
+                                {loadingDimRows.has(row.id) ? (
+                                  <svg className="animate-spin h-3 w-3 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : (
+                                  <i className={`fas fa-chevron-right text-[10px] ${loadingDimRows.has(row.id) ? 'text-amber-500' : 'text-slate-400'}`}></i>
+                                )}
+                              </button>}
                               <div className="flex flex-col min-w-0">
                                 <span className={`${nameClass} truncate group-hover:text-indigo-600`}>{row.name}</span>
                                 <span className={labelClass}>{ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label}</span>
