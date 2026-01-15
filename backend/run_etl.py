@@ -109,9 +109,11 @@ def run_mtg_etl(date: str) -> tuple[bool, float]:
         # Parse spend from SUMMARY line
         spend = 0.0
         for line in result_output.split('\n'):
-            if line.startswith('SUMMARY: spend='):
+            if 'MTG total - Spend:' in line:
                 try:
-                    spend = float(line.split('=')[1])
+                    # Format: "MTG total - Spend: 123.45, Imp: ..."
+                    spend_str = line.split('Spend:')[1].split(',')[0].strip()
+                    spend = float(spend_str)
                 except:
                     pass
                 break
