@@ -930,7 +930,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
               {/* Summary Row */}
               {summary && (
                 <tr className="bg-gradient-to-r from-slate-50 to-slate-100">
-                  <th className="left-0 bg-gradient-to-r from-slate-50 to-slate-100 z-30 px-3 py-2 text-left border-b border-slate-200 min-w-max">
+                  <th className="left-0 bg-gradient-to-r from-slate-50 to-slate-100 z-30 px-3 py-2 text-left border-b border-slate-200 min-w-[300px]">
                     <div className="flex items-center gap-2">
                       <i className="fas fa-calculator text-indigo-500 text-xs"></i>
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Summary</span>
@@ -950,7 +950,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
               )}
               {/* Header Row */}
               <tr>
-                <th className="left-0 bg-white z-30 px-3 py-2 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 min-w-max">
+                <th className="left-0 bg-white z-30 px-3 py-2 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 min-w-[300px]">
                   Dimension
                 </th>
                 {visibleMetrics.map(metric => (
@@ -974,7 +974,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
                     key={row.id}
                     className={`group hover:bg-slate-50 transition-colors ${row.level === 1 ? 'bg-slate-50/50' : ''}`}
                   >
-                    <td className={`left-0 bg-white z-10 px-3 py-2 border-b border-slate-200 font-medium text-slate-700 text-xs transition-colors ${row.level === 0 ? 'font-bold' : ''} ${row.level === 1 ? 'text-indigo-600 group-hover:!text-purple-600' : 'group-hover:text-purple-600'} min-w-max`}>
+                    <td className={`left-0 bg-white z-10 px-3 py-2 border-b border-slate-200 font-medium text-slate-700 text-xs transition-colors ${row.level === 0 ? 'font-bold' : ''} ${row.level === 1 ? 'text-indigo-600 group-hover:!text-purple-600' : 'group-hover:text-purple-600'} min-w-[300px]`}>
                       <div className={`flex items-center gap-2 ${row.level === 1 ? 'justify-between w-full' : ''}`}>
                         <div className="flex items-center gap-2 flex-1">
                           {row.hasChild && (
