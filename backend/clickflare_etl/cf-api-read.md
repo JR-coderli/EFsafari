@@ -48,6 +48,7 @@
 | 流量来源 | `trafficSourceID` |
 | Offer | `offerID` |
 | 广告网络 | `affiliateNetworkID` |
+| Lander | `landingID` |
 | trackingField1 | `trackingField1` |
 | trackingField2 | `trackingField2` |
 | trackingField5 | `trackingField5` |
@@ -77,6 +78,7 @@ trackingField1-20, param1-20
 | 流量来源名称 | `trafficSourceName` |
 | Offer 名称 | `offerName` |
 | 广告网络名称 | `affiliateNetworkName` |
+| Lander 名称 | `landingName` |
 
 ---
 
@@ -150,6 +152,8 @@ curl --request POST \
 | offerID | `offerID` | `offerID` | Offer ID |
 | advertiser | `affiliateNetworkID` | `affiliateNetworkName` | 广告网络名称 |
 | advertiserID | `affiliateNetworkID` | `affiliateNetworkID` | 广告网络 ID |
+| lander | `landingID` | `landingName` | Lander 名称 |
+| landerID | `landingID` | `landingID` | Lander ID |
 | Campaign | - | `trackingField2` | 活动名称 |
 | CampaignID | `trackingField2` | `trackingField2` | 活动 ID |
 | Adset | - | `trackingField6` | 广告组 |
