@@ -230,7 +230,7 @@ class MTGETL:
     def _get_cf_rows_for_update(self, report_date: str) -> Dict[str, Dict]:
         """
         Get ALL CF rows for the report date that need MTG updates.
-        Returns a dict keyed by (CampaignID_AdsetID) with list of CF rows.
+        Returns a dict keyed by AdsetID with list of CF rows.
 
         This is much more efficient - one query instead of thousands!
 
@@ -238,7 +238,7 @@ class MTGETL:
             report_date: Report date string
 
         Returns:
-            Dict: {(CampaignID_AdsetID): [list of CF rows with their data]}
+            Dict: {AdsetID: [list of CF rows with their data]}
         """
         try:
             query = f"""
@@ -250,10 +250,10 @@ class MTGETL:
 
             result = self.ch_client.query(query)
 
-            # Group by CampaignID + AdsetID (MTG doesn't have AdsID/offerID)
+            # Group by AdsetID only (精准匹配)
             grouped = {}
             for row in result.named_results():
-                key = f"{row['CampaignID']}_{row.get('AdsetID', '')}"
+                key = row.get('AdsetID', '')
                 if key not in grouped:
                     grouped[key] = []
                 grouped[key].append({
@@ -265,7 +265,7 @@ class MTGETL:
                 })
 
             total_rows = sum(len(rows) for rows in grouped.values())
-            self.logger.info(f"Loaded {total_rows} CF rows in {len(grouped)} CampaignID+AdsetID groups")
+            self.logger.info(f"Loaded {total_rows} CF rows in {len(grouped)} AdsetID groups")
 
             return grouped
         except Exception as e:
@@ -278,9 +278,9 @@ class MTGETL:
         This is MUCH more efficient than row-by-row UPDATE.
 
         Logic:
-        1. Load ALL CF rows once (grouped by CampaignID+AdsetID)
-        2. For each MTG row, calculate distribution and accumulate in memory
-        3. Batch UPDATE each unique CF row only ONCE
+        1. Load ALL CF rows once (grouped by AdsetID)
+        2. For each MTG row, match by AdsetID (精准匹配)
+        3. Distribute spend/metrics by impressions ratio
 
         Args:
             data: List of transformed MTG rows
@@ -316,7 +316,6 @@ class MTGETL:
             skipped_count = 0
 
             for row in data:
-                campaign_id = row['CampaignID']
                 adset_id = row.get('AdsetID', '')
 
                 mtg_spend = row.get('spend', 0)
@@ -324,13 +323,12 @@ class MTGETL:
                 mtg_clicks = row.get('m_clicks', 0)
                 mtg_conv = row.get('m_conv', 0)
 
-                # Find matching CF group
-                key = f"{campaign_id}_{adset_id}"
-                if key not in cf_groups:
+                # Find matching CF group by AdsetID only (精准匹配)
+                if adset_id not in cf_groups:
                     skipped_count += 1
                     continue
 
-                cf_rows = cf_groups[key]
+                cf_rows = cf_groups[adset_id]
 
                 # Calculate total impressions for distribution
                 total_cf_impressions = sum(r['impressions'] for r in cf_rows)
