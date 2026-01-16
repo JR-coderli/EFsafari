@@ -29,11 +29,11 @@ class ClickflareETL:
         "advertiserID": "affiliateNetworkID",
         "lander": "landingName",
         "landerID": "landingID",
-        "Campaign": "trackingField2",
-        "CampaignID": "trackingField2",
+        "Campaign": "trackingField4",
+        "CampaignID": "trackingField3",
         "Adset": "trackingField6",
         "AdsetID": "trackingField5",
-        "Ads": "trackingField1",
+        "Ads": "trackingField2",
         "AdsID": "trackingField1",
     }
 
@@ -176,6 +176,8 @@ class ClickflareETL:
             # Get tracking field values
             tracking_field_1 = raw_row.get("trackingField1", "")
             tracking_field_2 = raw_row.get("trackingField2", "")
+            tracking_field_3 = raw_row.get("trackingField3", "")
+            tracking_field_4 = raw_row.get("trackingField4", "")
             tracking_field_5 = raw_row.get("trackingField5", "")
             tracking_field_6 = raw_row.get("trackingField6", "")
 
@@ -204,11 +206,11 @@ class ClickflareETL:
                 "advertiserID": affiliate_network_id if affiliate_network_id else "",
                 "lander": landing_name if landing_name else "",
                 "landerID": landing_id if landing_id else "",
-                "Campaign": tracking_field_2 if tracking_field_2 else "",
-                "CampaignID": tracking_field_2 if tracking_field_2 else "",
+                "Campaign": tracking_field_4 if tracking_field_4 else "",
+                "CampaignID": tracking_field_3 if tracking_field_3 else "",
                 "Adset": tracking_field_6 if tracking_field_6 else "",
                 "AdsetID": tracking_field_5 if tracking_field_5 else "",
-                "Ads": tracking_field_1 if tracking_field_1 else "",
+                "Ads": tracking_field_2 if tracking_field_2 else "",
                 "AdsID": tracking_field_1 if tracking_field_1 else "",
                 # CF metrics
                 "impressions": impressions,

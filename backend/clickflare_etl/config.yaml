@@ -29,15 +29,16 @@ etl:
   page_size: 1000
   max_pages: 100
 
-  # API 分组维度
+  # API 分组维度（最多10个）
   group_by:
     - "date"
     - "trafficSourceID"
     - "offerID"
     - "affiliateNetworkID"
-    - "landingID"
     - "trackingField1"
     - "trackingField2"
+    - "trackingField3"
+    - "trackingField4"
     - "trackingField5"
     - "trackingField6"
 
@@ -46,7 +47,6 @@ etl:
     - "trafficSourceName"
     - "offerName"
     - "affiliateNetworkName"
-    - "landingName"
     - "uniqueVisits"
     - "uniqueClicks"
     - "conversions"
