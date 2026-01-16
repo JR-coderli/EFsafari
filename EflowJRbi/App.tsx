@@ -643,7 +643,20 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   // Filter and flatten data before pagination
   const filteredAndFlattenedData = useMemo(() => {
     // Sort function - sorts a single level of rows
+    // Special handling for 'date' dimension: always sort by date (name) descending
     const sortRows = (rows: AdRow[]): AdRow[] => {
+      if (rows.length === 0) return rows;
+
+      // Check if this level is 'date' dimension - use date descending sort
+      const isDateDimension = rows[0].dimensionType === 'date';
+      if (isDateDimension) {
+        return [...rows].sort((a, b) => {
+          // Sort by name (date string) descending
+          return b.name.localeCompare(a.name);
+        });
+      }
+
+      // For non-date dimensions, use the selected sort
       if (!sortColumn || !sortOrder) return rows;
       return [...rows].sort((a, b) => {
         const aVal = a[sortColumn] as number;
@@ -677,7 +690,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           let childRows = row.children || [];
           // Filter by impressions first
           childRows = childRows.filter(child => !hideZeroImpressions || child.impressions > 0);
-          // Sort the children
+          // Sort the children (will use date sort if child dimension is 'date')
           childRows = sortRows(childRows);
           childRows.forEach(child => {
             results.push(child);
