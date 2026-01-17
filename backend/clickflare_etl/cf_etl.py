@@ -10,6 +10,9 @@ Enhanced with MTG data integration:
 import os
 import sys
 import yaml
+import time
+import hashlib
+import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import clickhouse_connect
@@ -17,9 +20,144 @@ import clickhouse_connect
 from cf_api import ClickflareAPI
 from logger import ETLLogger
 
-# Import MTG API client from parent directory
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'mtg_etl'))
-from mtg_api import MTGAPIClient
+
+class MTGAPIClient:
+    """
+    MTG Report API Client with retry and polling support
+    """
+
+    # API response codes
+    CODE_SUCCESS = 200
+    CODE_RECEIVED = 201
+    CODE_GENERATING = 202
+    CODE_NO_REQUEST = 203
+    CODE_NOT_READY = 204
+    CODE_EXPIRED = 205
+    CODE_ERROR = 10000
+
+    def __init__(self, config, logger):
+        """Initialize API client"""
+        self.base_url = config["base_url"]
+        self.endpoint = config["endpoint"]
+        self.access_key = config["access_key"]
+        self.api_key = config["api_key"]
+        self.timezone = config.get("timezone", "+8")
+        self.dimension_option = config["dimension_option"]
+        self.time_granularity = config.get("time_granularity", "daily")
+
+        # Retry config
+        self.max_attempts = config["retry"]["max_attempts"]
+        self.backoff_factor = config["retry"]["backoff_factor"]
+
+        # Poll config
+        self.poll_max_attempts = config["poll"]["max_attempts"]
+        self.poll_interval = config["poll"]["interval_seconds"]
+        self.poll_timeout = config["poll"]["timeout_seconds"]
+
+        self.logger = logger
+        self.session = requests.Session()
+
+    def _generate_token(self, timestamp: str) -> str:
+        """Generate token using MD5(API_KEY + MD5(timestamp))"""
+        ts_md5 = hashlib.md5(timestamp.encode("utf-8")).hexdigest()
+        raw = self.api_key + ts_md5
+        return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+    def _get_headers(self) -> Dict[str, str]:
+        """Generate request headers with Token"""
+        timestamp = str(int(time.time()))
+        token = self._generate_token(timestamp)
+        return {
+            "access-key": self.access_key,
+            "Token": token,
+            "Timestamp": timestamp
+        }
+
+    def _do_request_with_retry(self, url: str, params: Dict) -> requests.Response:
+        """Make HTTP request with retry logic"""
+        last_error = None
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                headers = self._get_headers()
+                response = self.session.get(url, params=params, headers=headers, timeout=60)
+                if response.status_code == 200:
+                    return response
+                self.logger.warning(f"API request returned status {response.status_code}, attempt {attempt}/{self.max_attempts}")
+            except requests.exceptions.RequestException as e:
+                last_error = e
+                self.logger.warning(f"API request failed: {str(e)}, attempt {attempt}/{self.max_attempts}")
+            if attempt < self.max_attempts:
+                wait_time = self.backoff_factor ** attempt
+                time.sleep(wait_time)
+        raise Exception(f"API request failed after {self.max_attempts} attempts")
+
+    def get_report_data(self, report_date: str) -> Tuple[bool, str]:
+        """Full workflow: initiate -> poll -> download"""
+        url = f"{self.base_url}{self.endpoint}"
+
+        # Initiate (type=1)
+        params = {
+            "start_time": report_date,
+            "end_time": report_date,
+            "type": 1,
+            "timezone": self.timezone,
+            "dimension_option": self.dimension_option,
+            "time_granularity": self.time_granularity
+        }
+
+        headers = self._get_headers()
+        response = self.session.get(url, params=params, headers=headers, timeout=60)
+        data = response.json()
+
+        code = data.get("code")
+        self.logger.info(f"Response code: {code}, message: {data.get('msg', '')}")
+
+        # Poll if needed
+        if code != self.CODE_SUCCESS:
+            start_time = time.time()
+            for attempt in range(1, self.poll_max_attempts + 1):
+                if time.time() - start_time > self.poll_timeout:
+                    return False, "Poll timeout"
+                response = self.session.get(url, params=params, headers=headers, timeout=30)
+                data = response.json()
+                if data.get("code") == self.CODE_SUCCESS:
+                    break
+                time.sleep(self.poll_interval)
+
+        # Download (type=2)
+        params["type"] = 2
+        response = self.session.get(url, params=params, headers=headers, timeout=120)
+        if response.status_code == 200:
+            content = response.content.decode("utf-8")
+            self.logger.info(f"Downloaded {len(content)} bytes of data")
+            return True, content
+        return False, f"Download failed: {response.status_code}"
+
+    def parse_tsv_data(self, tsv_content: str) -> List[Dict]:
+        """Parse TSV content into list of dictionaries"""
+        lines = tsv_content.strip().split("\n")
+        if len(lines) < 2:
+            return []
+        headers = [h.strip() for h in lines[0].split("\t")]
+        rows = []
+        for line in lines[1:]:
+            if not line.strip():
+                continue
+            values = line.split("\t")
+            row = {}
+            for i, header in enumerate(headers):
+                if i < len(values):
+                    row[header] = values[i].strip()
+                rows.append(row)
+        self.logger.info(f"Parsed {len(rows)} data rows from TSV")
+        return rows
+
+    def get_parsed_data(self, report_date: str) -> Tuple[bool, List[Dict]]:
+        """Get and parse report data"""
+        success, content = self.get_report_data(report_date)
+        if not success:
+            return False, []
+        return True, self.parse_tsv_data(content)
 
 
 class ClickflareETL:
