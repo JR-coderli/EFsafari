@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """
-Unified ETL Runner
-Runs Clickflare ETL first to establish base data, then MTG ETL to supplement.
+ETL Runner
+
+运行 Clickflare ETL（已集成 MTG 数据合并）
+支持超时中断和旧任务清理
 """
 import os
 import sys
 import subprocess
 import io
+import time
+import signal
 from datetime import datetime
 import argparse
 
@@ -16,21 +20,91 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "api"))
 from cache import set_cache, init_redis
 
 
-def run_clickflare_etl(date: str) -> tuple[bool, float]:
-    """Run Clickflare ETL for the specified date. Returns (success, revenue_sum)."""
+def kill_old_etl_processes():
+    """
+    查找并杀死正在运行的旧 ETL 进程（包括本脚本和 cf_etl.py）
+    使用 pgrep 命令，不依赖外部包
+    返回被杀死的进程数量
+    """
+    current_pid = os.getpid()
+    killed_count = 0
+
+    try:
+        # 使用 pgrep 查找 ETL 相关进程
+        result = subprocess.run(
+            ['pgrep', '-f', 'run_etl.py|cf_etl.py'],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            old_pids = result.stdout.strip().split('\n')
+            for pid_str in old_pids:
+                if not pid_str:
+                    continue
+
+                old_pid = int(pid_str)
+                if old_pid == current_pid:
+                    continue
+
+                # 检查进程运行时间（通过 /proc/PID/stat）
+                try:
+                    with open(f'/proc/{old_pid}/stat', 'r') as f:
+                        stat_data = f.read().split()
+                        # starttime 是第 22 个字段（索引 21）
+                        starttime_ticks = int(stat_data[21])
+                        # 系统启动时间（通过 /proc/uptime 获取）
+                        with open('/proc/uptime', 'r') as u:
+                            uptime_seconds = float(u.read().split()[0])
+                        # Hz (通常为 100）
+                        hz = 100
+                        running_seconds = uptime_seconds - (starttime_ticks / hz)
+
+                        # 只杀死运行超过 10 分钟的进程
+                        if running_seconds > 600:
+                            print(f"[KILL] Found old ETL process PID={old_pid}, running {int(running_seconds)}s, killing...")
+                            os.kill(old_pid, signal.SIGKILL)
+                            killed_count += 1
+                        else:
+                            print(f"[SKIP] Recent ETL process PID={old_pid}, running {int(running_seconds)}s, keeping")
+
+                except (FileNotFoundError, ProcessLookupError, ValueError, IndexError):
+                    # 进程可能已经退出
+                    pass
+
+        if killed_count > 0:
+            print(f"[KILL] Killed {killed_count} old ETL process(es)")
+            time.sleep(2)  # 等待进程完全退出
+        else:
+            print("[INFO] No old ETL processes found (or all are recent)")
+
+    except FileNotFoundError:
+        print("[WARN] pgrep command not found, skipping old process check")
+    except Exception as e:
+        print(f"[WARN] Error checking old processes: {e}")
+
+    return killed_count
+
+
+def run_etl(date: str) -> tuple[bool, dict]:
+    """
+    运行 Clickflare ETL（已集成 MTG 数据合并）
+
+    Returns:
+        (success, summary_dict) 其中 summary_dict 包含 revenue 和 spend
+    """
     print("=" * 60)
-    print("STEP 1: Running Clickflare ETL (base data)")
+    print("Running Clickflare ETL (with MTG integration)")
     print("=" * 60)
 
     etl_dir = os.path.join(os.path.dirname(__file__), "clickflare_etl")
     etl_script = os.path.join(etl_dir, "cf_etl.py")
 
     if not os.path.exists(etl_script):
-        print(f"Error: Clickflare ETL script not found: {etl_script}")
-        return False, 0.0
+        print(f"Error: ETL script not found: {etl_script}")
+        return False, {"revenue": 0, "spend": 0}
 
     try:
-        # 设置环境变量确保子进程输出不被缓冲
         env = os.environ.copy()
         env['PYTHONUNBUFFERED'] = '1'
 
@@ -40,91 +114,45 @@ def run_clickflare_etl(date: str) -> tuple[bool, float]:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1,  # Line buffered
+            bufsize=1,
             env=env
         )
 
         # 实时打印并捕获输出
         output_buffer = io.StringIO()
         for line in process.stdout:
-            print(line, end='')  # 实时显示
+            print(line, end='')
             output_buffer.write(line)
 
         process.wait()
         result_output = output_buffer.getvalue()
 
-        # Parse revenue from SUMMARY line
-        revenue = 0.0
+        # Parse SUMMARY line: "SUMMARY: revenue=XXX, spend=XXX"
+        summary = {"revenue": 0, "spend": 0}
         for line in result_output.split('\n'):
             if line.startswith('SUMMARY: revenue='):
                 try:
-                    revenue = float(line.split('=')[1])
+                    parts = line.split()
+                    summary["revenue"] = float(parts[0].split('=')[1])
+                    summary["spend"] = float(parts[1].split('=')[1])
                 except:
                     pass
                 break
 
-        return process.returncode == 0, revenue
+        return process.returncode == 0, summary
+
     except Exception as e:
-        print(f"Error running Clickflare ETL: {e}")
-        return False, 0.0
-
-
-def run_mtg_etl(date: str) -> tuple[bool, float]:
-    """Run MTG ETL to supplement Clickflare data. Returns (success, spend_sum)."""
-    print("\n" + "=" * 60)
-    print("STEP 2: Running MTG ETL (supplemental data)")
-    print("=" * 60)
-
-    etl_dir = os.path.join(os.path.dirname(__file__), "mtg_etl")
-    etl_script = os.path.join(etl_dir, "mtg_etl.py")
-
-    if not os.path.exists(etl_script):
-        print(f"Warning: MTG ETL script not found: {etl_script}")
-        return True, 0.0  # Not an error if MTG ETL doesn't exist
-
-    try:
-        # 设置环境变量确保子进程输出不被缓冲
-        env = os.environ.copy()
-        env['PYTHONUNBUFFERED'] = '1'
-
-        process = subprocess.Popen(
-            [sys.executable, etl_script, "-d", date],
-            cwd=etl_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,  # Line buffered
-            env=env
-        )
-
-        # 实时打印并捕获输出
-        output_buffer = io.StringIO()
-        for line in process.stdout:
-            print(line, end='')  # 实时显示
-            output_buffer.write(line)
-
-        process.wait()
-        result_output = output_buffer.getvalue()
-
-        # Parse spend from SUMMARY line
-        spend = 0.0
-        for line in result_output.split('\n'):
-            if 'MTG total - Spend:' in line:
-                try:
-                    # Format: "MTG total - Spend: 123.45, Imp: ..."
-                    spend_str = line.split('Spend:')[1].split(',')[0].strip()
-                    spend = float(spend_str)
-                except:
-                    pass
-                break
-
-        return process.returncode == 0, spend
-    except Exception as e:
-        print(f"Error running MTG ETL: {e}")
-        return False, 0.0
+        print(f"Error running ETL: {e}")
+        return False, {"revenue": 0, "spend": 0}
 
 
 def main():
+    # Step 0: 杀死旧的 ETL 进程
+    print("=" * 60)
+    print("Checking for old ETL processes...")
+    print("=" * 60)
+    kill_old_etl_processes()
+
     # Initialize Redis for ETL status
     config_path = os.path.join(os.path.dirname(__file__), "api", "config.yaml")
     with open(config_path) as f:
@@ -132,7 +160,7 @@ def main():
     redis_config = config.get("redis", {})
     init_redis(redis_config)
 
-    parser = argparse.ArgumentParser(description="Unified ETL Runner")
+    parser = argparse.ArgumentParser(description="ETL Runner")
     parser.add_argument(
         "-d", "--date",
         type=str,
@@ -153,53 +181,32 @@ def main():
         report_date = (datetime.now() - __import__('datetime').timedelta(days=1)).strftime("%Y-%m-%d")
         print(f"No date specified, using yesterday: {report_date}")
 
-    # Run ETLs in sequence and track results
-    results = {
-        "clickflare": {"success": False, "revenue": 0.0},
-        "mtg": {"success": False, "spend": 0.0}
-    }
-
-    # Step 1: Clickflare (base data)
-    results["clickflare"]["success"], results["clickflare"]["revenue"] = run_clickflare_etl(report_date)
-    if not results["clickflare"]["success"]:
-        print("\nERROR: Clickflare ETL failed!")
-
-    # Step 2: MTG (supplemental data)
-    results["mtg"]["success"], results["mtg"]["spend"] = run_mtg_etl(report_date)
-    if not results["mtg"]["success"]:
-        print("\nWARNING: MTG ETL failed!")
+    # Run ETL
+    success, summary = run_etl(report_date)
 
     # Summary
     print("\n" + "=" * 60)
     print("ETL SUMMARY")
     print("=" * 60)
     print(f"Report Date:       {report_date}")
-    print(f"Clickflare ETL:    {'✓ SUCCESS' if results['clickflare']['success'] else '✗ FAILED'}")
-    print(f"  - Revenue:       ${results['clickflare']['revenue']:,.2f}")
-    print(f"MTG ETL:           {'✓ SUCCESS' if results['mtg']['success'] else '✗ FAILED'}")
-    print(f"  - Spend:         ${results['mtg']['spend']:,.2f}")
+    print(f"Status:            {'✓ SUCCESS' if success else '✗ FAILED'}")
+    print(f"  - Revenue:       ${summary['revenue']:,.2f}")
+    print(f"  - Spend:         ${summary['spend']:,.2f}")
     print("=" * 60)
-
-    # Only report overall success if ALL ETLs succeeded
-    all_success = results["clickflare"]["success"] and results["mtg"]["success"]
 
     # Save ETL status to Redis (24h TTL)
     last_update = datetime.now().strftime("%Y-%m-%d %H:%M")
     etl_status = {
         "last_update": last_update,
         "report_date": report_date,
-        "all_success": all_success
+        "success": success,
+        "revenue": summary["revenue"],
+        "spend": summary["spend"]
     }
     set_cache("etl:last_update", etl_status, ttl=24*3600)
     print(f"ETL status saved to Redis: {last_update}")
 
-    if all_success:
-        print("ETL completed successfully!")
-    else:
-        print("ETL completed with errors!")
-    print("=" * 60)
-
-    sys.exit(0 if all_success else 1)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Bicode - AdData Dashboard
 
-营销数据管理与可视化平台，整合多个广告平台（Clickflare、MTG）的数据，提供多维度的营销数据分析仪表板。
+营销数据管理与可视化平台，整合多个广告平台（Clickflare、MTG/Mintegral）的数据，提供多维度的营销数据分析仪表板。
 
 ## 项目结构
 
@@ -13,14 +13,12 @@ bicode/
 │   │   ├── database.py       # ClickHouse 连接
 │   │   ├── routers/          # API 路由
 │   │   └── models/           # 数据模型
-│   ├── clickflare_etl/       # Clickflare ETL
-│   │   ├── cf_etl.py         # 主 ETL (两次拉取)
+│   ├── clickflare_etl/       # Clickflare ETL (已集成 MTG 数据)
+│   │   ├── cf_etl.py         # 主 ETL
 │   │   ├── cf_api.py         # API 客户端
+│   │   ├── logger.py         # 日志模块
 │   │   └── config.yaml       # 配置
-│   └── mtg_etl/             # MTG ETL
-│       ├── mtg_etl.py        # 主 ETL (DELETE + INSERT)
-│       ├── mtg_api.py        # API 客户端
-│       └── config.yaml       # 配置
+│   └── run_etl.py            # ETL 运行器 (统一入口)
 ├── EflowJRbi/                # 前端应用 (React + Vite)
 └── deploy/                   # 部署脚本
 ```
@@ -104,19 +102,38 @@ SETTINGS index_granularity = 8192
 
 ### ETL 流程优化
 
-#### Clickflare ETL (两次拉取)
+#### 当前 ETL 流程 (一体化设计)
+
 ```
-PASS 1: 拉取 advertiser 信息 (10 维)
-PASS 2: 拉取 landing 信息 (10 维)
-合并: 内存中合并 9 维 key
-写入: DELETE + INSERT
+Clickflare ETL (已集成 MTG 数据):
+├── PASS 1: 拉取 advertiser 信息 (10 维)
+├── PASS 2: 拉取 landing 信息 (10 维)
+├── 内存合并 CF 两轮数据
+├── 拉取 MTG API (3个账户)
+├── 按 AdsetID 匹配合并 MTG spend
+└── 一次性 DELETE + INSERT
 ```
 
-#### MTG ETL (DELETE + INSERT)
-```
-原方案: ~10,000 次 UPDATE → 大量碎片
-新方案: 1 次 DELETE + 1 次 INSERT → 碎片少
-```
+#### MTG Spend 合并策略
+
+| 问题 | 解决方案 |
+|------|----------|
+| MTG 追踪所有 impressions，CF 只追踪有转化的 | MTG 数据按 CF impressions 比例分配 spend |
+| 一个 AdsetID 对应多行 CF 数据 | 按 CF impressions 权重分配，保证 spend 总数不变 |
+| 无 CF 匹配的 MTG 数据 | 创建新的 MTG-only 行 |
+
+#### 超时保护机制
+
+| 检查点 | 说明 |
+|--------|------|
+| CF PASS 1 完成后 | 检查是否超过 30 分钟 |
+| CF PASS 2 完成后 | 检查是否超过 30 分钟 |
+| 每个 MTG 账户拉取后 | 检查是否超过 30 分钟 |
+| 超时处理 | 插入已拉取的部分数据，等待下次任务继续 |
+
+#### 旧任务清理
+
+新任务启动时，自动杀死运行超过 10 分钟的旧 ETL 进程，防止并发运行。
 
 ### 监控命令
 
@@ -142,4 +159,6 @@ SELECT * FROM system.merges"
 | 可用内存 | 574 MB | 1.7 GB |
 | ClickHouse 内存 | 2.1 GB (58%) | 1.0 GB (28%) |
 | 活跃 parts | 4 个 | 2 个 |
-| SQL 操作 (MTG) | ~10,000 UPDATE | 1 DELETE + 1 INSERT |
+| SQL 操作 | CF INSERT + MTG ~10,000 UPDATE | 1 次 DELETE + 1 次 INSERT |
+| MTG spend 保留率 | ~0.4% (丢失 99.6%) | 100% 完整保留 |
+| ETL 步骤 | 2 个独立进程 | 1 个一体化进程 |

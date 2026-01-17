@@ -1,16 +1,25 @@
 """
 Clickflare Report ETL Main Process
 Extracts data from Clickflare API, transforms, and loads into ClickHouse
+
+Enhanced with MTG data integration:
+- Fetches MTG spend data in the same ETL run
+- Merges MTG data with CF data in memory
+- Single INSERT operation (no DELETE + extra UPDATE)
 """
 import os
 import sys
 import yaml
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import clickhouse_connect
 
 from cf_api import ClickflareAPI
 from logger import ETLLogger
+
+# Import MTG API client from parent directory
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'mtg_etl'))
+from mtg_api import MTGAPIClient
 
 
 class ClickflareETL:
@@ -76,6 +85,25 @@ class ClickflareETL:
         self.group_by_pass2 = self.config["etl"].get("group_by_pass2", [])
         self.metrics_pass2 = self.config["etl"].get("metrics_pass2", [])
         self.exclude_spend_media = self.config["etl"].get("exclude_spend_media", [])
+
+        # MTG integration config
+        mtg_config = self.config["etl"].get("mtg_integration", {})
+        self.mtg_enabled = mtg_config.get("enabled", False)
+        self.mtg_accounts = mtg_config.get("accounts", [])
+        self.mtg_media_keywords = mtg_config.get("mtg_media_keywords", ["Mintegral", "Hastraffic"])
+        self.mtg_api_config = {
+            "base_url": mtg_config.get("api_base_url", "https://ss-api.mintegral.com"),
+            "endpoint": mtg_config.get("api_endpoint", "/api/v2/reports/data"),
+            "timezone": mtg_config.get("api_timezone", "0"),
+            "dimension_option": mtg_config.get("dimension_option", "Offer,Campaign,Creative"),
+            "time_granularity": mtg_config.get("time_granularity", "daily"),
+            "retry": self.config.get("retry", {}),
+            "poll": self.config.get("poll", {})
+        }
+
+        # Timeout config: 如果总运行时间超过这个限制，插入部分数据并中断
+        self.timeout_minutes = self.config["etl"].get("timeout_minutes", 30)
+        self.start_time = None  # 将在 run() 开始时设置
 
         self.ch_client = None
         self.api_client = None
@@ -523,6 +551,315 @@ class ClickflareETL:
         self.logger.info(f"Transformed {len(transformed_data)} rows")
         return transformed_data
 
+    def _check_timeout(self, stage: str = "") -> bool:
+        """
+        检查是否超过超时限制
+
+        Args:
+            stage: 当前阶段名称，用于日志
+
+        Returns:
+            bool: True if timeout exceeded
+        """
+        if self.start_time is None:
+            return False
+
+        elapsed = (datetime.now() - self.start_time).total_seconds() / 60
+        if elapsed >= self.timeout_minutes:
+            self.logger.warning(f"Timeout check at stage '{stage}': {elapsed:.1f} minutes elapsed (limit: {self.timeout_minutes} min)")
+            return True
+        return False
+
+    def _handle_timeout(self, report_date: str, partial_data: List[Dict], stage: str) -> None:
+        """
+        处理超时情况：插入已拉取的部分数据并中断程序
+
+        Args:
+            report_date: 报告日期
+            partial_data: 已拉取并转换的部分数据
+            stage: 超时发生的阶段
+        """
+        self.logger.error(f"=== TIMEOUT TRIGGERED at stage: {stage} ===")
+        self.logger.error(f"Elapsed time: {(datetime.now() - self.start_time).total_seconds() / 60:.1f} minutes")
+
+        if not partial_data:
+            self.logger.warning("No partial data to insert, exiting without saving")
+            return
+
+        # 插入部分数据
+        self.logger.info(f"Inserting partial data ({len(partial_data)} rows) before timeout...")
+        self.delete_existing_data(report_date)
+        self.insert_data(partial_data)
+
+        total_revenue = sum(row.get('revenue', 0) for row in partial_data)
+        total_spend = sum(row.get('spend', 0) for row in partial_data)
+        self.logger.warning(f"PARTIAL DATA INSERTED: revenue=${total_revenue:.2f}, spend=${total_spend:.2f}")
+        self.logger.warning(f"Next scheduled task will continue fetching remaining data")
+
+    def _is_special_media(self, media_name: str) -> bool:
+        """
+        Check if a media name matches special media keywords (需要从其他 API 获取 spend 的媒体)
+
+        这些媒体的 spend 在 Clickflare API 中为 0，需要从 MTG 等其他 API 获取并合并
+
+        Args:
+            media_name: Media name to check
+
+        Returns:
+            bool: True if this is a special media that needs spend from other APIs
+        """
+        if not media_name:
+            return False
+        media_lower = media_name.lower()
+        return any(keyword.lower() in media_lower for keyword in self.mtg_media_keywords)
+
+    def _fetch_mtg_data_for_date(self, report_date: str) -> List[Dict]:
+        """
+        Fetch MTG data from all MTG accounts for the given date
+
+        Args:
+            report_date: Report date string (YYYY-MM-DD)
+
+        Returns:
+            List[Dict]: All MTG data rows from all accounts
+        """
+        if not self.mtg_enabled or not self.mtg_accounts:
+            self.logger.info("MTG integration disabled or no accounts configured")
+            return []
+
+        self.logger.info(f"Fetching MTG data for {report_date} from {len(self.mtg_accounts)} accounts...")
+
+        all_mtg_data = []
+
+        for account in self.mtg_accounts:
+            account_name = account.get("name", "Unknown")
+            self.logger.info(f"Fetching MTG data from account: {account_name}")
+
+            try:
+                # Create MTG API client for this account
+                api_config = {
+                    **self.mtg_api_config,
+                    "access_key": account["access_key"],
+                    "api_key": account["api_key"]
+                }
+                mtg_client = MTGAPIClient(api_config, self.logger)
+
+                # Get data from MTG API
+                success, mtg_rows = mtg_client.get_parsed_data(report_date)
+
+                if success and mtg_rows:
+                    # Transform MTG rows to our schema
+                    for row in mtg_rows:
+                        transformed = self._transform_mtg_row(row, report_date)
+                        if transformed:
+                            all_mtg_data.append(transformed)
+
+                    self.logger.info(f"Fetched {len(mtg_rows)} rows from {account_name}")
+                else:
+                    self.logger.warning(f"No data from {account_name}")
+
+            except Exception as e:
+                self.logger.error(f"Failed to fetch MTG data from {account_name}: {str(e)}")
+
+        self.logger.info(f"Total MTG rows fetched: {len(all_mtg_data)}")
+        return all_mtg_data
+
+    def _transform_mtg_row(self, raw_row: Dict, report_date: str) -> Optional[Dict]:
+        """
+        Transform raw MTG API data to our internal format
+
+        MTG API fields:
+        - Date: YYYYMMDD format
+        - Campaign Id, Offer Id (AdsetID), Creative Id (AdsID)
+        - Offer Name (Adset), Creative Name (Ads)
+        - Impression, Click, Conversion, Spend
+
+        Args:
+            raw_row: Raw MTG API data row
+            report_date: Report date string (YYYY-MM-DD)
+
+        Returns:
+            Optional[Dict]: Transformed row with AdsetID as key
+        """
+        try:
+            # Parse date
+            api_date = raw_row.get("Date", "")
+            if api_date:
+                try:
+                    year = int(api_date[:4])
+                    month = int(api_date[4:6])
+                    day = int(api_date[6:8])
+                    date_obj = datetime(year, month, day).date()
+                except:
+                    date_obj = datetime.strptime(report_date, "%Y-%m-%d").date()
+            else:
+                date_obj = datetime.strptime(report_date, "%Y-%m-%d").date()
+
+            return {
+                "reportDate": date_obj,
+                "dataSource": "MTG",
+                "CampaignID": raw_row.get("Campaign Id", "") or "0",
+                "AdsetID": raw_row.get("Offer Id", "") or "0",  # Key for matching
+                "AdsID": raw_row.get("Creative Id", "") or "0",
+                "Adset": raw_row.get("Offer Name", ""),
+                "Ads": raw_row.get("Creative Name", ""),
+                "spend": self._safe_float(raw_row.get("Spend", "0").replace(",", "")),
+                "m_imp": self._safe_int(raw_row.get("Impression", "0").replace(",", "")),
+                "m_clicks": self._safe_int(raw_row.get("Click", "0").replace(",", "")),
+                "m_conv": self._safe_int(raw_row.get("Conversion", "0").replace(",", ""))
+            }
+
+        except Exception as e:
+            self.logger.warning(f"Failed to transform MTG row: {str(e)}")
+            return None
+
+    def _merge_mtg_data_to_cf(self, cf_data: List[Dict], mtg_data: List[Dict]) -> List[Dict]:
+        """
+        Merge MTG spend data into CF data in memory
+
+        Strategy:
+        1. Group MTG data by AdsetID (sum spend per AdsetID)
+        2. For each AdsetID, either update existing CF rows or create new MTG-only rows
+        3. This ensures ALL MTG spend is captured, not just the portion matching CF impressions
+
+        Args:
+            cf_data: Clickflare transformed data
+            mtg_data: MTG transformed data
+
+        Returns:
+            List[Dict]: Merged data ready for INSERT
+        """
+        if not mtg_data:
+            self.logger.info("No MTG data to merge, returning CF data as-is")
+            return cf_data
+
+        self.logger.info(f"Merging {len(mtg_data)} MTG rows into {len(cf_data)} CF rows...")
+
+        # Step 1: Aggregate MTG data by AdsetID (一个 AdsetID 可能有多个 MTG 行)
+        mtg_by_adset = {}
+        for mtg_row in mtg_data:
+            adset_id = mtg_row.get("AdsetID", "")
+            if not adset_id or adset_id == "0":
+                continue
+
+            if adset_id not in mtg_by_adset:
+                mtg_by_adset[adset_id] = {
+                    "spend": 0,
+                    "m_imp": 0,
+                    "m_clicks": 0,
+                    "m_conv": 0,
+                    "CampaignID": mtg_row.get("CampaignID", ""),
+                    "Adset": mtg_row.get("Adset", ""),
+                    "AdsID": mtg_row.get("AdsID", ""),
+                    "Ads": mtg_row.get("Ads", ""),
+                }
+
+            mtg_by_adset[adset_id]["spend"] += mtg_row.get('spend', 0)
+            mtg_by_adset[adset_id]["m_imp"] += mtg_row.get('m_imp', 0)
+            mtg_by_adset[adset_id]["m_clicks"] += mtg_row.get('m_clicks', 0)
+            mtg_by_adset[adset_id]["m_conv"] += mtg_row.get('m_conv', 0)
+
+        self.logger.info(f"Aggregated MTG data into {len(mtg_by_adset)} unique AdsetIDs")
+
+        # Step 2: Build CF lookup by AdsetID
+        cf_lookup = {}
+        for row in cf_data:
+            adset_id = row.get("AdsetID", "")
+            if adset_id not in cf_lookup:
+                cf_lookup[adset_id] = []
+            cf_lookup[adset_id].append(row)
+
+        # Step 3: Merge - update existing CF rows or create new MTG-only rows
+        matched_count = 0
+        unmatched_count = 0
+        new_rows = []
+        report_date = None
+
+        # Find report_date from existing data
+        if cf_data:
+            report_date = cf_data[0].get('reportDate')
+
+        for adset_id, mtg_agg in mtg_by_adset.items():
+            if adset_id in cf_lookup and cf_lookup[adset_id]:
+                # Has matching CF rows - update them with MTG data
+                matching_cf_rows = cf_lookup[adset_id]
+
+                # 只更新 special media 的 CF 行
+                special_cf_rows = [r for r in matching_cf_rows if self._is_special_media(r.get("Media", ""))]
+
+                if not special_cf_rows:
+                    # 这个 AdsetID 的 CF 行都不是 special media，跳过
+                    continue
+
+                # 按 CF impressions 比例分配 MTG spend
+                total_cf_impressions = sum(r.get('impressions', 0) for r in special_cf_rows)
+
+                if total_cf_impressions == 0:
+                    # 没有 CF impressions，平均分配
+                    count = len(special_cf_rows)
+                    for cf_row in special_cf_rows:
+                        cf_row['spend'] = mtg_agg['spend'] / count
+                        cf_row['m_imp'] = int(round(mtg_agg['m_imp'] / count)) if count > 0 else 0
+                        cf_row['m_clicks'] = int(round(mtg_agg['m_clicks'] / count)) if count > 0 else 0
+                        cf_row['m_conv'] = int(round(mtg_agg['m_conv'] / count)) if count > 0 else 0
+                else:
+                    # 按 CF impressions 比例分配
+                    for cf_row in special_cf_rows:
+                        cf_impressions = cf_row.get('impressions', 0)
+                        ratio = cf_impressions / total_cf_impressions
+                        cf_row['spend'] = mtg_agg['spend'] * ratio
+                        cf_row['m_imp'] = int(round(mtg_agg['m_imp'] * ratio))
+                        cf_row['m_clicks'] = int(round(mtg_agg['m_clicks'] * ratio))
+                        cf_row['m_conv'] = int(round(mtg_agg['m_conv'] * ratio))
+
+                matched_count += 1
+            else:
+                # No matching CF rows - create a new MTG-only row
+                unmatched_count += 1
+
+                # 创建一个 MTG 专用行（没有 CF 追踪的数据）
+                new_row = {
+                    "reportDate": report_date,
+                    "dataSource": "MTG",
+                    "Media": "Mintegral",  # 默认媒体名称
+                    "MediaID": "",
+                    "offer": "",
+                    "offerID": "",
+                    "advertiser": "",
+                    "advertiserID": "",
+                    "lander": "",
+                    "landerID": "",
+                    "Campaign": "",
+                    "CampaignID": mtg_agg["CampaignID"],
+                    "Adset": mtg_agg["Adset"],
+                    "AdsetID": adset_id,
+                    "Ads": mtg_agg["Ads"],
+                    "AdsID": mtg_agg["AdsID"],
+                    # CF metrics - MTG 不提供，设为 0
+                    "impressions": 0,
+                    "clicks": 0,
+                    "conversions": 0,
+                    "revenue": 0.0,
+                    # MTG metrics
+                    "spend": mtg_agg['spend'],
+                    "m_imp": mtg_agg['m_imp'],
+                    "m_clicks": mtg_agg['m_clicks'],
+                    "m_conv": mtg_agg['m_conv'],
+                }
+                new_rows.append(new_row)
+
+        self.logger.info(f"MTG merge complete: {matched_count} matched (updated CF rows), {unmatched_count} unmatched (created new rows)")
+
+        # Add new MTG-only rows to the data
+        cf_data.extend(new_rows)
+
+        # Log merged totals
+        merged_spend = sum(row.get('spend', 0) for row in cf_data if self._is_special_media(row.get('Media', '')) or row.get('dataSource') == 'MTG')
+        mtg_total = sum(m['spend'] for m in mtg_by_adset.values())
+        self.logger.info(f"Total MTG spend: ${mtg_total:.2f}, Merged spend in data: ${merged_spend:.2f}, New rows created: {len(new_rows)}")
+
+        return cf_data
+
     def run(self, report_date: Optional[str] = None) -> bool:
         """
         Run the complete ETL process
@@ -534,6 +871,9 @@ class ClickflareETL:
         Returns:
             bool: ETL success status
         """
+        # 设置开始时间，用于超时检查
+        self.start_time = datetime.now()
+
         # Determine report date
         if report_date is None:
             report_date = self.get_report_date()
@@ -559,6 +899,15 @@ class ClickflareETL:
                 self.logger.log_etl_failed(report_date, "Data extraction failed")
                 return False
 
+            # 超时检查: CF PASS 1 完成后
+            if self._check_timeout("after CF PASS 1"):
+                # CF 只有 PASS 1 数据，没有 landing 数据，先处理这部分
+                raw_data_pass2 = []
+                raw_data = self.merge_two_pass_data(raw_data, raw_data_pass2)
+                transformed_data = self.transform_data(raw_data)
+                self._handle_timeout(report_date, transformed_data, "after CF PASS 1")
+                return False
+
             if not raw_data:
                 self.logger.info("No data to process")
                 self.logger.log_etl_complete(report_date, 0)
@@ -567,6 +916,15 @@ class ClickflareETL:
             # Step 3.5: Extract data (PASS 2 - for landingID/landingName)
             self.logger.info("Step 3.5: Extracting data from Clickflare API (PASS 2 - landing)...")
             success_pass2, raw_data_pass2 = self.extract_data_pass2(report_date)
+
+            # 超时检查: CF PASS 2 完成后
+            if self._check_timeout("after CF PASS 2"):
+                if not success_pass2:
+                    raw_data_pass2 = []
+                raw_data = self.merge_two_pass_data(raw_data, raw_data_pass2)
+                transformed_data = self.transform_data(raw_data)
+                self._handle_timeout(report_date, transformed_data, "after CF PASS 2")
+                return False
 
             if not success_pass2:
                 self.logger.warning("PASS 2 extraction failed, continuing without landing data")
@@ -586,6 +944,54 @@ class ClickflareETL:
                 self.logger.log_etl_complete(report_date, 0)
                 return True
 
+            # Step 4.5: Fetch and merge MTG data (if enabled)
+            if self.mtg_enabled:
+                self.logger.info("Step 4.5: Fetching and merging MTG data...")
+
+                # 逐步拉取 MTG 数据，每个账户后检查超时
+                all_mtg_data = []
+                mtg_accounts_fetched = 0
+
+                for account in self.mtg_accounts:
+                    account_name = account.get("name", "Unknown")
+                    self.logger.info(f"Fetching MTG data from account: {account_name}")
+
+                    try:
+                        api_config = {
+                            **self.mtg_api_config,
+                            "access_key": account["access_key"],
+                            "api_key": account["api_key"]
+                        }
+                        mtg_client = MTGAPIClient(api_config, self.logger)
+                        success, mtg_rows = mtg_client.get_parsed_data(report_date)
+
+                        if success and mtg_rows:
+                            for row in mtg_rows:
+                                transformed = self._transform_mtg_row(row, report_date)
+                                if transformed:
+                                    all_mtg_data.append(transformed)
+                            mtg_accounts_fetched += 1
+
+                        # 超时检查: 每个 MTG 账户拉取后
+                        if self._check_timeout(f"after MTG account {account_name}"):
+                            if all_mtg_data:
+                                transformed_data = self._merge_mtg_data_to_cf(transformed_data, all_mtg_data)
+                            self._handle_timeout(report_date, transformed_data, f"after MTG account {account_name}")
+                            return False
+
+                    except Exception as e:
+                        self.logger.error(f"Failed to fetch MTG data from {account_name}: {str(e)}")
+
+                self.logger.info(f"Fetched MTG data from {mtg_accounts_fetched}/{len(self.mtg_accounts)} accounts")
+
+                if all_mtg_data:
+                    transformed_data = self._merge_mtg_data_to_cf(transformed_data, all_mtg_data)
+                    self.logger.info("MTG data merged successfully")
+                else:
+                    self.logger.info("No MTG data fetched, continuing with CF data only")
+            else:
+                self.logger.info("Step 4.5: MTG integration disabled, skipping...")
+
             # Step 5: Delete existing data
             self.logger.info("Step 5: Deleting existing data...")
             self.delete_existing_data(report_date)
@@ -598,10 +1004,11 @@ class ClickflareETL:
 
             # Calculate and log revenue summary
             total_revenue = sum(row.get('revenue', 0) for row in transformed_data)
+            total_spend = sum(row.get('spend', 0) for row in transformed_data)
             self.logger.log_etl_complete(report_date, len(transformed_data))
 
             # Print summary for run_etl.py to parse
-            print(f"SUMMARY: revenue={total_revenue:.2f}")
+            print(f"SUMMARY: revenue={total_revenue:.2f}, spend={total_spend:.2f}")
 
             return True
 

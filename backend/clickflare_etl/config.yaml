@@ -11,6 +11,12 @@ retry:
   backoff_factor: 2
   retry_status_codes: [500, 502, 503, 504]
 
+# Poll 配置（用于 MTG API）
+poll:
+  max_attempts: 20
+  interval_seconds: 15
+  timeout_seconds: 300
+
 # ClickHouse 配置
 clickhouse:
   host: "43.160.248.9"
@@ -74,6 +80,33 @@ etl:
   exclude_spend_media:
     - "Mintegral"
     - "Hastraffic"
+
+  # MTG 数据集成配置
+  # 在 CF ETL 中同时拉取并合并 MTG spend 数据
+  mtg_integration:
+    enabled: true  # 是否启用 MTG 数据集成
+    api_base_url: "https://ss-api.mintegral.com"
+    api_endpoint: "/api/v2/reports/data"
+    api_timezone: "0"
+    dimension_option: "Offer,Campaign,Creative"
+    time_granularity: "daily"
+
+    # MTG 账户配置
+    accounts:
+      - name: "Account1"
+        access_key: "28e3b671a1c06171448e85233b65e0e0"
+        api_key: "25e8f524265bb39fa0521ea7f72924e4"
+      - name: "Account2"
+        access_key: "00c6e1387b44dc94d5d7df4256ed07eb"
+        api_key: "ea70b2e328b7c11b1ecec66dea2d1a49"
+      - name: "Account3"
+        access_key: "e0c55f0bc62515cfbb08c21d98ca7776"
+        api_key: "1c23a2044c0dac36cf7a0671e075c3d9"
+
+    # 需要合并 MTG spend 的媒体关键词
+    mtg_media_keywords:
+      - "Mintegral"
+      - "Hastraffic"
 
 # 日志配置
 logging:
