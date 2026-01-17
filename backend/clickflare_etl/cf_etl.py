@@ -41,7 +41,7 @@ class MTGAPIClient:
         self.endpoint = config["endpoint"]
         self.access_key = config["access_key"]
         self.api_key = config["api_key"]
-        self.timezone = config.get("timezone", "+8")
+        self.timezone = config.get("timezone", "0")  # UTC+0
         self.dimension_option = config["dimension_option"]
         self.time_granularity = config.get("time_granularity", "daily")
 
