@@ -194,93 +194,59 @@ class MTGETL:
         except:
             return 0.0
 
-    def reset_mtg_metrics(self, report_date: str) -> bool:
+    def _get_mtg_media_cf_rows(self, report_date: str) -> List[Dict]:
         """
-        Reset MTG metrics to 0 for media that use MTG spend data.
-        Only reset media specified in mtg_media_keywords config - other media keep CF spend.
+        Get ALL CF rows for MTG media (完整数据，用于 DELETE + INSERT).
 
-        Args:
-            report_date: Report date to reset
-
-        Returns:
-            bool: Operation success status
-        """
-        try:
-            # Build WHERE clause with media keywords from config
-            media_conditions = " OR ".join([f"Media LIKE '%{keyword}%'" for keyword in self.mtg_media_keywords])
-
-            reset_sql = f"""
-                ALTER TABLE {self.ch_database}.{self.ch_table}
-                UPDATE spend = 0, m_imp = 0, m_clicks = 0, m_conv = 0
-                WHERE reportDate = '{report_date}'
-                AND ({media_conditions})
-            """
-
-            self.logger.info(f"Resetting MTG metrics for media: {self.mtg_media_keywords}")
-            self.logger.debug(f"SQL: {reset_sql}")
-
-            self.ch_client.command(reset_sql)
-            self.logger.info("MTG metrics reset successfully")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to reset MTG metrics: {str(e)}")
-            return False
-
-    def _get_cf_rows_for_update(self, report_date: str) -> Dict[str, Dict]:
-        """
-        Get ALL CF rows for the report date that need MTG updates.
-        Returns a dict keyed by AdsetID with list of CF rows.
-
-        This is much more efficient - one query instead of thousands!
+        只读取 MTG 负责的媒体数据，避免影响其他媒体。
 
         Args:
             report_date: Report date string
 
         Returns:
-            Dict: {AdsetID: [list of CF rows with their data]}
+            List[Dict]: Complete CF rows for MTG media
         """
         try:
+            media_conditions = " OR ".join([f"Media LIKE '%{keyword}%'" for keyword in self.mtg_media_keywords])
+
             query = f"""
-                SELECT CampaignID, AdsetID, AdsID, offerID, impressions
+                SELECT
+                    reportDate, dataSource, Media, MediaID,
+                    offer, offerID, advertiser, advertiserID,
+                    lander, landerID,
+                    Campaign, CampaignID, Adset, AdsetID, Ads, AdsID,
+                    impressions, clicks, conversions, revenue, spend,
+                    m_imp, m_clicks, m_conv
                 FROM {self.ch_database}.{self.ch_table}
                 WHERE reportDate = '{report_date}'
                 AND dataSource = 'Clickflare'
+                AND ({media_conditions})
             """
 
             result = self.ch_client.query(query)
+            rows = list(result.named_results())
 
-            # Group by AdsetID only (精准匹配)
-            grouped = {}
-            for row in result.named_results():
-                key = row.get('AdsetID', '')
-                if key not in grouped:
-                    grouped[key] = []
-                grouped[key].append({
-                    'CampaignID': row['CampaignID'],
-                    'AdsetID': row.get('AdsetID', ''),
-                    'AdsID': row.get('AdsID', ''),
-                    'offerID': row.get('offerID', ''),
-                    'impressions': row['impressions']
-                })
+            self.logger.info(f"Loaded {len(rows)} CF rows for MTG media ({self.mtg_media_keywords})")
+            return rows
 
-            total_rows = sum(len(rows) for rows in grouped.values())
-            self.logger.info(f"Loaded {total_rows} CF rows in {len(grouped)} AdsetID groups")
-
-            return grouped
         except Exception as e:
-            self.logger.error(f"Failed to query CF rows: {str(e)}")
-            return {}
+            self.logger.error(f"Failed to query CF rows for MTG media: {str(e)}")
+            return []
 
     def insert_data(self, data: List[Dict]) -> bool:
         """
-        Update ClickHouse data with MTG metrics using BATCH approach.
-        This is MUCH more efficient than row-by-row UPDATE.
+        使用 DELETE + INSERT 方式更新 MTG 数据（优化后，减少 ClickHouse merge 负担）
 
-        Logic:
-        1. Load ALL CF rows once (grouped by AdsetID)
-        2. For each MTG row, match by AdsetID (精准匹配)
-        3. Distribute spend/metrics by impressions ratio
+        流程:
+        1. 读取 MTG 媒体的完整 CF 数据
+        2. 内存中合并 MTG 的 spend/metrics
+        3. DELETE MTG 媒体的数据
+        4. INSERT 合并后的完整数据
+
+        优点:
+        - 只执行 2 次 SQL 操作（DELETE + INSERT）
+        - 避免 10000+ 次 UPDATE
+        - 减少 ClickHouse merge 负担
 
         Args:
             data: List of transformed MTG rows
@@ -289,177 +255,218 @@ class MTGETL:
             bool: Operation success status
         """
         if not data:
-            self.logger.warning("No data to update")
+            self.logger.warning("No MTG data to process")
             return True
 
         try:
-            self.logger.info(f"Processing {len(data)} MTG rows with batch update approach")
+            report_date = data[0]['reportDate']
 
+            # 统计 MTG 数据
             total_spend = sum(row.get('spend', 0) for row in data)
             total_m_imp = sum(row.get('m_imp', 0) for row in data)
             total_m_clicks = sum(row.get('m_clicks', 0) for row in data)
             total_m_conv = sum(row.get('m_conv', 0) for row in data)
 
-            self.logger.info(f"MTG total - Spend: {total_spend:.2f}, Imp: {total_m_imp}, Clicks: {total_m_clicks}, Conv: {total_m_conv}")
+            self.logger.info(f"MTG API data - Spend: ${total_spend:.2f}, Imp: {total_m_imp:,}, Clicks: {total_m_clicks:,}, Conv: {total_m_conv:,}")
 
-            # Step 1: Load ALL CF rows at once (much more efficient!)
-            self.logger.info("Loading CF data for batch update...")
-            cf_groups = self._get_cf_rows_for_update(data[0]['reportDate'])
+            # Step 1: 读取 MTG 媒体的完整 CF 数据
+            self.logger.info("Step 1: Loading CF data for MTG media...")
+            cf_rows = self._get_mtg_media_cf_rows(report_date)
 
-            if not cf_groups:
-                self.logger.warning("No CF data found, cannot update")
+            if not cf_rows:
+                self.logger.warning("No CF data found for MTG media")
                 return True
 
-            # Step 2: Accumulate updates in memory (key = unique CF row identifier)
-            # Key format: CampaignID_AdsetID_AdsID_offerID
-            updates_accumulator = {}
-            skipped_count = 0
+            self.logger.info(f"Loaded {len(cf_rows)} CF rows for MTG media")
 
-            for row in data:
-                adset_id = row.get('AdsetID', '')
+            # Step 2: 内存中合并 MTG 数据到 CF 数据
+            self.logger.info("Step 2: Merging MTG data with CF data in memory...")
 
-                mtg_spend = row.get('spend', 0)
-                mtg_imp = row.get('m_imp', 0)
-                mtg_clicks = row.get('m_clicks', 0)
-                mtg_conv = row.get('m_conv', 0)
+            # 构建 CF 数据的查找字典 (key = AdsetID)
+            cf_lookup = {}
+            for row in cf_rows:
+                key = row.get('AdsetID', '')
+                if key not in cf_lookup:
+                    cf_lookup[key] = []
+                cf_lookup[key].append(row)
 
-                # Find matching CF group by AdsetID only (精准匹配)
-                if adset_id not in cf_groups:
-                    skipped_count += 1
+            # 合并 MTG 数据
+            merged_rows = []
+            unmatched_mtg_count = 0
+
+            for mtg_row in data:
+                adset_id = mtg_row.get('AdsetID', '')
+
+                if adset_id not in cf_lookup or not cf_lookup[adset_id]:
+                    unmatched_mtg_count += 1
                     continue
 
-                cf_rows = cf_groups[adset_id]
+                matching_cf_rows = cf_lookup[adset_id]
 
-                # Calculate total impressions for distribution
-                total_cf_impressions = sum(r['impressions'] for r in cf_rows)
+                # 计算总 impressions 用于按比例分配
+                total_impressions = sum(r.get('impressions', 0) for r in matching_cf_rows)
 
-                if total_cf_impressions == 0:
-                    # Distribute evenly
-                    for cf_row in cf_rows:
-                        cf_key = f"{cf_row['CampaignID']}_{cf_row['AdsetID']}_{cf_row['AdsID']}_{cf_row['offerID']}"
-                        if cf_key not in updates_accumulator:
-                            updates_accumulator[cf_key] = {
-                                'CampaignID': cf_row['CampaignID'],
-                                'AdsetID': cf_row['AdsetID'],
-                                'AdsID': cf_row['AdsID'],
-                                'offerID': cf_row['offerID'],
-                                'spend': 0,
-                                'm_imp': 0,
-                                'm_clicks': 0,
-                                'm_conv': 0
-                            }
+                mtg_spend = mtg_row.get('spend', 0)
+                mtg_imp = mtg_row.get('m_imp', 0)
+                mtg_clicks = mtg_row.get('m_clicks', 0)
+                mtg_conv = mtg_row.get('m_conv', 0)
 
-                        count = len(cf_rows)
-                        updates_accumulator[cf_key]['spend'] += mtg_spend / count
-                        updates_accumulator[cf_key]['m_imp'] += mtg_imp / count
-                        updates_accumulator[cf_key]['m_clicks'] += mtg_clicks / count
-                        updates_accumulator[cf_key]['m_conv'] += mtg_conv / count
+                if total_impressions == 0:
+                    # 平均分配
+                    count = len(matching_cf_rows)
+                    for cf_row in matching_cf_rows:
+                        merged_row = cf_row.copy()
+                        merged_row['spend'] = mtg_spend / count
+                        merged_row['m_imp'] = mtg_imp / count
+                        merged_row['m_clicks'] = mtg_clicks / count
+                        merged_row['m_conv'] = mtg_conv / count
+                        merged_rows.append(merged_row)
                 else:
-                    # Distribute by impressions ratio
-                    for cf_row in cf_rows:
-                        cf_key = f"{cf_row['CampaignID']}_{cf_row['AdsetID']}_{cf_row['AdsID']}_{cf_row['offerID']}"
-                        if cf_key not in updates_accumulator:
-                            updates_accumulator[cf_key] = {
-                                'CampaignID': cf_row['CampaignID'],
-                                'AdsetID': cf_row['AdsetID'],
-                                'AdsID': cf_row['AdsID'],
-                                'offerID': cf_row['offerID'],
-                                'spend': 0,
-                                'm_imp': 0,
-                                'm_clicks': 0,
-                                'm_conv': 0
-                            }
+                    # 按 impressions 比例分配
+                    for cf_row in matching_cf_rows:
+                        ratio = cf_row.get('impressions', 0) / total_impressions
+                        merged_row = cf_row.copy()
+                        merged_row['spend'] = mtg_spend * ratio
+                        merged_row['m_imp'] = mtg_imp * ratio
+                        merged_row['m_clicks'] = mtg_clicks * ratio
+                        merged_row['m_conv'] = mtg_conv * ratio
+                        merged_rows.append(merged_row)
 
-                        ratio = cf_row['impressions'] / total_cf_impressions
-                        updates_accumulator[cf_key]['spend'] += mtg_spend * ratio
-                        updates_accumulator[cf_key]['m_imp'] += mtg_imp * ratio
-                        updates_accumulator[cf_key]['m_clicks'] += mtg_clicks * ratio
-                        updates_accumulator[cf_key]['m_conv'] += mtg_conv * ratio
+            # 处理 CF 中有但 MTG 中没有的行（spend 保持原值或设为 0）
+            matched_adset_ids = set(row.get('AdsetID', '') for row in data)
+            for cf_row in cf_rows:
+                if cf_row.get('AdsetID', '') not in matched_adset_ids:
+                    # CF 有但 MTG 没有，spend 保持 CF 的值（或者可以设为 0）
+                    merged_rows.append(cf_row.copy())
 
-            self.logger.debug(f"Calculated updates for {len(updates_accumulator)} unique CF rows, {skipped_count} MTG rows skipped (no match)")
+            self.logger.info(f"Merged {len(merged_rows)} rows ({unmatched_mtg_count} MTG rows had no CF match)")
 
-            # Step 3: Batch UPDATE - each CF row updated only ONCE!
-            self.logger.info("Executing batch UPDATE...")
-            updated_count = 0
+            # Step 3: DELETE MTG 媒体的数据
+            self.logger.info("Step 3: Deleting existing MTG media data...")
+            self._delete_mtg_media_data(report_date)
 
-            for cf_key, update_data in updates_accumulator.items():
-                if not self._update_single_row_batch(
-                    data[0]['reportDate'],
-                    update_data['CampaignID'],
-                    update_data['AdsetID'],
-                    update_data['AdsID'],
-                    update_data['offerID'],
-                    update_data['spend'],
-                    update_data['m_imp'],
-                    update_data['m_clicks'],
-                    update_data['m_conv']
-                ):
-                    # Skip logging - some rows are expected to not match (按 imp 分配)
-                    pass
-                else:
-                    updated_count += 1
+            # Step 4: INSERT 合并后的完整数据
+            self.logger.info("Step 4: Inserting merged data...")
+            self._insert_merged_data(merged_rows)
 
-            self.logger.info(f"Batch update completed: {updated_count} CF rows updated successfully")
+            # 验证汇总
+            inserted_spend = sum(float(row.get('spend', 0)) for row in merged_rows)
+            inserted_imp = sum(int(row.get('m_imp', 0)) for row in merged_rows)
+
+            self.logger.info(f"Verification - Inserted Spend: ${inserted_spend:.2f}, Imp: {inserted_imp:,}")
+            self.logger.info(f"Optimization: Used DELETE + INSERT instead of {len(cf_rows)}+ UPDATE statements")
+
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to update data: {str(e)}")
+            self.logger.error(f"Failed to process MTG data: {str(e)}")
             import traceback
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
 
-    def _update_single_row_batch(self, report_date: str, campaign_id: str, adset_id: str, ads_id: str, offer_id: str,
-                                 spend_add: float, imp_add: int, clicks_add: int, conv_add: int) -> bool:
+    def _delete_mtg_media_data(self, report_date: str) -> bool:
         """
-        Update a specific CF row with MTG metrics (optimized for batch processing).
+        Delete MTG media data for the report date.
 
         Args:
-            report_date: Report date
-            campaign_id: Campaign ID
-            adset_id: Adset ID
-            ads_id: Ads ID
-            offer_id: Offer ID
-            spend_add: Spend to add
-            imp_add: Impressions to add
-            clicks_add: Clicks to add
-            conv_add: Conversions to add
+            report_date: Report date to delete
 
         Returns:
-            bool: Success status
+            bool: Operation success status
         """
         try:
-            # Build WHERE clause for precise matching
-            where_clause = f"reportDate = '{report_date}' AND CampaignID = '{campaign_id}'"
-            if adset_id and adset_id != '0':
-                where_clause += f" AND AdsetID = '{adset_id}'"
+            media_conditions = " OR ".join([f"Media LIKE '%{keyword}%'" for keyword in self.mtg_media_keywords])
 
-            # Handle AdsID - may be empty
-            if ads_id and ads_id != '0':
-                where_clause += f" AND AdsID = '{ads_id}'"
-            else:
-                where_clause += " AND (AdsID = '' OR empty(AdsID))"
+            delete_sql = f"""
+                ALTER TABLE {self.ch_database}.{self.ch_table}
+                DELETE
+                WHERE reportDate = '{report_date}'
+                AND dataSource = 'Clickflare'
+                AND ({media_conditions})
+            """
 
-            # Handle offerID - may be empty
-            if offer_id and offer_id != '0':
-                where_clause += f" AND offerID = '{offer_id}'"
-            else:
-                where_clause += " AND (offerID = '' OR empty(offerID))"
+            self.logger.info(f"Deleting MTG media data for: {self.mtg_media_keywords}")
+            self.logger.debug(f"SQL: {delete_sql}")
 
-            # Round to 2 decimals for spend to avoid precision issues
-            spend_add = round(spend_add, 2)
-
-            update_sql = f"ALTER TABLE {self.ch_database}.{self.ch_table} UPDATE "
-            update_sql += f"spend = spend + {spend_add}, "
-            update_sql += f"m_imp = m_imp + {imp_add}, "
-            update_sql += f"m_clicks = m_clicks + {clicks_add}, "
-            update_sql += f"m_conv = m_conv + {conv_add} "
-            update_sql += f"WHERE {where_clause}"
-
-            self.ch_client.command(update_sql)
+            self.ch_client.command(delete_sql)
+            self.logger.info("MTG media data deleted successfully")
             return True
+
         except Exception as e:
-            # Data not found is expected for some MTG rows (按 imp 分配的情况)
-            self.logger.debug(f"Update row failed (expected for some rows): {str(e)}")
+            self.logger.error(f"Failed to delete MTG media data: {str(e)}")
+            return False
+
+    def _insert_merged_data(self, data: List[Dict]) -> bool:
+        """
+        Insert merged data into ClickHouse.
+
+        Args:
+            data: List of merged rows
+
+        Returns:
+            bool: Operation success status
+        """
+        if not data:
+            self.logger.warning("No data to insert")
+            return True
+
+        try:
+            self.logger.info(f"Inserting {len(data)} rows into {self.ch_database}.{self.ch_table}")
+
+            # Column names (must match ClickHouse table columns)
+            columns = [
+                'reportDate', 'dataSource', 'Media', 'MediaID',
+                'offer', 'offerID', 'advertiser', 'advertiserID',
+                'lander', 'landerID',
+                'Campaign', 'CampaignID', 'Adset', 'AdsetID', 'Ads', 'AdsID',
+                'impressions', 'clicks', 'conversions', 'revenue',
+                'spend', 'm_imp', 'm_clicks', 'm_conv'
+            ]
+
+            # Convert dict to list of lists
+            rows = []
+            for row in data:
+                rows.append([
+                    row.get('reportDate'),
+                    row.get('dataSource', 'Clickflare'),
+                    row.get('Media', ''),
+                    row.get('MediaID', ''),
+                    row.get('offer', ''),
+                    row.get('offerID', ''),
+                    row.get('advertiser', ''),
+                    row.get('advertiserID', ''),
+                    row.get('lander', ''),
+                    row.get('landerID', ''),
+                    row.get('Campaign', ''),
+                    row.get('CampaignID', ''),
+                    row.get('Adset', ''),
+                    row.get('AdsetID', ''),
+                    row.get('Ads', ''),
+                    row.get('AdsID', ''),
+                    row.get('impressions', 0),
+                    row.get('clicks', 0),
+                    row.get('conversions', 0),
+                    row.get('revenue', 0.0),
+                    row.get('spend', 0.0),
+                    row.get('m_imp', 0),
+                    row.get('m_clicks', 0),
+                    row.get('m_conv', 0)
+                ])
+
+            # Insert data
+            self.ch_client.insert(
+                table=f"{self.ch_database}.{self.ch_table}",
+                column_names=columns,
+                data=rows
+            )
+
+            self.logger.info("Data inserted successfully")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to insert data: {str(e)}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
 
     def run_account(self, account: Dict, report_date: str) -> tuple[bool, int]:
@@ -587,12 +594,8 @@ class MTGETL:
                 self.logger.warning("No data to insert from any account")
                 return True
 
-            # Step 4: Reset MTG metrics to 0 (don't delete data, CF already inserted)
-            self.logger.info("Step 3: Resetting MTG metrics...")
-            self.reset_mtg_metrics(report_date)
-
-            # Step 5: Load data into ClickHouse using batch approach
-            self.logger.info("Step 4: Loading data into ClickHouse (batch mode)...")
+            # Step 4: Load data into ClickHouse using DELETE + INSERT approach
+            self.logger.info("Step 3: Loading data into ClickHouse (DELETE + INSERT mode)...")
             if not self.insert_data(all_transformed_data):
                 self.logger.error("Data insertion failed")
                 return False
