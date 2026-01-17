@@ -148,7 +148,7 @@ class MTGAPIClient:
             for i, header in enumerate(headers):
                 if i < len(values):
                     row[header] = values[i].strip()
-                rows.append(row)
+            rows.append(row)  # Fix: 应该在 for 循环外面
         self.logger.info(f"Parsed {len(rows)} data rows from TSV")
         return rows
 
