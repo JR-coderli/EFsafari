@@ -42,6 +42,19 @@ etl:
     - "trackingField5"
     - "trackingField6"
 
+  # 第二次拉取：用 landingID 替换 affiliateNetworkID
+  group_by_pass2:
+    - "date"
+    - "trafficSourceID"
+    - "offerID"
+    - "landingID"
+    - "trackingField1"
+    - "trackingField2"
+    - "trackingField3"
+    - "trackingField4"
+    - "trackingField5"
+    - "trackingField6"
+
   # API 指标（所有字段都不带 cm_ 前缀）
   metrics:
     - "trafficSourceName"
@@ -52,6 +65,10 @@ etl:
     - "conversions"
     - "revenue"
     - "cost"
+
+  # 第二次拉取的指标（获取 landingName）
+  metrics_pass2:
+    - "landingName"
 
   # 不拉取 spend 的媒体（这些媒体有其他 API 安排）
   exclude_spend_media:

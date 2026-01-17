@@ -73,6 +73,8 @@ class ClickflareETL:
         self.max_pages = self.config["etl"]["max_pages"]
         self.group_by = self.config["etl"]["group_by"]
         self.metrics = self.config["etl"]["metrics"]
+        self.group_by_pass2 = self.config["etl"].get("group_by_pass2", [])
+        self.metrics_pass2 = self.config["etl"].get("metrics_pass2", [])
         self.exclude_spend_media = self.config["etl"].get("exclude_spend_media", [])
 
         self.ch_client = None
@@ -384,6 +386,122 @@ class ClickflareETL:
             self.logger.error(f"Extraction failed: {str(e)}")
             return False, []
 
+    def extract_data_pass2(self, report_date: str) -> tuple[bool, List[Dict]]:
+        """
+        Extract data from Clickflare API (Second Pass - for landingID/landingName)
+
+        Args:
+            report_date: Report date string (YYYY-MM-DD)
+
+        Returns:
+            tuple[bool, List[Dict]]: (success, raw_data)
+        """
+        if not self.group_by_pass2 or not self.metrics_pass2:
+            self.logger.info("No second pass configuration, skipping...")
+            return True, []
+
+        try:
+            # Format datetime for API
+            start_datetime = f"{report_date} 00:00:00"
+            end_datetime = f"{report_date} 23:59:59"
+
+            self.logger.info(f"Extracting data (PASS 2) for {report_date}")
+            self.logger.debug(f"Date range: {start_datetime} to {end_datetime}")
+
+            # Fetch all pages with pass 2 configuration
+            all_items, error = self.api_client.fetch_all_pages(
+                start_date=start_datetime,
+                end_date=end_datetime,
+                group_by=self.group_by_pass2,
+                metrics=self.metrics_pass2,
+                page_size=self.page_size,
+                max_pages=self.max_pages
+            )
+
+            if error:
+                self.logger.error(f"API extraction (PASS 2) failed: {error}")
+                return False, []
+
+            if not all_items:
+                self.logger.warning("No data returned from API (PASS 2)")
+                return True, []
+
+            self.logger.info(f"Extracted {len(all_items)} raw rows from API (PASS 2)")
+            return True, all_items
+
+        except Exception as e:
+            self.logger.error(f"Extraction (PASS 2) failed: {str(e)}")
+            return False, []
+
+    def merge_two_pass_data(self, pass1_data: List[Dict], pass2_data: List[Dict]) -> List[Dict]:
+        """
+        Merge data from two passes: pass1 has advertiser, pass2 has landing
+
+        Uses 9 fields as merge key: date + trafficSourceID + offerID + trackingField1-6
+
+        Args:
+            pass1_data: Data from first pass (contains advertiser info)
+            pass2_data: Data from second pass (contains landing info)
+
+        Returns:
+            List[Dict]: Merged data with landingID/landingName filled in
+        """
+        if not pass2_data:
+            self.logger.info("No pass 2 data to merge, returning pass 1 data as-is")
+            return pass1_data
+
+        self.logger.info(f"Merging {len(pass1_data)} pass1 rows with {len(pass2_data)} pass2 rows")
+
+        # Build a lookup dict from pass2 data using composite key
+        pass2_lookup = {}
+
+        for row in pass2_data:
+            # Create composite key
+            key = self._make_merge_key(row)
+            if key not in pass2_lookup:
+                pass2_lookup[key] = {
+                    "landingID": row.get("landingID", ""),
+                    "landingName": row.get("landingName", ""),
+                }
+
+        # Merge pass2 data into pass1
+        merged_count = 0
+        for row in pass1_data:
+            key = self._make_merge_key(row)
+            if key in pass2_lookup:
+                row["landingID"] = pass2_lookup[key]["landingID"]
+                row["landingName"] = pass2_lookup[key]["landingName"]
+                merged_count += 1
+            else:
+                # No matching landing data
+                row["landingID"] = ""
+                row["landingName"] = ""
+
+        self.logger.info(f"Merged landing data for {merged_count}/{len(pass1_data)} rows")
+        return pass1_data
+
+    def _make_merge_key(self, row: Dict) -> str:
+        """
+        Create a composite key for merging two-pass data
+
+        Args:
+            row: Data row
+
+        Returns:
+            str: Composite key string
+        """
+        return (
+            f"{row.get('date', '')}|"
+            f"{row.get('trafficSourceID', '')}|"
+            f"{row.get('offerID', '')}|"
+            f"{row.get('trackingField1', '')}|"
+            f"{row.get('trackingField2', '')}|"
+            f"{row.get('trackingField3', '')}|"
+            f"{row.get('trackingField4', '')}|"
+            f"{row.get('trackingField5', '')}|"
+            f"{row.get('trackingField6', '')}"
+        )
+
     def transform_data(self, raw_data: List[Dict]) -> List[Dict]:
         """
         Transform raw API data to target schema
@@ -433,8 +551,8 @@ class ClickflareETL:
             self.logger.info("Step 2: Initializing API client...")
             self.init_api_client()
 
-            # Step 3: Extract data
-            self.logger.info("Step 3: Extracting data from Clickflare API...")
+            # Step 3: Extract data (PASS 1 - with advertiser)
+            self.logger.info("Step 3: Extracting data from Clickflare API (PASS 1)...")
             success, raw_data = self.extract_data(report_date)
 
             if not success:
@@ -445,6 +563,19 @@ class ClickflareETL:
                 self.logger.info("No data to process")
                 self.logger.log_etl_complete(report_date, 0)
                 return True
+
+            # Step 3.5: Extract data (PASS 2 - for landingID/landingName)
+            self.logger.info("Step 3.5: Extracting data from Clickflare API (PASS 2 - landing)...")
+            success_pass2, raw_data_pass2 = self.extract_data_pass2(report_date)
+
+            if not success_pass2:
+                self.logger.warning("PASS 2 extraction failed, continuing without landing data")
+                raw_data_pass2 = []
+
+            # Step 3.6: Merge two-pass data
+            if raw_data_pass2:
+                self.logger.info("Step 3.6: Merging PASS 1 and PASS 2 data...")
+                raw_data = self.merge_two_pass_data(raw_data, raw_data_pass2)
 
             # Step 4: Transform data
             self.logger.info("Step 4: Transforming data...")
