@@ -80,6 +80,8 @@ etl:
   exclude_spend_media:
     - "Mintegral"
     - "Hastraffic"
+    - "JMmobi"
+    - "Brain"
 
   # MTG 数据集成配置
   # 在 CF ETL 中同时拉取并合并 MTG spend 数据
@@ -103,10 +105,9 @@ etl:
         access_key: "e0c55f0bc62515cfbb08c21d98ca7776"
         api_key: "1c23a2044c0dac36cf7a0671e075c3d9"
 
-    # 需要合并 MTG spend 的媒体关键词
+    # 需要合并 MTG spend 的媒体关键词（MTG API 只提供 Mintegral 数据）
     mtg_media_keywords:
       - "Mintegral"
-      - "Hastraffic"
 
 # 日志配置
 logging:

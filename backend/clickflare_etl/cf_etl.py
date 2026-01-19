@@ -356,7 +356,10 @@ class ClickflareETL:
             revenue = self._safe_float(raw_row.get("revenue"))
             cost = self._safe_float(raw_row.get("cost"))
 
-            # Check if this media should have spend excluded
+            # Special Media 逻辑：
+            # - exclude_spend_media (Mintegral/Hastraffic/JMmobi/Brain) 初始 spend = revenue
+            # - mtg_media_keywords (只有 Mintegral) 会被 MTG API 真实 spend 覆盖
+            # - 其他 media (Hastraffic/JMmobi/Brain) 保持 spend = revenue
             media_name = traffic_source_name if traffic_source_name else self.media_source
             should_exclude_spend = any(
                 excluded.lower() in media_name.lower()
@@ -386,7 +389,7 @@ class ClickflareETL:
                 "conversions": conversions,
                 "revenue": revenue,
                 # Media metrics
-                "spend": 0.0 if should_exclude_spend else cost,  # Use cost from API, exclude for specific media
+                "spend": revenue if should_exclude_spend else cost,  # For special media, spend = revenue"
                 "m_imp": impressions,
                 "m_clicks": clicks,
                 "m_conv": conversions
@@ -736,15 +739,17 @@ class ClickflareETL:
 
     def _is_special_media(self, media_name: str) -> bool:
         """
-        Check if a media name matches special media keywords (需要从其他 API 获取 spend 的媒体)
+        判断是否为 MTG 需要更新 spend 的媒体（只有 Mintegral）
 
-        这些媒体的 spend 在 Clickflare API 中为 0，需要从 MTG 等其他 API 获取并合并
+        注意：这与 exclude_spend_media 不同
+        - exclude_spend_media: 初始 spend = revenue (包括 Mintegral/Hastraffic/JMmobi/Brain)
+        - mtg_media_keywords: 只有 Mintegral，会被 MTG API 真实 spend 覆盖
 
         Args:
             media_name: Media name to check
 
         Returns:
-            bool: True if this is a special media that needs spend from other APIs
+            bool: True if this media should be updated with MTG spend data
         """
         if not media_name:
             return False
