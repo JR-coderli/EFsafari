@@ -17,7 +17,7 @@ import argparse
 # Add api directory to path for Redis import
 import yaml
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "api"))
-from cache import set_cache, init_redis
+from cache import set_cache, init_redis, clear_data_cache
 
 
 def kill_old_etl_processes():
@@ -204,6 +204,9 @@ def main():
         "spend": summary["spend"]
     }
     set_cache("etl:last_update", etl_status, ttl=24*3600)
+    # Clear data cache after ETL
+    clear_data_cache()
+    print("Data cache cleared after ETL success")
     print(f"ETL status saved to Redis: {last_update}")
 
     sys.exit(0 if success else 1)
