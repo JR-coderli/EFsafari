@@ -35,6 +35,7 @@ class ViewService:
                 visible_metrics Array(String),
                 color_mode UInt8 DEFAULT 0,
                 is_default UInt8 DEFAULT 0,
+                view_type String DEFAULT 'performance',
                 created_at DateTime,
                 updated_at Nullable(DateTime)
             ) ENGINE = MergeTree()
@@ -42,6 +43,11 @@ class ViewService:
         """
         client = self.db.connect()
         client.command(create_sql)
+        # 添加 view_type 列（如果表已存在且没有该列）
+        try:
+            client.command(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS view_type String DEFAULT 'performance'")
+        except Exception as e:
+            logger.debug(f"Could not add view_type column: {e}")
         logger.info(f"Table {table_name} ensured")
 
     def create_view(self, user_id: str, view_create: SavedViewCreate) -> SavedViewResponse:
@@ -167,6 +173,50 @@ class ViewService:
         client = self.db.connect()
         alter_sql = f"ALTER TABLE {table_name} UPDATE is_default = 0, updated_at = now() WHERE user_id = '{user_id}' AND is_default = 1"
         client.command(alter_sql)
+
+    def save_hourly_metrics_order(self, user_id: str, metric_keys: List[str]) -> bool:
+        """Save hourly metrics order for a user."""
+        table_name = self._get_table_name()
+        client = self.db.connect()
+
+        # 检查是否已存在 hourly 配置
+        result = client.query(f"SELECT id FROM {table_name} WHERE user_id = '{user_id}' AND view_type = 'hourly' LIMIT 1")
+        existing = list(result.named_results())
+
+        if existing:
+            # 更新现有记录
+            view_id = existing[0]['id']
+            metrics_str = str(metric_keys).replace("'", "''")
+            alter_sql = f"ALTER TABLE {table_name} UPDATE visible_metrics = {metrics_str}, updated_at = now() WHERE id = '{view_id}'"
+            client.command(alter_sql)
+        else:
+            # 创建新记录
+            view_id = f"hourly_{user_id}"
+            now = datetime.now()
+            data = [[
+                view_id,
+                user_id,
+                'Hourly Default',
+                [],
+                metric_keys,  # 直接作为数组
+                0,
+                0,
+                'hourly',
+                now,
+                None
+            ]]
+            client.insert(table_name, data, column_names=['id', 'user_id', 'name', 'dimensions', 'visible_metrics', 'color_mode', 'is_default', 'view_type', 'created_at', 'updated_at'])
+
+        return True
+
+    def get_hourly_metrics_order(self, user_id: str) -> Optional[List[str]]:
+        """Get hourly metrics order for a user."""
+        table_name = self._get_table_name()
+        client = self.db.connect()
+        result = client.query(f"SELECT visible_metrics FROM {table_name} WHERE user_id = '{user_id}' AND view_type = 'hourly' LIMIT 1")
+        for row in result.named_results():
+            return list(row["visible_metrics"]) if row["visible_metrics"] else None
+        return None
 
     def _row_to_response(self, row: dict) -> SavedViewResponse:
         """Convert database row to SavedViewResponse."""

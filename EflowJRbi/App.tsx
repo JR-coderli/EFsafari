@@ -9,6 +9,7 @@ import { authApi, usersApi, tokenManager } from './src/api/auth';
 import { dailyReportApi, dashboardApi } from './src/api/client';
 import { viewsApi } from './src/api/views';
 import DailyReport from './components/DailyReport';
+import HourlyReport from './components/HourlyReport';
 
 interface Filter {
   dimension: Dimension;
@@ -415,7 +416,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [editingDimIndex, setEditingDimIndex] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
-  const [currentPage, setCurrentPage] = useState<'performance' | 'permissions' | 'daily_report'>('performance');
+  type PageType = 'performance' | 'permissions' | 'daily_report' | 'hourly';
+  const [currentPage, setCurrentPage] = useState<PageType>('performance');
+  // Performance 子菜单状态
+  const [performanceSubPage, setPerformanceSubPage] = useState<'dates' | 'hourly'>('dates');
+  // Performance 菜单展开状态
+  const [performanceMenuOpen, setPerformanceMenuOpen] = useState(true);
   const [activeFilters, setActiveFilters] = useState<Filter[]>([]);
   const [expandedDailyRows, setExpandedDailyRows] = useState<Set<string>>(new Set());
   const [loadingDailyRows, setLoadingDailyRows] = useState<Set<string>>(new Set());
@@ -427,6 +433,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [selectedRange, setSelectedRange] = useState('Yesterday');
   const [customDateStart, setCustomDateStart] = useState<Date | undefined>(undefined);
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(undefined);
+  // Hourly Insight page: default to Today
+  const [hourlyRange, setHourlyRange] = useState('Today');
+  const [hourlyDateStart, setHourlyDateStart] = useState<Date | undefined>(undefined);
+  const [hourlyDateEnd, setHourlyDateEnd] = useState<Date | undefined>(undefined);
   // Daily Report page: default to This Month
   const [dailyReportRange, setDailyReportRange] = useState('This Month');
   const [dailyReportStart, setDailyReportStart] = useState<Date | undefined>(undefined);
@@ -473,8 +483,11 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     if (currentPage === 'daily_report') {
       return getRangeInfo(dailyReportRange, dailyReportStart, dailyReportEnd).dateString;
     }
+    if (currentPage === 'hourly') {
+      return getRangeInfo(hourlyRange, hourlyDateStart, hourlyDateEnd).dateString;
+    }
     return getRangeInfo(selectedRange, customDateStart, customDateEnd).dateString;
-  }, [currentPage, selectedRange, customDateStart, customDateEnd, dailyReportRange, dailyReportStart, dailyReportEnd]);
+  }, [currentPage, selectedRange, customDateStart, customDateEnd, dailyReportRange, dailyReportStart, dailyReportEnd, hourlyRange, hourlyDateStart, hourlyDateEnd]);
 
   // Reset pagination when filters or data changes
   useEffect(() => {
@@ -1338,10 +1351,43 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           {isSidebarOpen && <span className="text-white font-black text-sm uppercase italic tracking-tighter">Data Insight</span>}
         </div>
         <nav className="flex-1 py-6">
-          <button onClick={() => setCurrentPage('performance')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'performance' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
-            <i className="fas fa-chart-bar w-5 text-center"></i>
-            {isSidebarOpen && <span className="text-sm font-bold">Performance</span>}
-          </button>
+          {/* Performance - 可展开的一级菜单 */}
+          <div>
+            <button
+              onClick={() => setPerformanceMenuOpen(!performanceMenuOpen)}
+              className={`w-full flex items-center justify-between gap-4 px-6 py-4 transition-colors ${(currentPage === 'performance' || currentPage === 'hourly') ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}
+            >
+              <div className="flex items-center gap-4">
+                <i className="fas fa-chart-bar w-5 text-center"></i>
+                {isSidebarOpen && <span className="text-sm font-bold">Performance</span>}
+              </div>
+              {isSidebarOpen && (
+                <i className={`fas fa-chevron-${performanceMenuOpen ? 'down' : 'right'} text-xs transition-transform`}></i>
+              )}
+            </button>
+            {/* 二级菜单 */}
+            {performanceMenuOpen && isSidebarOpen && (
+              <div className="ml-6 border-l border-slate-700/50">
+                <button
+                  onClick={() => { setCurrentPage('performance'); setPerformanceSubPage('dates'); }}
+                  className={`w-full flex items-center gap-4 px-6 py-3 transition-colors ${currentPage === 'performance' && performanceSubPage === 'dates' ? 'text-indigo-400 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800/30'}`}
+                >
+                  <span className="w-2"></span>
+                  <i className="fas fa-calendar-alt w-4 text-center text-xs"></i>
+                  <span className="text-xs font-bold">Dates Report</span>
+                </button>
+                <button
+                  onClick={() => { setCurrentPage('hourly'); setPerformanceSubPage('hourly'); }}
+                  className={`w-full flex items-center gap-4 px-6 py-3 transition-colors ${currentPage === 'hourly' ? 'text-indigo-400 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800/30'}`}
+                >
+                  <span className="w-2"></span>
+                  <i className="fas fa-clock w-4 text-center text-xs"></i>
+                  <span className="text-xs font-bold">Hourly Insight</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {currentUser.role === 'admin' && (
             <button onClick={() => setCurrentPage('daily_report')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'daily_report' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
               <i className="fas fa-calendar-day w-5 text-center"></i>
@@ -1368,15 +1414,21 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 transition-colors"><i className="fas fa-bars"></i></button>
             <h2 className="font-extrabold text-slate-800 tracking-tight ml-2 uppercase italic text-sm">
-              {currentPage === 'performance' ? 'Analytics Data' : currentPage === 'daily_report' ? 'Daily Report' : 'Permissions'}
+              {currentPage === 'performance' && performanceSubPage === 'dates' ? 'Dates Report' :
+               currentPage === 'hourly' ? 'Hourly Insight' :
+               currentPage === 'daily_report' ? 'Daily Report' : 'Permissions'}
             </h2>
-            {(currentPage === 'performance' || currentPage === 'daily_report') && (
+            {(currentPage === 'performance' || currentPage === 'daily_report' || currentPage === 'hourly') && (
               <DatePicker
                 onRangeChange={(range, start, end) => {
                   if (currentPage === 'daily_report') {
                     setDailyReportRange(range);
                     setDailyReportStart(start);
                     setDailyReportEnd(end);
+                  } else if (currentPage === 'hourly') {
+                    setHourlyRange(range);
+                    setHourlyDateStart(start);
+                    setHourlyDateEnd(end);
                   } else {
                     setSelectedRange(range);
                     setCustomDateStart(start);
@@ -1384,7 +1436,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                   }
                 }}
                 currentDisplay={dateDisplayString}
-                currentRange={currentPage === 'daily_report' ? dailyReportRange : selectedRange}
+                currentRange={currentPage === 'daily_report' ? dailyReportRange : currentPage === 'hourly' ? hourlyRange : selectedRange}
               />
             )}
             {/* Data source indicator */}
@@ -1773,6 +1825,18 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                 </div>
             </div>
           </>
+        ) : currentPage === 'hourly' ? (
+          <HourlyReport
+            selectedRange={hourlyRange}
+            customDateStart={hourlyDateStart}
+            customDateEnd={hourlyDateEnd}
+            onRangeChange={(range, start, end) => {
+              setHourlyRange(range);
+              setHourlyDateStart(start);
+              setHourlyDateEnd(end);
+            }}
+            currentUser={currentUser}
+          />
         ) : currentPage === 'daily_report' ? (
           <DailyReport
             selectedRange={dailyReportRange}
