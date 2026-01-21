@@ -690,7 +690,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
       sortedRows.forEach(row => {
         // Apply quickFilterText only to top-level rows (not expanded children)
-        const matchesFilter = !quickFilterText || row.name.toLowerCase().includes(quickFilterText.toLowerCase());
+        // 空格分隔的关键词 = OR 查询（例如 "im mx" 匹配包含 im 或 mx 的行）
+        const searchTerms = quickFilterText.toLowerCase().trim().split(/\s+/).filter(k => k);
+        const matchesFilter = searchTerms.length === 0 || searchTerms.some(term => row.name.toLowerCase().includes(term));
         // Hide rows with zero impressions
         const hasImpressions = !hideZeroImpressions || row.impressions > 0;
 
