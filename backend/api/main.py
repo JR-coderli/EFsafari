@@ -18,6 +18,7 @@ from api.routers.auth import router as auth_router
 from api.users.router import router as users_router
 from api.routers.daily_report import router as daily_report_router
 from api.routers.views import router as views_router
+from api.routers.hourly import router as hourly_router
 from api.cache import init_redis
 
 
@@ -76,13 +77,13 @@ async def startup_event():
     redis_config = config.get("redis", {})
     init_redis(redis_config)
 
-    # Start the scheduler for daily data sync
+    # Start the scheduler for daily data sync and hourly ETL
     try:
         from api.tasks.scheduler import start_scheduler
         start_scheduler()
-        logger.info("Daily report scheduler started successfully")
+        logger.info("Scheduler started successfully")
     except ImportError:
-        logger.warning("APScheduler not installed - daily sync disabled")
+        logger.warning("APScheduler not installed - scheduler disabled")
     except Exception as e:
         logger.error(f"Failed to start scheduler: {e}")
 
@@ -93,9 +94,8 @@ async def shutdown_event():
     try:
         from api.tasks.scheduler import stop_scheduler
         stop_scheduler()
-    except:
+    except Exception:
         pass
-
 # Configure CORS
 # app.add_middleware(
 #     CORSMiddleware,
@@ -111,7 +111,7 @@ async def shutdown_event():
 # )
 
 # Include routers
-logger.info(f"Including routers: dashboard={dashboard_router}, auth={auth_router}, users={users_router}, daily_report={daily_report_router}, views={views_router}")
+logger.info(f"Including routers: dashboard={dashboard_router}, auth={auth_router}, users={users_router}, daily_report={daily_report_router}, views={views_router}, hourly={hourly_router}")
 logger.info(f"Auth router prefix: {auth_router.prefix}")
 logger.info(f"Auth router routes: {[r.path for r in auth_router.routes]}")
 app.include_router(dashboard_router)
@@ -119,6 +119,7 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(daily_report_router)
 app.include_router(views_router)
+app.include_router(hourly_router)
 
 
 @app.get("/test")
