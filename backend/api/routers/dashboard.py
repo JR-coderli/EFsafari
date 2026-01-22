@@ -287,9 +287,6 @@ async def get_aggregated_data(
         filter_values = [f.get("value") for f in filter_list]
 
         for row in result.named_results():
-            # Debug: log raw row data for lander dimension
-            if primary_dim == "lander":
-                logger.info(f"[LANDER DEBUG] Raw row: landerUrl={row.get('landerUrl')}, type={type(row.get('landerUrl'))}")
             formatted_row = format_row_for_frontend(
                 row,
                 dimension_type=primary_dim,
@@ -298,9 +295,6 @@ async def get_aggregated_data(
                 all_dimensions=dimensions,
                 filter_list=filter_list
             )
-            # Debug: log formatted row
-            if primary_dim == "lander":
-                logger.info(f"[LANDER DEBUG] Formatted row: has landerUrl={('landerUrl' in formatted_row)}, value={formatted_row.get('landerUrl', 'NOT_FOUND')}")
             # Determine if this row can have children
             formatted_row["hasChild"] = len(dimensions) > 1
             formatted_data.append(formatted_row)

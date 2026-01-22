@@ -62,10 +62,6 @@ class DataCache {
 
 const dataCache = new DataCache();
 
-// Force clear cache on load to ensure fresh data during development
-dataCache.clear();
-console.log('[CACHE] Data cache cleared on module load, cache size:', dataCache);
-
 /**
  * Generate cache key from parameters
  * SECURITY: Includes user ID to prevent cache data leakage between users
@@ -178,11 +174,8 @@ export async function loadHierarchy(
   const { start, end } = getDateRange(selectedRange, customStart, customEnd);
   const cacheKeyVal = cacheKey('hierarchy', start, end, activeDims);
 
-  // BYPASS CACHE for lander dimension during debugging
+  // Bypass cache for lander dimension
   const shouldBypassCache = activeDims.includes('lander');
-  if (shouldBypassCache) {
-    console.log('[CACHE] Bypassing cache for lander dimension');
-  }
 
   // Check cache first (skip for lander)
   const cached = shouldBypassCache ? null : dataCache.get(cacheKeyVal);
@@ -204,15 +197,6 @@ export async function loadHierarchy(
     }
 
     const data = await response.json();
-
-    // Debug: log hierarchy response for lander dimension
-    if (activeDims.includes('lander')) {
-      const firstNodeKey = Object.keys(data.hierarchy || {})[0];
-      if (firstNodeKey) {
-        const firstNode = data.hierarchy[firstNodeKey];
-        console.log('[loadHierarchy] First node:', firstNodeKey, 'has landerUrl:', !!(firstNode as any).landerUrl, 'landerUrl:', (firstNode as any).landerUrl);
-      }
-    }
 
     dataCache.set(cacheKeyVal, data);
     return data;
@@ -282,11 +266,6 @@ function hierarchyNodeToAdRow(
   // Add landerUrl if present (for lander dimension)
   if (node.landerUrl) {
     (result as any).landerUrl = node.landerUrl;
-  }
-
-  // Debug logging for lander dimension
-  if (node._dimension === 'lander') {
-    console.log('[hierarchyNodeToAdRow] name:', name, 'has landerUrl:', !!node.landerUrl, 'landerUrl:', node.landerUrl);
   }
 
   return result;

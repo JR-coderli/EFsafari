@@ -441,18 +441,36 @@ async def get_etl_status():
     if not r:
         return {"utc": None, "utc8": None, "est": None, "pst": None}
 
+    import json
+
+    # Try to get hourly ETL status (with timezone-specific keys)
     utc_status = r.get("hourly_etl:last_update:UTC")
     utc8_status = r.get("hourly_etl:last_update:Asia/Shanghai")
     est_status = r.get("hourly_etl:last_update:EST")
     pst_status = r.get("hourly_etl:last_update:PST")
 
-    import json
-    return {
-        "utc": json.loads(utc_status) if utc_status else None,
-        "utc8": json.loads(utc8_status) if utc8_status else None,
-        "est": json.loads(est_status) if est_status else None,
-        "pst": json.loads(pst_status) if pst_status else None
-    }
+    # If hourly ETL status keys exist, use them
+    if utc_status or utc8_status:
+        return {
+            "utc": json.loads(utc_status) if utc_status else None,
+            "utc8": json.loads(utc8_status) if utc8_status else None,
+            "est": json.loads(est_status) if est_status else None,
+            "pst": json.loads(pst_status) if pst_status else None
+        }
+
+    # Fallback: use main ETL status and convert to expected format
+    main_etl_status = r.get("etl:last_update")
+    if main_etl_status:
+        etl_data = json.loads(main_etl_status)
+        # Convert to format expected by frontend
+        return {
+            "utc": {"last_update": etl_data.get("last_update"), "success": etl_data.get("success")},
+            "utc8": {"last_update": etl_data.get("last_update"), "success": etl_data.get("success")},
+            "est": None,
+            "pst": None
+        }
+
+    return {"utc": None, "utc8": None, "est": None, "pst": None}
 
 
 @router.post("/refresh")

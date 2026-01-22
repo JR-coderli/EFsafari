@@ -1691,7 +1691,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                                   {/* Lander 跳转图标 */}
                                   {(() => {
                                     if (row.dimensionType === 'lander') {
-                                      console.log('[Lander Debug] row:', row, 'has landerUrl:', !!(row as any).landerUrl);
                                       if ((row as any).landerUrl) {
                                         const url = (row as any).landerUrl;
                                         const urlWithParam = url.includes('?') ? `${url}&w=1` : `${url}?w=1`;
