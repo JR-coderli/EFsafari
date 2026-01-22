@@ -62,6 +62,10 @@ class DataCache {
 
 const dataCache = new DataCache();
 
+// Force clear cache on load to ensure fresh data during development
+dataCache.clear();
+console.log('[CACHE] Data cache cleared on module load, cache size:', dataCache);
+
 /**
  * Generate cache key from parameters
  * SECURITY: Includes user ID to prevent cache data leakage between users
@@ -152,6 +156,7 @@ interface HierarchyNode {
   };
   _dimension: Dimension;
   _children?: Record<string, HierarchyNode>;
+  landerUrl?: string;  // Lander URL for lander dimension
 }
 
 interface HierarchyResponse {
@@ -173,9 +178,15 @@ export async function loadHierarchy(
   const { start, end } = getDateRange(selectedRange, customStart, customEnd);
   const cacheKeyVal = cacheKey('hierarchy', start, end, activeDims);
 
-  // Check cache first
-  const cached = dataCache.get(cacheKeyVal);
-  if (cached) {
+  // BYPASS CACHE for lander dimension during debugging
+  const shouldBypassCache = activeDims.includes('lander');
+  if (shouldBypassCache) {
+    console.log('[CACHE] Bypassing cache for lander dimension');
+  }
+
+  // Check cache first (skip for lander)
+  const cached = shouldBypassCache ? null : dataCache.get(cacheKeyVal);
+  if (cached && !shouldBypassCache) {
     return cached;
   }
 
@@ -193,6 +204,16 @@ export async function loadHierarchy(
     }
 
     const data = await response.json();
+
+    // Debug: log hierarchy response for lander dimension
+    if (activeDims.includes('lander')) {
+      const firstNodeKey = Object.keys(data.hierarchy || {})[0];
+      if (firstNodeKey) {
+        const firstNode = data.hierarchy[firstNodeKey];
+        console.log('[loadHierarchy] First node:', firstNodeKey, 'has landerUrl:', !!(firstNode as any).landerUrl, 'landerUrl:', (firstNode as any).landerUrl);
+      }
+    }
+
     dataCache.set(cacheKeyVal, data);
     return data;
   } catch (error) {
@@ -224,7 +245,7 @@ function hierarchyNodeToAdRow(
   const filterPath = [...parentFilters, { dimension: node._dimension, value: name }];
   const uniqueId = filterPath.map(f => f.value).join('|');
 
-  return {
+  const result: AdRow = {
     id: uniqueId,
     name,
     level,
@@ -257,6 +278,18 @@ function hierarchyNodeToAdRow(
     children: [],
     filterPath,
   };
+
+  // Add landerUrl if present (for lander dimension)
+  if (node.landerUrl) {
+    (result as any).landerUrl = node.landerUrl;
+  }
+
+  // Debug logging for lander dimension
+  if (node._dimension === 'lander') {
+    console.log('[hierarchyNodeToAdRow] name:', name, 'has landerUrl:', !!node.landerUrl, 'landerUrl:', node.landerUrl);
+  }
+
+  return result;
 }
 
 /**
@@ -321,8 +354,12 @@ export async function loadRootData(
 
   // Check if hierarchy is already cached
   const hierarchyCacheKey = cacheKey('hierarchy', start, end, activeDims);
-  const cachedHierarchy = dataCache.get(hierarchyCacheKey);
-  if (cachedHierarchy) {
+  // BYPASS CACHE for lander dimension during debugging
+  const shouldBypassHierarchyCache = activeDims.includes('lander') || activeDims[currentLevel] === 'lander';
+  console.log('[loadRootData] activeDims:', activeDims, 'currentLevel:', currentLevel, 'shouldBypassHierarchyCache:', shouldBypassHierarchyCache);
+  const cachedHierarchy = shouldBypassHierarchyCache ? null : dataCache.get(hierarchyCacheKey);
+  console.log('[loadRootData] cachedHierarchy:', cachedHierarchy ? 'FOUND (will be skipped)' : 'null');
+  if (cachedHierarchy && !shouldBypassHierarchyCache) {
     const result = getDataFromHierarchy(cachedHierarchy.hierarchy, activeDims, activeFilters, 0);
     // Also cache this level for faster access
     dataCache.set(cacheKeyVal, result);
@@ -349,12 +386,17 @@ export async function loadRootData(
       const m_clicks = Number(row.m_clicks) || 0;
       const m_conv = Number(row.m_conv) || 0;
 
+      // Debug: log API response structure for lander dimension
+      if (primaryDim === 'lander') {
+        console.log('[loadRootData] API row:', row.name, 'has landerUrl:', 'landerUrl' in row, 'value:', (row as any).landerUrl);
+      }
+
       // Build filterPath - use backend's if available, otherwise build from activeFilters
       const rowFilterPath = (row as any).filterPath || [...activeFilters, { dimension: primaryDim, value: row.name }];
       // Generate unique ID from filterPath (consistent with hierarchy data)
       const uniqueId = rowFilterPath.map(f => f.value).join('|');
 
-      return {
+      const resultRow: any = {
         ...row,
         id: uniqueId,  // Use unique ID from filterPath
         dimensionType: row.dimensionType as Dimension,
@@ -384,7 +426,20 @@ export async function loadRootData(
         hasChild: currentLevel < activeDims.length - 1,
         filterPath: rowFilterPath,
       };
+
+      // Preserve landerUrl if present
+      if ((row as any).landerUrl) {
+        resultRow.landerUrl = (row as any).landerUrl;
+      }
+
+      return resultRow;
     });
+
+    // Debug: verify result has landerUrl for lander dimension
+    if (primaryDim === 'lander') {
+      const firstRow = result[0];
+      console.log('[loadRootData] Result first row:', firstRow?.name, 'has landerUrl:', !!(firstRow as any)?.landerUrl, 'value:', (firstRow as any)?.landerUrl);
+    }
 
     dataCache.set(cacheKeyVal, result);
 
@@ -482,7 +537,7 @@ export async function loadChildData(
       // Generate unique ID from filterPath (consistent with hierarchy data)
       const uniqueId = rowFilterPath.map(f => f.value).join('|');
 
-      return {
+      const resultRow: any = {
         ...row,
         id: uniqueId,  // Use unique ID from filterPath
         dimensionType: row.dimensionType as Dimension,
@@ -512,6 +567,13 @@ export async function loadChildData(
         hasChild: currentLevel + 1 < activeDims.length,
         filterPath: rowFilterPath,
       };
+
+      // Preserve landerUrl if present
+      if ((row as any).landerUrl) {
+        resultRow.landerUrl = (row as any).landerUrl;
+      }
+
+      return resultRow;
     });
 
     dataCache.set(cacheKeyVal, result);
