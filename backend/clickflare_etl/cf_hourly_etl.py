@@ -17,7 +17,13 @@ import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
+# Add api directory to PYTHONPATH
+# Get absolute path to the backend directory
+_etl_dir = os.path.dirname(os.path.abspath(__file__))
+_backend_dir = os.path.dirname(_etl_dir)
+_api_dir = os.path.join(_backend_dir, "api")
+if _api_dir not in sys.path:
+    sys.path.insert(0, _api_dir)
 
 import clickhouse_connect
 from api.cache import set_cache
