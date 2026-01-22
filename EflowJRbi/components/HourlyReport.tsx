@@ -304,19 +304,12 @@ export default function HourlyReport({ currentUser, selectedRange = 'Today', cus
     }
   };
 
-  // 格式化最后更新时间
+  // 格式化最后更新时间（始终显示 UTC+8 的更新时间）
   const getLastUpdateDisplay = () => {
     if (!etlStatus) return 'No data';
 
-    // 根据当前选择的时区显示对应的更新时间
-    const statusMap: Record<string, string> = {
-      'Asia/Shanghai': 'utc8',
-      'UTC': 'utc',
-      'EST': 'est',
-      'PST': 'pst',
-    };
-    const statusKey = statusMap[timezone] || 'utc';
-    const status = etlStatus[statusKey];
+    // 始终使用 utc8 (Asia/Shanghai) 的更新时间
+    const status = etlStatus.utc8;
 
     if (!status) return 'No data';
 
