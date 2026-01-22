@@ -1686,7 +1686,32 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                                 )}
                               </button>}
                               <div className="flex flex-col min-w-0">
-                                <span className={`${nameClass} truncate group-hover:text-indigo-600`}>{row.name}</span>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className={`${nameClass} truncate group-hover:text-indigo-600`}>{row.name}</span>
+                                  {/* Lander 跳转图标 */}
+                                  {(() => {
+                                    if (row.dimensionType === 'lander') {
+                                      console.log('[Lander Debug] row:', row, 'has landerUrl:', !!(row as any).landerUrl);
+                                      if ((row as any).landerUrl) {
+                                        const url = (row as any).landerUrl;
+                                        const urlWithParam = url.includes('?') ? `${url}&w=1` : `${url}?w=1`;
+                                        return (
+                                          <a
+                                            href={urlWithParam}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full hover:bg-indigo-100 transition-colors z-10"
+                                            title="Open Lander"
+                                          >
+                                            <i className="fas fa-external-link-alt text-[10px] text-indigo-400 hover:text-indigo-600"></i>
+                                          </a>
+                                        );
+                                      }
+                                    }
+                                    return null;
+                                  })()}
+                                </div>
                                 <span className={labelClass}>{ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label}</span>
                               </div>
                             </div>

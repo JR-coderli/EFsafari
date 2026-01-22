@@ -232,25 +232,51 @@ async def get_aggregated_data(
         # Build GROUP BY - use the primary dimension for top-level aggregation
         group_clause = primary_column
 
-        # Build SELECT with aggregations
-        query = f"""
-            SELECT
-                {primary_column} as group_{primary_dim},
-                sum(impressions) as impressions,
-                sum(clicks) as clicks,
-                sum(conversions) as conversions,
-                sum(spend) as spend,
-                sum(revenue) as total_revenue,
-                sum(m_imp) as m_imp,
-                sum(m_clicks) as m_clicks,
-                sum(m_conv) as m_conv
-            FROM {db.database}.{db.table}
-            WHERE {where_clause}
-            GROUP BY {group_clause}
-            ORDER BY total_revenue DESC
-            LIMIT {limit}
-            SETTINGS max_memory_usage=2000000000, max_threads=4
-        """
+        # Check if we need to JOIN lander URL mapping (when primary dimension is lander)
+        is_lander_dimension = primary_dim == "lander"
+
+        if is_lander_dimension:
+            # For lander dimension, JOIN with the URL mapping table
+            query = f"""
+                SELECT
+                    t.lander as group_{primary_dim},
+                    m.landerUrl as landerUrl,
+                    sum(t.impressions) as impressions,
+                    sum(t.clicks) as clicks,
+                    sum(t.conversions) as conversions,
+                    sum(t.spend) as spend,
+                    sum(t.revenue) as total_revenue,
+                    sum(t.m_imp) as m_imp,
+                    sum(t.m_clicks) as m_clicks,
+                    sum(t.m_conv) as m_conv
+                FROM {db.database}.{db.table} t
+                LEFT JOIN {db.database}.dim_lander_url_mapping m ON t.landerID = m.landerID
+                WHERE {where_clause}
+                GROUP BY t.lander, m.landerUrl
+                ORDER BY total_revenue DESC
+                LIMIT {limit}
+                SETTINGS max_memory_usage=2000000000, max_threads=4
+            """
+        else:
+            # Build SELECT with aggregations (non-lander dimension)
+            query = f"""
+                SELECT
+                    {primary_column} as group_{primary_dim},
+                    sum(impressions) as impressions,
+                    sum(clicks) as clicks,
+                    sum(conversions) as conversions,
+                    sum(spend) as spend,
+                    sum(revenue) as total_revenue,
+                    sum(m_imp) as m_imp,
+                    sum(m_clicks) as m_clicks,
+                    sum(m_conv) as m_conv
+                FROM {db.database}.{db.table}
+                WHERE {where_clause}
+                GROUP BY {group_clause}
+                ORDER BY total_revenue DESC
+                LIMIT {limit}
+                SETTINGS max_memory_usage=2000000000, max_threads=4
+            """
 
         logger.info(f"Executing query: {query[:200]}...")
         # Execute query
@@ -261,6 +287,9 @@ async def get_aggregated_data(
         filter_values = [f.get("value") for f in filter_list]
 
         for row in result.named_results():
+            # Debug: log raw row data for lander dimension
+            if primary_dim == "lander":
+                logger.info(f"[LANDER DEBUG] Raw row: landerUrl={row.get('landerUrl')}, type={type(row.get('landerUrl'))}")
             formatted_row = format_row_for_frontend(
                 row,
                 dimension_type=primary_dim,
@@ -269,6 +298,9 @@ async def get_aggregated_data(
                 all_dimensions=dimensions,
                 filter_list=filter_list
             )
+            # Debug: log formatted row
+            if primary_dim == "lander":
+                logger.info(f"[LANDER DEBUG] Formatted row: has landerUrl={('landerUrl' in formatted_row)}, value={formatted_row.get('landerUrl', 'NOT_FOUND')}")
             # Determine if this row can have children
             formatted_row["hasChild"] = len(dimensions) > 1
             formatted_data.append(formatted_row)
@@ -522,30 +554,77 @@ async def get_data_hierarchy(
         db = get_db()
         client = db.connect()
 
-        # Fetch all data grouped by all dimensions at once
-        columns = [DIMENSION_COLUMN_MAP.get(d, d) for d in dim_list]
-        group_by_clause = ", ".join(columns)
+        # Check if lander dimension is included - need to JOIN for URL
+        has_lander = "lander" in dim_list
 
-        base_query = f"""
-            SELECT
-                {', '.join(columns)},
-                sum(impressions) as impressions,
-                sum(clicks) as clicks,
-                sum(conversions) as conversions,
-                sum(spend) as spend,
-                sum(revenue) as revenue,
-                sum(m_imp) as m_imp,
-                sum(m_clicks) as m_clicks,
-                sum(m_conv) as m_conv
-            FROM {db.database}.{db.table}
-            WHERE reportDate >= '{start_date}' AND reportDate <= '{end_date}'
-        """
+        if has_lander:
+            # Build query with JOIN to get landerUrl for all dimensions
+            # Include all dimension columns in SELECT and GROUP BY
+            columns = [DIMENSION_COLUMN_MAP.get(d, d) for d in dim_list]
 
-        # Add permission filter
-        if permission_filter:
-            base_query += f" AND {permission_filter}"
+            # Find lander column index and name for special handling
+            lander_idx = dim_list.index("lander")
+            lander_column = DIMENSION_COLUMN_MAP.get("lander", "lander")
 
-        base_query += f" GROUP BY {group_by_clause} ORDER BY revenue DESC"
+            # Build SELECT: all dimension columns + landerUrl (aliased for grouping)
+            # We need to include landerUrl with MAX to avoid GROUP BY issues
+            select_parts = []
+            for i, col in enumerate(columns):
+                if i == lander_idx:
+                    # For lander column, we still select it normally
+                    select_parts.append(f"t.{lander_column}")
+                else:
+                    select_parts.append(f"t.{col}")
+
+            base_query = f"""
+                SELECT
+                    {', '.join(select_parts)},
+                    MAX(m.landerUrl) as landerUrl,
+                    sum(t.impressions) as impressions,
+                    sum(t.clicks) as clicks,
+                    sum(t.conversions) as conversions,
+                    sum(t.spend) as spend,
+                    sum(t.revenue) as revenue,
+                    sum(t.m_imp) as m_imp,
+                    sum(t.m_clicks) as m_clicks,
+                    sum(t.m_conv) as m_conv
+                FROM {db.database}.{db.table} t
+                LEFT JOIN {db.database}.dim_lander_url_mapping m ON t.landerID = m.landerID
+                WHERE t.reportDate >= '{start_date}' AND t.reportDate <= '{end_date}'
+            """
+
+            # Add permission filter
+            if permission_filter:
+                base_query += f" AND {permission_filter}"
+
+            # GROUP BY all dimension columns (not landerUrl, we use MAX)
+            group_by_clause = ", ".join([f"t.{col}" for col in columns])
+            base_query += f" GROUP BY {group_by_clause} ORDER BY revenue DESC"
+        else:
+            # Fetch all data grouped by all dimensions at once (no lander)
+            columns = [DIMENSION_COLUMN_MAP.get(d, d) for d in dim_list]
+            group_by_clause = ", ".join(columns)
+
+            base_query = f"""
+                SELECT
+                    {', '.join(columns)},
+                    sum(impressions) as impressions,
+                    sum(clicks) as clicks,
+                    sum(conversions) as conversions,
+                    sum(spend) as spend,
+                    sum(revenue) as revenue,
+                    sum(m_imp) as m_imp,
+                    sum(m_clicks) as m_clicks,
+                    sum(m_conv) as m_conv
+                FROM {db.database}.{db.table}
+                WHERE reportDate >= '{start_date}' AND reportDate <= '{end_date}'
+            """
+
+            # Add permission filter
+            if permission_filter:
+                base_query += f" AND {permission_filter}"
+
+            base_query += f" GROUP BY {group_by_clause} ORDER BY revenue DESC"
 
         result = client.query(base_query)
 
@@ -570,7 +649,7 @@ async def get_data_hierarchy(
 
                 if level_key not in current_level:
                     # Create new node with metrics
-                    current_level[level_key] = {
+                    node_data = {
                         "_metrics": {
                             "impressions": row.get("impressions", 0),
                             "clicks": row.get("clicks", 0),
@@ -589,6 +668,12 @@ async def get_data_hierarchy(
                         "_dimension": dim,
                         "_children": {} if not is_last else None
                     }
+                    # Add landerUrl for lander dimension nodes (include empty strings)
+                    if dim == "lander" and row.get("landerUrl") is not None:
+                        node_data["landerUrl"] = row.get("landerUrl")
+                        # Debug log for hierarchy landerUrl
+                        logger.info(f"[HIERARCHY LANDER] name={level_key}, landerUrl={row.get('landerUrl')}")
+                    current_level[level_key] = node_data
                 else:
                     # Node exists - accumulate metrics for aggregation
                     existing_metrics = current_level[level_key]["_metrics"]
