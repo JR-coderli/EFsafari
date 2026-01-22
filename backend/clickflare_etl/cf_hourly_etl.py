@@ -32,7 +32,20 @@ if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
 import clickhouse_connect
-from api.cache import set_cache
+from api.cache import set_cache, init_redis
+
+# Initialize Redis client for cache operations
+# Read config for Redis connection
+try:
+    with open("config.yaml", encoding="utf-8") as f:
+        config_data = yaml.safe_load(f)
+    redis_config = config_data.get("redis", {
+        "host": "localhost",
+        "port": 6379
+    })
+    init_redis(redis_config)
+except Exception as e:
+    print(f"[WARNING] Failed to initialize Redis: {e}")
 
 
 class HourlyETL:
