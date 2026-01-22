@@ -27,7 +27,10 @@ SYSTEM_USER = {
 
 def kill_old_hourly_etl_processes():
     """
-    查找并杀死正在运行的旧 Hourly ETL 进程（cf_hourly_etl.py）
+    查找并杀死所有正在运行的 Hourly ETL 进程（cf_hourly_etl.py）
+
+    不判断运行时间，直接全部杀死。因为每 10 分钟触发一次，
+    每次启动前先清理旧进程，确保不会并发运行。
 
     Returns:
         int: 被杀死的进程数量
@@ -53,37 +56,20 @@ def kill_old_hourly_etl_processes():
                 if old_pid == current_pid:
                     continue
 
-                # 检查进程运行时间
+                # 直接杀死，不判断运行时间
                 try:
-                    with open(f'/proc/{old_pid}/stat', 'r') as f:
-                        stat_data = f.read().split()
-                        # starttime 是第 22 个字段（索引 21）
-                        starttime_ticks = int(stat_data[21])
-                        # 系统启动时间（通过 /proc/uptime 获取）
-                        with open('/proc/uptime', 'r') as u:
-                            uptime_seconds = float(u.read().split()[0])
-                        # Hz (通常为 100）
-                        hz = 100
-                        running_seconds = uptime_seconds - (starttime_ticks / hz)
-
-                        # 只杀死运行超过 5 分钟的进程（避免杀死刚启动的）
-                        # 因为调度器每 10 分钟触发一次，5 分钟足够判断是否卡住
-                        if running_seconds > 300:
-                            logger.warning(f"[KILL] Found old Hourly ETL process PID={old_pid}, running {int(running_seconds)}s, killing...")
-                            os.kill(old_pid, signal.SIGKILL)
-                            killed_count += 1
-                        else:
-                            logger.info(f"[SKIP] Recent Hourly ETL process PID={old_pid}, running {int(running_seconds)}s, keeping")
-
-                except (FileNotFoundError, ProcessLookupError, ValueError, IndexError):
+                    logger.warning(f"[KILL] Killing old Hourly ETL process PID={old_pid}")
+                    os.kill(old_pid, signal.SIGKILL)
+                    killed_count += 1
+                except ProcessLookupError:
                     # 进程可能已经退出
                     pass
 
         if killed_count > 0:
             logger.info(f"[KILL] Killed {killed_count} old Hourly ETL process(es)")
-            time.sleep(2)  # 等待进程完全退出
+            time.sleep(1)  # 等待进程完全退出
         else:
-            logger.debug("[INFO] No old Hourly ETL processes found (or all are recent)")
+            logger.debug("[INFO] No old Hourly ETL processes found")
 
     except FileNotFoundError:
         logger.warning("[WARN] pgrep command not found, skipping old process check")
