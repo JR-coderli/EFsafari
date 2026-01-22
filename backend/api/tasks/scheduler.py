@@ -10,6 +10,8 @@ import logging
 import subprocess
 import sys
 import os
+import signal
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,74 @@ SYSTEM_USER = {
     "username": "system",
     "role": "admin"
 }
+
+
+def kill_old_hourly_etl_processes():
+    """
+    查找并杀死正在运行的旧 Hourly ETL 进程（cf_hourly_etl.py）
+
+    Returns:
+        int: 被杀死的进程数量
+    """
+    current_pid = os.getpid()
+    killed_count = 0
+
+    try:
+        # 使用 pgrep 查找 Hourly ETL 相关进程
+        result = subprocess.run(
+            ['pgrep', '-f', 'cf_hourly_etl.py'],
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            old_pids = result.stdout.strip().split('\n')
+            for pid_str in old_pids:
+                if not pid_str:
+                    continue
+
+                old_pid = int(pid_str)
+                if old_pid == current_pid:
+                    continue
+
+                # 检查进程运行时间
+                try:
+                    with open(f'/proc/{old_pid}/stat', 'r') as f:
+                        stat_data = f.read().split()
+                        # starttime 是第 22 个字段（索引 21）
+                        starttime_ticks = int(stat_data[21])
+                        # 系统启动时间（通过 /proc/uptime 获取）
+                        with open('/proc/uptime', 'r') as u:
+                            uptime_seconds = float(u.read().split()[0])
+                        # Hz (通常为 100）
+                        hz = 100
+                        running_seconds = uptime_seconds - (starttime_ticks / hz)
+
+                        # 只杀死运行超过 5 分钟的进程（避免杀死刚启动的）
+                        # 因为调度器每 10 分钟触发一次，5 分钟足够判断是否卡住
+                        if running_seconds > 300:
+                            logger.warning(f"[KILL] Found old Hourly ETL process PID={old_pid}, running {int(running_seconds)}s, killing...")
+                            os.kill(old_pid, signal.SIGKILL)
+                            killed_count += 1
+                        else:
+                            logger.info(f"[SKIP] Recent Hourly ETL process PID={old_pid}, running {int(running_seconds)}s, keeping")
+
+                except (FileNotFoundError, ProcessLookupError, ValueError, IndexError):
+                    # 进程可能已经退出
+                    pass
+
+        if killed_count > 0:
+            logger.info(f"[KILL] Killed {killed_count} old Hourly ETL process(es)")
+            time.sleep(2)  # 等待进程完全退出
+        else:
+            logger.debug("[INFO] No old Hourly ETL processes found (or all are recent)")
+
+    except FileNotFoundError:
+        logger.warning("[WARN] pgrep command not found, skipping old process check")
+    except Exception as e:
+        logger.warning(f"[WARN] Error checking old processes: {e}")
+
+    return killed_count
 
 
 async def run_hourly_etl(timezone: str = "UTC") -> bool:
@@ -89,11 +159,18 @@ async def hourly_etl_task():
 
     Note: The ETL script now generates both UTC and Asia/Shanghai data in a single run
     by converting from the UTC+8 API data. So we only need to run it once.
+
+    Concurrency protection: Kills any old hourly ETL processes before starting a new one.
     """
     try:
         logger.info("Starting scheduled hourly ETL task")
 
-        # Run ETL once - it generates both UTC and Asia/Shanghai data
+        # Step 1: 杀死旧的 Hourly ETL 进程（防止并发）
+        killed = kill_old_hourly_etl_processes()
+        if killed > 0:
+            logger.info(f"Killed {killed} old Hourly ETL process(es) before starting new one")
+
+        # Step 2: 运行 ETL - 生成 UTC 和 Asia/Shanghai 两个时区的数据
         success = await run_hourly_etl("UTC")
 
         if success:

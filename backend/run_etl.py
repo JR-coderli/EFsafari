@@ -60,8 +60,8 @@ def kill_old_etl_processes():
                         hz = 100
                         running_seconds = uptime_seconds - (starttime_ticks / hz)
 
-                        # 只杀死运行超过 10 分钟的进程
-                        if running_seconds > 600:
+                        # 只杀死运行超过 20 分钟的进程
+                        if running_seconds > 1200:
                             print(f"[KILL] Found old ETL process PID={old_pid}, running {int(running_seconds)}s, killing...")
                             os.kill(old_pid, signal.SIGKILL)
                             killed_count += 1
