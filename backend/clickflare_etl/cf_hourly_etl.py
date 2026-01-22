@@ -18,12 +18,18 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 # Add api directory to PYTHONPATH
-# Get absolute path to the backend directory
-_etl_dir = os.path.dirname(os.path.abspath(__file__))
-_backend_dir = os.path.dirname(_etl_dir)
+# Get the script's directory and find the backend/api directory
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_backend_dir = os.path.dirname(_script_dir)
 _api_dir = os.path.join(_backend_dir, "api")
+
+# Ensure the api directory is in the Python path
 if _api_dir not in sys.path:
     sys.path.insert(0, _api_dir)
+
+# Also add backend_dir to path for imports
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
 
 import clickhouse_connect
 from api.cache import set_cache
