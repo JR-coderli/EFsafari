@@ -106,6 +106,9 @@ class AdRow(BaseModel):
     m_cpv: float
     hasChild: bool
     isExpanded: Optional[bool] = None
+    # Optional fields for specific dimensions
+    landerUrl: Optional[str] = None  # Lander URL for lander dimension
+    filterPath: Optional[List[DimensionFilter]] = None  # Full filter path for hierarchy navigation
 
 
 class DataQueryResponse(BaseModel):
