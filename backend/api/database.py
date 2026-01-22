@@ -168,7 +168,7 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
     # Add current row's dimension and value
     filter_path.append({"dimension": dimension_type, "value": dim_value})
 
-    return {
+    result = {
         "id": row_id,
         "name": dim_value,
         "level": level,
@@ -195,6 +195,13 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
         "hasChild": True,  # Will be determined by query logic
         "filterPath": filter_path,  # Add filterPath for frontend
     }
+
+    # Add landerUrl if present (for lander dimension)
+    lander_url = row.get("landerUrl")
+    if lander_url is not None:  # Changed from truthy check to None check
+        result["landerUrl"] = lander_url
+
+    return result
 
 
 def format_daily_row(row: Dict[str, Any]) -> Dict[str, Any]:
