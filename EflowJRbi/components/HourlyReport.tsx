@@ -145,56 +145,73 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   // Token
   const token = localStorage.getItem('addata_access_token') || '';
 
-  // 时区切换时，更新父组件的日期为该时区的今天，并刷新数据
+  // 时区切换时，保留筛选路径（platform 等维度），但清除 hour 筛选（不同时区的 hour 值不同）
   const handleTimezoneChange = async (newTimezone: string) => {
     setTimezone(newTimezone);
 
-    // 切换时区时重置下钻路径（因为不同时区的 hour 值不同）
-    setDrillPath([]);
+    // 过滤掉 hour 维度的筛选（因为不同时区的 hour 值不同）
+    const filteredPath = drillPath.filter(item => item.dimension !== 'hour');
+    setDrillPath(filteredPath);
 
     // 计算新时区的今天日期
     const todayInTimezone = getDateInTimezone(newTimezone);
     const date = new Date(todayInTimezone + 'T00:00:00');
 
-    // 更新父组件的日期
+    // 更新父组件的日期（触发日期控件刷新）
     if (onRangeChange) {
       onRangeChange('Custom', date, date);
     }
 
-    // 立即刷新数据（使用新时区的今天）
+    // 等待父组件更新后，再次刷新数据确保最新
     setLoading(true);
     setError(null);
+
     try {
-      const filters = []; // 已清空 drillPath，所以 filters 为空
+      // 第一次刷新
+      await loadDataForTimezone(newTimezone, todayInTimezone, filteredPath);
 
-      const params = new URLSearchParams({
-        start_date: todayInTimezone,
-        end_date: todayInTimezone,
-        group_by: activeDims[0] || 'hour',
-        timezone: newTimezone,
-        limit: '1000',
-      });
+      // 短暂延迟后再次刷新，确保父组件状态已同步
+      setTimeout(async () => {
+        await loadDataForTimezone(newTimezone, todayInTimezone, filteredPath);
+      }, 100);
 
-      if (filters.length > 0) {
-        params.append('filters', JSON.stringify(filters));
-      }
-
-      const response = await fetch(`/api/hourly/data?${params}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result: HourlyDataResponse = await response.json();
-      setData(result.data);
     } catch (err) {
       console.error('Error loading hourly data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
+  };
+
+  // 辅助函数：为指定时区和日期加载数据
+  const loadDataForTimezone = async (tz: string, dateStr: string, path: DrillPathItem[]) => {
+    const filters = path.map(item => ({
+      dimension: item.dimension,
+      value: item.value
+    }));
+
+    const params = new URLSearchParams({
+      start_date: dateStr,
+      end_date: dateStr,
+      group_by: activeDims[0] || 'hour',
+      timezone: tz,
+      limit: '1000',
+    });
+
+    if (filters.length > 0) {
+      params.append('filters', JSON.stringify(filters));
+    }
+
+    const response = await fetch(`/api/hourly/data?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result: HourlyDataResponse = await response.json();
+    setData(result.data);
   };
 
   // 当前层级维度：根据下钻路径计算
