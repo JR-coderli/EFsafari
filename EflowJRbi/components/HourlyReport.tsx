@@ -219,7 +219,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     const newDimension = activeDims[newDimensionIndex] || activeDims[0] || 'hour';
     console.log('[Timezone Change] Current dimension:', newDimension);
 
-    // 设置标志和目标日期，防止 useEffect 触发 loadData 以及防止父组件覆盖日期
+    // 设置标志，防止 useEffect 触发 loadData
     setIsTimezoneChanging(true);
     timezoneChangeTargetRef.current = todayInNewTimezone;
 
@@ -228,13 +228,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     setCurrentDate(todayInNewTimezone);
     setDrillPath(filteredPath);
 
-    // 通知父组件日期已变化（用于显示）
-    // 注意：这会触发父组件的 customDateStart 变化，但我们已经设置了 timezoneChangeTargetRef 来防止覆盖
-    if (onRangeChange) {
-      const newDate = new Date(todayInNewTimezone + 'T00:00:00');
-      console.log('[Timezone Change] Calling onRangeChange with:', todayInNewTimezone);
-      onRangeChange('Custom', newDate, newDate);
-    }
+    // 注意：时区切换时不调用 onRangeChange，避免触发父组件的 customDateStart 变化
+    // 只有用户手动选择日期时才需要通知父组件
 
     // 等待状态更新后刷新数据
     setLoading(true);
@@ -242,7 +237,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
 
     try {
       // 使用 setTimeout 确保状态已更新
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       // 此时状态已更新，使用新的 currentDate 加载数据
       console.log('[Timezone Change] Loading data with new state...');
@@ -285,13 +280,13 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
-      // 延迟清除标志，确保父组件的 useEffect 已经执行完毕
+      // 延迟清除标志，给足够时间让所有状态更新完成
       setTimeout(() => {
         setIsTimezoneChanging(false);
         timezoneChangeTargetRef.current = null;
         console.log('[Timezone Change] Flags cleared');
-      }, 200);
-      console.log('[Timezone Change] END (flags will be cleared after 200ms)');
+      }, 500);
+      console.log('[Timezone Change] END (flags will be cleared after 500ms)');
     }
   };
 
