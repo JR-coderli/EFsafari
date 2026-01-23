@@ -334,13 +334,13 @@ async def get_hourly_data(
 
             if dim == "hour":
                 # hour 维度需要反向转换：用户看到的时区小时 -> UTC 小时
+                # UTC小时 = 目标时区小时 + 偏移量
                 try:
                     if ":" in str(value):
                         hour_val = int(value.split(":")[0])
                     else:
                         hour_val = int(value)
-                    # 用户时区的 hour_val 小时 = UTC 的 hour_val - tz_offset 小时
-                    utc_hour = (hour_val - tz_offset + 24) % 24
+                    utc_hour = (hour_val + tz_offset + 24) % 24
                     base_conditions.append(f"{column} = {utc_hour}")
                 except (ValueError, IndexError):
                     base_conditions.append(f"{column} = {value}")
@@ -357,9 +357,10 @@ async def get_hourly_data(
         # 根据主维度选择分组表达式
         if primary_dim == "hour":
             # 对于 hour 维度，使用时区转换后的小时
-            # 公式: UTC小时 + 偏移量 = 目标时区小时
-            # 例如: UTC 13 + 8 = 21 (Asia/Shanghai)
-            group_expr = f"((reportHour + {tz_offset} + 24) % 24)"
+            # 公式: UTC小时 - 偏移量 = 目标时区小时
+            # 例如: UTC 13 - (-8) = 21 (PST)
+            # 例如: UTC 13 - 8 = 5 (UTC+8 的第二天早上)
+            group_expr = f"((reportHour - {tz_offset} + 24) % 24)"
             logger.info(f"[HOURLY API] Hour dimension: group_expr={group_expr}, tz_offset={tz_offset}")
         else:
             # 其他维度使用原始列
