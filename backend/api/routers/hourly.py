@@ -311,13 +311,15 @@ async def get_hourly_data(
 
         # start = 目标日期午夜 + offset
         utc_start_dt = target_dt + timedelta(hours=hour_offset)
-        # end = start + 24小时（完整的本地日）
-        utc_end_dt = utc_start_dt + timedelta(days=1)
+        # end = min(当前UTC时间, start+24h)，历史日期显示全天，今天只显示到现在
+        utc_now = datetime.now(timezone.utc).replace(tzinfo=None)
+        day_end = utc_start_dt + timedelta(days=1)
+        utc_end_dt = min(utc_now, day_end)
 
         utc_start_ts = utc_start_dt.strftime("%Y-%m-%d %H:%M:%S")
         utc_end_ts = utc_end_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        logger.info(f"[HOURLY API] Target {timezone} {start_date} 00:00-23:59 = UTC {utc_start_ts} to {utc_end_ts}")
+        logger.info(f"[HOURLY API] Target {timezone} {start_date} = UTC {utc_start_ts} to {utc_end_ts}")
 
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
