@@ -246,6 +246,9 @@ class ClickflareETL:
         self.ch_client = None
         self.api_client = None
 
+        # MTG 状态跟踪
+        self.mtg_accounts_status = {}  # {account_name: success}
+
     def _load_config(self, config_path: str) -> Dict:
         """
         Load configuration from YAML file
@@ -1099,6 +1102,9 @@ class ClickflareETL:
                     account_name = account.get("name", "Unknown")
                     self.logger.info(f"Fetching MTG data from account: {account_name}")
 
+                    # 初始化该账户状态为 False
+                    self.mtg_accounts_status[account_name] = False
+
                     try:
                         api_config = {
                             **self.mtg_api_config,
@@ -1114,6 +1120,11 @@ class ClickflareETL:
                                 if transformed:
                                     all_mtg_data.append(transformed)
                             mtg_accounts_fetched += 1
+                            # 标记该账户拉取成功
+                            self.mtg_accounts_status[account_name] = True
+                        else:
+                            # 账户拉取失败，保持状态为 False
+                            self.logger.warning(f"MTG account {account_name} returned no data or failed")
 
                         # 超时检查: 每个 MTG 账户拉取后
                         if self._check_timeout(f"after MTG account {account_name}"):
@@ -1150,8 +1161,20 @@ class ClickflareETL:
             total_spend = sum(row.get('spend', 0) for row in transformed_data)
             self.logger.log_etl_complete(report_date, len(transformed_data))
 
+            # 计算 MTG 状态
+            mtg_all_success = True
+            if self.mtg_enabled and self.mtg_accounts:
+                # 如果有任何一个 MTG 账户失败，则不是全部成功
+                mtg_all_success = all(self.mtg_accounts_status.values())
+                # 如果所有账户都是 False（可能刚初始化），也算失败
+                if not self.mtg_accounts_status:
+                    mtg_all_success = True  # 没有启用 MTG 或没有账户
+            else:
+                # MTG 未启用，视为全部成功
+                mtg_all_success = True
+
             # Print summary for run_etl.py to parse
-            print(f"SUMMARY: revenue={total_revenue:.2f}, spend={total_spend:.2f}")
+            print(f"SUMMARY: revenue={total_revenue:.2f}, spend={total_spend:.2f}, mtg_all_success={mtg_all_success}")
 
             return True
 

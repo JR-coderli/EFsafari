@@ -1443,13 +1443,25 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             )}
             {/* Data source indicator */}
             {currentPage === 'performance' && (
-              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold ${useMock ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                <span className={`w-2 h-2 rounded-full ${useMock ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}></span>
+              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold ${
+                useMock
+                  ? 'bg-amber-100 text-amber-700'
+                  : etlStatus?.all_success === false
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-emerald-100 text-emerald-700'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  useMock
+                    ? 'bg-amber-500'
+                    : etlStatus?.all_success === false
+                      ? 'bg-amber-500 animate-pulse'
+                      : 'bg-emerald-500 animate-pulse'
+                }`}></span>
                 <span>{useMock ? 'Mock Data' : 'Live API'}</span>
                 <span className="w-px h-3 bg-current opacity-30"></span>
                 <span className="font-normal">
                   {etlStatus?.last_update
-                    ? `${etlStatus.all_success ? 'all update' : 'part update'} ${etlStatus.last_update}`
+                    ? `${etlStatus.all_success === false ? 'part update' : 'all update'} ${etlStatus.last_update}`
                     : 'null'
                   }
                 </span>
