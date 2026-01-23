@@ -115,6 +115,17 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [refreshing, setRefreshing] = useState(false);
 
+  // 内部日期状态：使用当前时区的今天，不依赖父组件的 customDateStart
+  const [currentDate, setCurrentDate] = useState(() => {
+    const tz = 'UTC'; // 初始时区
+    const now = new Date();
+    const tzOffsetMap: Record<string, number> = { 'UTC': 0, 'Asia/Shanghai': 8, 'EST': -5, 'PST': -8 };
+    const offsetHours = tzOffsetMap[tz] || 0;
+    const utcTimestamp = now.getTime() - (now.getTimezoneOffset() * 60000);
+    const tzTimestamp = utcTimestamp + (offsetHours * 3600000);
+    return new Date(tzTimestamp).toISOString().split('T')[0];
+  });
+
   // 拖动相关状态
   const [draggedMetricIndex, setDraggedMetricIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -145,11 +156,6 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     console.log('[getDateInTimezone]', { tz, offsetHours, utcTimestamp, tzTimestamp, result });
     return result;
   };
-
-  // 使用父组件传入的日期，如果没有则使用当前时区的今天
-  const selectedDate = customDateStart?.toISOString().split('T')[0] || getDateInTimezone(timezone);
-
-  // Token
   const token = localStorage.getItem('addata_access_token') || '';
 
   // 时区切换时，保留筛选路径（platform 等维度），但清除 hour 筛选（不同时区的 hour 值不同）
@@ -159,9 +165,10 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     // 计算新时区的今天日期
     const todayInNewTimezone = getDateInTimezone(newTimezone);
     console.log('[Timezone Change] New timezone today:', todayInNewTimezone);
-    console.log('[Timezone Change] Old selectedDate:', selectedDate);
+    console.log('[Timezone Change] Old currentDate:', currentDate);
 
     setTimezone(newTimezone);
+    setCurrentDate(todayInNewTimezone); // 更新内部日期状态
 
     // 过滤掉 hour 维度的筛选（因为不同时区的 hour 值不同）
     const filteredPath = drillPath.filter(item => item.dimension !== 'hour');
@@ -176,7 +183,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     const newDimension = activeDims[newDimensionIndex] || activeDims[0] || 'hour';
     console.log('[Timezone Change] Current dimension:', newDimension);
 
-    // 更新父组件的日期为新时区的今天
+    // 通知父组件日期已变化（用于显示）
     if (onRangeChange) {
       const newDate = new Date(todayInNewTimezone + 'T00:00:00');
       console.log('[Timezone Change] Calling onRangeChange with:', todayInNewTimezone);
@@ -267,8 +274,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     setError(null);
 
     try {
-      const startDate = selectedDate;
-      const endDate = selectedDate;
+      const startDate = currentDate;
+      const endDate = currentDate;
 
       // 构建过滤条件
       const filters = drillPath.map(item => ({
@@ -437,7 +444,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
 
   useEffect(() => {
     loadData();
-  }, [drillPath, activeDims, timezone, customDateStart]);
+  }, [drillPath, activeDims, timezone, currentDate]);
 
   // 初始化时加载保存的指标顺序
   useEffect(() => {
