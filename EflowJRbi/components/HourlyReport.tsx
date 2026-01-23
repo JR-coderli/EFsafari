@@ -149,10 +149,10 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   const handleTimezoneChange = async (newTimezone: string) => {
     console.log('[Timezone Change] START', { from: timezone, to: newTimezone });
 
-    // 保留用户当前选择的日期，不改变它
-    // selectedDate 是用户通过日期控件选择的日期，切换时区时应该保持不变
-    const currentDate = selectedDate;
-    console.log('[Timezone Change] Current selected date:', currentDate);
+    // 计算新时区的今天日期
+    const todayInNewTimezone = getDateInTimezone(newTimezone);
+    console.log('[Timezone Change] New timezone today:', todayInNewTimezone);
+    console.log('[Timezone Change] Old selectedDate:', selectedDate);
 
     setTimezone(newTimezone);
 
@@ -169,18 +169,25 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     const newDimension = activeDims[newDimensionIndex] || activeDims[0] || 'hour';
     console.log('[Timezone Change] Current dimension:', newDimension);
 
+    // 更新父组件的日期为新时区的今天
+    if (onRangeChange) {
+      const newDate = new Date(todayInNewTimezone + 'T00:00:00');
+      console.log('[Timezone Change] Calling onRangeChange with:', todayInNewTimezone);
+      onRangeChange('Custom', newDate, newDate);
+    }
+
     // 等待状态更新后刷新数据
     setLoading(true);
     setError(null);
 
     try {
-      // 使用当前选择的日期，而不是新时区的今天
-      await loadDataForTimezone(newTimezone, currentDate, filteredPath, newDimension);
+      // 使用新时区的今天加载数据
+      await loadDataForTimezone(newTimezone, todayInNewTimezone, filteredPath, newDimension);
       console.log('[Timezone Change] First load complete');
 
       // 短暂延迟后再次刷新，确保状态已同步
       setTimeout(async () => {
-        await loadDataForTimezone(newTimezone, currentDate, filteredPath, newDimension);
+        await loadDataForTimezone(newTimezone, todayInNewTimezone, filteredPath, newDimension);
         console.log('[Timezone Change] Second load complete');
       }, 100);
 
