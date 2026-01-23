@@ -290,43 +290,56 @@ async def get_hourly_data(
 
         logger.info(f"[HOURLY API] Timezone: {timezone}, offset: {tz_offset}")
 
-        # 根据用户选择的日期（start_date）计算 UTC 查询范围
-        # 目标时区的 D 日 00:00 = UTC (D日 00:00 + tz_offset)
-        # EST (-5): D日00:00 = UTC D日05:00
-        # PST (-8): D日00:00 = UTC D日08:00
-        # UTC+8:   D日00:00 = UTC D-1日16:00
+        # 根据用户选择的日期（start_date）查询 UTC 数据
+        # 数据是以 UTC 日期存储的，需要计算目标本地日对应的 UTC 日期范围
+        # PST (-8): 本地 D日 = UTC D日 00:00-23:59
+        #           → PST D日 00:00-15:59 = UTC D日 08:00-23:59
+        #           → PST D日 16:00-23:59 = UTC D+1日 00:00-07:59
+        # EST (-5): 本地 D日 = UTC D日 00:00-23:59
+        #           → EST D日 00:00-18:59 = UTC D日 05:00-23:59
+        #           → EST D日 19:00-23:59 = UTC D+1日 00:00-04:59
 
-        # 用户选择的日期（目标时区的日期）
-        target_date = datetime.strptime(start_date, "%Y-%m-%d")
-
-        # 计算目标时区该日 00:00 对应的 UTC 时间
-        utc_start_dt = target_date + timedelta(hours=tz_offset)
-
-        # 计算目标时区该日 23:59:59 对应的 UTC 时间
-        utc_day_end = target_date + timedelta(days=1) - timedelta(seconds=1) + timedelta(hours=tz_offset)
-
-        # 判断选择的日期是否是目标时区的"今天"
+        utc_today_midnight = datetime.now(dt_timezone.utc).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
         utc_now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
-        # 目标时区当前时间 = UTC 当前时间 + tz_offset
-        target_now = utc_now + timedelta(hours=tz_offset)
-        target_today = target_now.date()
 
         # 用户选择的日期
-        selected_date = target_date.date()
+        selected_date = datetime.strptime(start_date, "%Y-%m-%d")
 
-        is_today = (selected_date == target_today)
+        # 计算该日期在 UTC 中对应的日期范围
+        # 对于负时区，本地 D日 跨越 UTC D日 和 D+1日
+        # 对于正时区，本地 D日 跨越 UTC D-1日 和 D日
+        if tz_offset < 0:
+            # 负时区（PST/EST）: 查询 UTC D日 00:00 到 D+1日结束
+            query_date = selected_date.replace(hour=0, minute=0, second=0)
+            utc_start_dt = query_date  # UTC D日 00:00
+            # 扩展到明天 UTC 以包含晚间数据
+            utc_end_of_day = query_date + timedelta(days=1) + timedelta(hours=abs(tz_offset)) - timedelta(seconds=1)
+        elif tz_offset > 0:
+            # 正时区（UTC+8）: 查询 UTC D-1日 到 D日结束
+            query_date = selected_date.replace(hour=0, minute=0, second=0)
+            utc_start_dt = query_date - timedelta(days=1)  # UTC D-1日 00:00
+            utc_end_of_day = query_date - timedelta(seconds=1)  # UTC D日 23:59:59
+        else:
+            # UTC: 直接查询当天
+            utc_start_dt = selected_date.replace(hour=0, minute=0, second=0)
+            utc_end_of_day = utc_start_dt + timedelta(days=1) - timedelta(seconds=1)
+
+        # 判断是否是今天
+        target_now = utc_now + timedelta(hours=tz_offset)
+        target_today = target_now.date()
+        is_today = (selected_date.date() == target_today)
 
         if is_today:
-            # 今天：只查询到当前 UTC 时间
+            # 今天：end = 当前 UTC 时间
             utc_end_dt = utc_now
         else:
-            # 历史日期：查询全天
-            utc_end_dt = utc_day_end
+            # 历史日期：end = 计算的结束时间
+            utc_end_dt = utc_end_of_day
 
         utc_start_ts = utc_start_dt.strftime("%Y-%m-%d %H:%M:%S")
         utc_end_ts = utc_end_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        logger.info(f"[HOURLY API] {timezone} date {start_date}: UTC {utc_start_ts} to {utc_end_ts} (is_today={is_today}, target_today={target_today})")
+        logger.info(f"[HOURLY API] {timezone} date {start_date}: UTC {utc_start_ts} to {utc_end_ts} (is_today={is_today})")
 
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
