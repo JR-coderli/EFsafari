@@ -147,44 +147,57 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
 
   // 时区切换时，保留筛选路径（platform 等维度），但清除 hour 筛选（不同时区的 hour 值不同）
   const handleTimezoneChange = async (newTimezone: string) => {
+    console.log('[Timezone Change] START', { from: timezone, to: newTimezone });
+
+    // 保留用户当前选择的日期，不改变它
+    // selectedDate 是用户通过日期控件选择的日期，切换时区时应该保持不变
+    const currentDate = selectedDate;
+    console.log('[Timezone Change] Current selected date:', currentDate);
+
     setTimezone(newTimezone);
 
     // 过滤掉 hour 维度的筛选（因为不同时区的 hour 值不同）
     const filteredPath = drillPath.filter(item => item.dimension !== 'hour');
+    console.log('[Timezone Change] Filtered drill path:', {
+      original: drillPath.map(p => ({ dim: p.dimension, val: p.value })),
+      filtered: filteredPath.map(p => ({ dim: p.dimension, val: p.value }))
+    });
     setDrillPath(filteredPath);
 
-    // 计算新时区的今天日期
-    const todayInTimezone = getDateInTimezone(newTimezone);
-    const date = new Date(todayInTimezone + 'T00:00:00');
+    // 计算当前应该显示的维度：根据筛选后的路径计算
+    const newDimensionIndex = filteredPath.length;
+    const newDimension = activeDims[newDimensionIndex] || activeDims[0] || 'hour';
+    console.log('[Timezone Change] Current dimension:', newDimension);
 
-    // 更新父组件的日期（触发日期控件刷新）
-    if (onRangeChange) {
-      onRangeChange('Custom', date, date);
-    }
-
-    // 等待父组件更新后，再次刷新数据确保最新
+    // 等待状态更新后刷新数据
     setLoading(true);
     setError(null);
 
     try {
-      // 第一次刷新
-      await loadDataForTimezone(newTimezone, todayInTimezone, filteredPath);
+      // 使用当前选择的日期，而不是新时区的今天
+      await loadDataForTimezone(newTimezone, currentDate, filteredPath, newDimension);
+      console.log('[Timezone Change] First load complete');
 
-      // 短暂延迟后再次刷新，确保父组件状态已同步
+      // 短暂延迟后再次刷新，确保状态已同步
       setTimeout(async () => {
-        await loadDataForTimezone(newTimezone, todayInTimezone, filteredPath);
+        await loadDataForTimezone(newTimezone, currentDate, filteredPath, newDimension);
+        console.log('[Timezone Change] Second load complete');
       }, 100);
 
     } catch (err) {
-      console.error('Error loading hourly data:', err);
+      console.error('[Timezone Change] Error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
+
+    console.log('[Timezone Change] END');
   };
 
   // 辅助函数：为指定时区和日期加载数据
-  const loadDataForTimezone = async (tz: string, dateStr: string, path: DrillPathItem[]) => {
+  const loadDataForTimezone = async (tz: string, dateStr: string, path: DrillPathItem[], dimension: string) => {
+    console.log('[Load Data]', { tz, dateStr, path, dimension });
+
     const filters = path.map(item => ({
       dimension: item.dimension,
       value: item.value
@@ -193,7 +206,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     const params = new URLSearchParams({
       start_date: dateStr,
       end_date: dateStr,
-      group_by: activeDims[0] || 'hour',
+      group_by: dimension,
       timezone: tz,
       limit: '1000',
     });
@@ -202,15 +215,19 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
       params.append('filters', JSON.stringify(filters));
     }
 
+    console.log('[Load Data] Request params:', Object.fromEntries(params));
+
     const response = await fetch(`/api/hourly/data?${params}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
 
     if (!response.ok) {
+      console.error('[Load Data] HTTP Error:', response.status, response.statusText);
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     const result: HourlyDataResponse = await response.json();
+    console.log('[Load Data] Response:', { total: result.total, dataCount: result.data.length });
     setData(result.data);
   };
 
