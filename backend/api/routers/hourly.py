@@ -308,34 +308,27 @@ async def get_hourly_data(
 
         # 对于需要跨 UTC 日查询的时区（如 PST/EST），确保包含两天数据
         # PST 23日需要 UTC 23日 08:00-23:59 和 UTC 24日 00:00-07:59
-        # utc_end_dt 已经是正确的结束日期，不需要再加一天
+        # EST 23日需要 UTC 22日 19:00-23:59 和 UTC 23日 00:00-04:59
+        # 使用完整时间戳过滤，而不是 reportDate + reportHour 单独过滤
         adjusted_start_date = utc_start_dt.strftime("%Y-%m-%d")
         adjusted_end_date = utc_end_dt.strftime("%Y-%m-%d")
+        utc_start_ts = utc_start_dt.strftime("%Y-%m-%d %H:%M:%S")
+        utc_end_ts = utc_end_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        logger.info(f"[HOURLY API] Target {timezone} {start_date} 00:00 = UTC {adjusted_start_date} {utc_start_dt.strftime('%H:%M')}")
-        logger.info(f"[HOURLY API] Target {timezone} {start_date} 23:59 = UTC {adjusted_end_date} {utc_end_dt.strftime('%H:%M')}")
-        logger.info(f"[HOURLY API] Query range: {adjusted_start_date} to {adjusted_end_date}")
+        logger.info(f"[HOURLY API] Target {timezone} {start_date} 00:00 = UTC {utc_start_ts}")
+        logger.info(f"[HOURLY API] Target {timezone} {start_date} 23:59 = UTC {utc_end_ts}")
 
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
-        # 构建基础 WHERE 条件（数据都是 UTC），使用调整后的日期范围
-        # 对于负时区（PST/EST），需要添加小时过滤避免包含错误的小时
-        if tz_offset < 0:
-            # PST/EST: 第一天只取 hours >= -tz_offset，第二天只取 hours < -tz_offset
-            # PST (-8): Day1 hours >= 8, Day2 hours 0-7
-            # EST (-5): Day1 hours >= 5, Day2 hours 0-4
-            first_day_hours = -tz_offset  # PST=8, EST=5
-            date_filter = f"((reportDate = '{adjusted_start_date}' AND reportHour >= {first_day_hours}) OR (reportDate = '{adjusted_end_date}' AND reportHour < {first_day_hours}))"
-            base_conditions = [
-                date_filter,
-                f"timezone = 'UTC'"
-            ]
-            logger.info(f"[HOURLY API] Negative timezone filter: {date_filter}")
-        else:
-            base_conditions = [
-                f"reportDate >= '{adjusted_start_date}' AND reportDate <= '{adjusted_end_date}'",
-                f"timezone = 'UTC'"
-            ]
+        # 构建基础 WHERE 条件
+        # 使用完整时间戳比较：toDateTime(reportDate) + toIntervalHour(reportHour)
+        # 这样可以精确匹配跨天的时间范围
+        timestamp_filter = f"(toDateTime(reportDate) + toIntervalHour(reportHour)) >= toDateTime('{utc_start_ts}') AND (toDateTime(reportDate) + toIntervalHour(reportHour)) <= toDateTime('{utc_end_ts}')"
+        base_conditions = [
+            timestamp_filter,
+            f"timezone = 'UTC'"
+        ]
+        logger.info(f"[HOURLY API] Timestamp filter: {timestamp_filter}")
 
         if permission_filter:
             base_conditions.append(permission_filter)
