@@ -148,7 +148,24 @@ export default function HourlyReport({ currentUser, selectedRange = 'Today', cus
     setError(null);
 
     try {
-      const startDate = customDateStart?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0];
+      // 根据时区计算正确的日期
+      const getLocalDateInTimezone = (tz: string) => {
+        const now = new Date();
+        // 转换为指定时区的日期字符串
+        const tzOffsetMap: Record<string, number> = {
+          'UTC': 0,
+          'Asia/Shanghai': 8,
+          'EST': -5,
+          'PST': -8
+        };
+        const offset = tzOffsetMap[tz] || 0;
+        // UTC时间 + 时区偏移
+        const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const tzTime = new Date(utcTime + (offset * 3600000));
+        return tzTime.toISOString().split('T')[0];
+      };
+
+      const startDate = customDateStart?.toISOString().split('T')[0] || getLocalDateInTimezone(timezone);
       const endDate = customDateEnd?.toISOString().split('T')[0] || startDate;
 
       // 构建过滤条件
