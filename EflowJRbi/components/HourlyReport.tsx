@@ -125,6 +125,7 @@ export default function HourlyReport({ currentUser }: Props) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // 根据时区计算当前日期（用于数据查询）
+  // 当 timezone 改变时，自动重置为当天
   const currentDateInTimezone = useMemo(() => {
     const now = new Date();
     // 时区偏移量（小时）
@@ -141,6 +142,14 @@ export default function HourlyReport({ currentUser }: Props) {
     const tzTime = new Date(utcTime + (offset * 3600000));
     return tzTime.toISOString().split('T')[0];
   }, [timezone]);
+
+  // 内部管理的日期状态（当用户手动选择日期时使用）
+  const [selectedDate, setSelectedDate] = useState<string>(currentDateInTimezone);
+
+  // 当 timezone 改变时，重置为当天
+  useEffect(() => {
+    setSelectedDate(currentDateInTimezone);
+  }, [currentDateInTimezone]);
 
   // Token
   const token = localStorage.getItem('addata_access_token') || '';
@@ -167,8 +176,8 @@ export default function HourlyReport({ currentUser }: Props) {
     setError(null);
 
     try {
-      const startDate = currentDateInTimezone;
-      const endDate = currentDateInTimezone;
+      const startDate = selectedDate;
+      const endDate = selectedDate;
 
       // 构建过滤条件
       const filters = drillPath.map(item => ({
@@ -337,7 +346,7 @@ export default function HourlyReport({ currentUser }: Props) {
 
   useEffect(() => {
     loadData();
-  }, [drillPath, activeDims, timezone, currentDateInTimezone]);
+  }, [drillPath, activeDims, timezone, selectedDate]);
 
   // 初始化时加载保存的指标顺序
   useEffect(() => {
@@ -518,9 +527,46 @@ export default function HourlyReport({ currentUser }: Props) {
               ))}
             </select>
           </div>
-          {/* 当前日期（根据时区计算） */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 text-indigo-700">
-            <span>{currentDateInTimezone}</span>
+          {/* 日期选择器 */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                // 前一天
+                const current = new Date(selectedDate);
+                current.setDate(current.getDate() - 1);
+                setSelectedDate(current.toISOString().split('T')[0]);
+              }}
+              className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] text-slate-600 transition-colors"
+              title="Previous day"
+            >
+              <i className="fas fa-chevron-left"></i>
+            </button>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold text-indigo-700 min-w-[100px] justify-center">
+              <span>{selectedDate}</span>
+            </div>
+            <button
+              onClick={() => {
+                // 后一天
+                const current = new Date(selectedDate);
+                current.setDate(current.getDate() + 1);
+                const newDate = current.toISOString().split('T')[0];
+                // 不允许选择未来日期（超过当前时区的今天）
+                if (newDate <= currentDateInTimezone) {
+                  setSelectedDate(newDate);
+                }
+              }}
+              className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] text-slate-600 transition-colors"
+              title="Next day"
+            >
+              <i className="fas fa-chevron-right"></i>
+            </button>
+            <button
+              onClick={() => setSelectedDate(currentDateInTimezone)}
+              className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] text-slate-600 transition-colors"
+              title="Back to today"
+            >
+              Today
+            </button>
           </div>
           {/* 上次更新时间 */}
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600">
