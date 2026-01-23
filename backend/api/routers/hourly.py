@@ -302,28 +302,23 @@ async def get_hourly_data(
         # 例如 PST 2026-01-23 00:00 = UTC 2026-01-23 08:00
         utc_start_dt = target_dt + timedelta(hours=-tz_offset)
 
-        # 计算结束时间：目标时区 D 日 23:59 的 UTC 时间
-        # 例如 PST 2026-01-23 23:59 = UTC 2026-01-24 07:59
-        utc_end_dt = target_dt + timedelta(days=1) - timedelta(seconds=1) + timedelta(hours=-tz_offset)
+        # 计算开始时间：目标时区 D 日 00:00 的 UTC 时间
+        # 计算结束时间：目标时区 D+1 日 00:00 的 UTC 时间（不包含 D 日 23:59 之后的数据）
+        # EST 2026-01-23 00:00 = UTC 2026-01-23 05:00, 结束 = UTC 2026-01-24 05:00
+        # PST 2026-01-23 00:00 = UTC 2026-01-23 08:00, 结束 = UTC 2026-01-24 08:00
+        utc_end_dt = utc_start_dt + timedelta(days=1)
 
-        # 对于需要跨 UTC 日查询的时区（如 PST/EST），确保包含两天数据
-        # PST 23日需要 UTC 23日 08:00-23:59 和 UTC 24日 00:00-07:59
-        # EST 23日需要 UTC 22日 19:00-23:59 和 UTC 23日 00:00-04:59
-        # 使用完整时间戳过滤，而不是 reportDate + reportHour 单独过滤
-        adjusted_start_date = utc_start_dt.strftime("%Y-%m-%d")
-        adjusted_end_date = utc_end_dt.strftime("%Y-%m-%d")
+        # 使用完整时间戳过滤：>= start, < end（不包含结束时刻）
         utc_start_ts = utc_start_dt.strftime("%Y-%m-%d %H:%M:%S")
         utc_end_ts = utc_end_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        logger.info(f"[HOURLY API] Target {timezone} {start_date} 00:00 = UTC {utc_start_ts}")
-        logger.info(f"[HOURLY API] Target {timezone} {start_date} 23:59 = UTC {utc_end_ts}")
+        logger.info(f"[HOURLY API] Target {timezone} {start_date} 00:00-23:59 = UTC {utc_start_ts} to {utc_end_ts}")
 
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
         # 构建基础 WHERE 条件
-        # 使用完整时间戳比较：toDateTime(reportDate) + toIntervalHour(reportHour)
-        # 这样可以精确匹配跨天的时间范围
-        timestamp_filter = f"(toDateTime(reportDate) + toIntervalHour(reportHour)) >= toDateTime('{utc_start_ts}') AND (toDateTime(reportDate) + toIntervalHour(reportHour)) <= toDateTime('{utc_end_ts}')"
+        # 使用完整时间戳比较：>= start, < end（不包含 end）
+        timestamp_filter = f"(toDateTime(reportDate) + toIntervalHour(reportHour)) >= toDateTime('{utc_start_ts}') AND (toDateTime(reportDate) + toIntervalHour(reportHour)) < toDateTime('{utc_end_ts}')"
         base_conditions = [
             timestamp_filter,
             f"timezone = 'UTC'"
