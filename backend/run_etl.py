@@ -133,11 +133,12 @@ def run_etl(date: str) -> tuple[bool, dict]:
             if line.startswith('SUMMARY: revenue='):
                 try:
                     parts = line.split()
-                    summary["revenue"] = float(parts[0].split('=')[1])
-                    summary["spend"] = float(parts[1].split('=')[1].rstrip(','))
+                    # parts = ["SUMMARY:", "revenue=XXX,", "spend=XXX,", "mtg_all_success=True/False"]
+                    summary["revenue"] = float(parts[1].split('=')[1].rstrip(','))
+                    summary["spend"] = float(parts[2].split('=')[1].rstrip(','))
                     # 解析 mtg_all_success
-                    if len(parts) >= 3 and 'mtg_all_success=' in parts[2]:
-                        mtg_success_str = parts[2].split('=')[1]
+                    if len(parts) >= 4 and 'mtg_all_success=' in parts[3]:
+                        mtg_success_str = parts[3].split('=')[1]
                         summary["mtg_all_success"] = mtg_success_str.lower() == 'true'
                 except Exception as e:
                     print(f"[WARN] Failed to parse SUMMARY line: {e}")
