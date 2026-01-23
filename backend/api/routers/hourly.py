@@ -290,22 +290,43 @@ async def get_hourly_data(
 
         logger.info(f"[HOURLY API] Timezone: {timezone}, offset: {tz_offset}")
 
-        # 计算查询范围：本地今天 00:00 到当前时间（转换为 UTC）
-        # 公式：local_midnight_utc = utc_midnight - tz_offset
-        # UTC+8 (offset=8): 00:00 - 8h = 昨天 16:00
-        # EST (offset=-5): 00:00 - (-5)h = 今天 05:00
-        # PST (offset=-8): 00:00 - (-8)h = 今天 08:00
-        utc_today_midnight = datetime.now(dt_timezone.utc).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
-        utc_now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
+        # 根据用户选择的日期（start_date）计算 UTC 查询范围
+        # 目标时区的 D 日 00:00 = UTC (D日 00:00 + tz_offset)
+        # EST (-5): D日00:00 = UTC D日05:00
+        # PST (-8): D日00:00 = UTC D日08:00
+        # UTC+8:   D日00:00 = UTC D-1日16:00
 
-        # 本地今天 00:00 对应的 UTC 时间
-        utc_start_dt = utc_today_midnight - timedelta(hours=tz_offset)
-        utc_end_dt = utc_now
+        # 用户选择的日期（目标时区的日期）
+        target_date = datetime.strptime(start_date, "%Y-%m-%d")
+
+        # 计算目标时区该日 00:00 对应的 UTC 时间
+        utc_start_dt = target_date + timedelta(hours=tz_offset)
+
+        # 计算目标时区该日 23:59:59 对应的 UTC 时间
+        utc_day_end = target_date + timedelta(days=1) - timedelta(seconds=1) + timedelta(hours=tz_offset)
+
+        # 判断选择的日期是否是目标时区的"今天"
+        utc_now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
+        # 目标时区当前时间 = UTC 当前时间 + tz_offset
+        target_now = utc_now + timedelta(hours=tz_offset)
+        target_today = target_now.date()
+
+        # 用户选择的日期
+        selected_date = target_date.date()
+
+        is_today = (selected_date == target_today)
+
+        if is_today:
+            # 今天：只查询到当前 UTC 时间
+            utc_end_dt = utc_now
+        else:
+            # 历史日期：查询全天
+            utc_end_dt = utc_day_end
 
         utc_start_ts = utc_start_dt.strftime("%Y-%m-%d %H:%M:%S")
         utc_end_ts = utc_end_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        logger.info(f"[HOURLY API] Query range for {timezone}: UTC {utc_start_ts} to {utc_end_ts}")
+        logger.info(f"[HOURLY API] {timezone} date {start_date}: UTC {utc_start_ts} to {utc_end_ts} (is_today={is_today}, target_today={target_today})")
 
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
