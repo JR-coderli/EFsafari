@@ -302,27 +302,28 @@ async def get_hourly_data(
         utc_today_midnight = datetime.now(dt_timezone.utc).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
         utc_now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
 
-        # 用户选择的日期
+        # 用户选择的日期（这是本地时区的日期）
         selected_date = datetime.strptime(start_date, "%Y-%m-%d")
 
-        # 计算该日期在 UTC 中对应的日期范围
-        # 对于负时区，本地 D日 跨越 UTC D日 和 D+1日
-        # 对于正时区，本地 D日 跨越 UTC D-1日 和 D日
-        if tz_offset < 0:
-            # 负时区（PST/EST）: 查询 UTC D日 00:00 到 D+1日结束
-            query_date = selected_date.replace(hour=0, minute=0, second=0)
-            utc_start_dt = query_date  # UTC D日 00:00
-            # 扩展到明天 UTC 以包含晚间数据
-            utc_end_of_day = query_date + timedelta(days=1) + timedelta(hours=abs(tz_offset)) - timedelta(seconds=1)
-        elif tz_offset > 0:
-            # 正时区（UTC+8）: 查询 UTC D-1日 到 D日结束
-            query_date = selected_date.replace(hour=0, minute=0, second=0)
-            utc_start_dt = query_date - timedelta(days=1)  # UTC D-1日 00:00
-            utc_end_of_day = query_date - timedelta(seconds=1)  # UTC D日 23:59:59
-        else:
-            # UTC: 直接查询当天
-            utc_start_dt = selected_date.replace(hour=0, minute=0, second=0)
-            utc_end_of_day = utc_start_dt + timedelta(days=1) - timedelta(seconds=1)
+        # 计算本地日期在 UTC 中的精确范围
+        # 关键：本地日期 D-日 00:00 → UTC D-日 + offset 小时
+        #       本地日期 D-日 23:59 → UTC D-日 + offset + 23:59
+
+        # 本地日期的开始时间（00:00:00）
+        local_midnight = selected_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # 本地日期的结束时间（23:59:59）
+        local_end_of_day = selected_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        # 转换为 UTC
+        # UTC = 本地时间 - 时区偏移
+        # PST (-8): PST 00:00 = UTC 08:00 (因为 UTC 比 PST 快 8 小时)
+        #          PST 23:59 = UTC(次日) 07:59
+        # UTC+8:   UTC+8 00:00 = UTC(前日) 16:00 (因为 UTC 比 UTC+8 慢 8 小时)
+        #          UTC+8 23:59 = UTC 15:59
+
+        utc_start_dt = local_midnight - timedelta(hours=tz_offset)
+        utc_end_of_day = local_end_of_day - timedelta(hours=tz_offset)
 
         # 判断是否是今天
         target_now = utc_now + timedelta(hours=tz_offset)
