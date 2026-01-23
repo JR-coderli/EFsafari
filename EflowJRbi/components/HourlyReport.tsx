@@ -119,6 +119,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   const loadDataRef = useRef<(() => Promise<void>) | null>(null);
   // 跟踪时区切换时的目标日期，防止被父组件的 customDateStart 覆盖
   const timezoneChangeTargetRef = useRef<string | null>(null);
+  // 请求序列号，防止旧请求覆盖新请求
+  const requestIdRef = useRef(0);
 
   // 内部日期状态：使用当前时区的今天，不依赖父组件的 customDateStart
   const [currentDate, setCurrentDate] = useState(() => {
@@ -348,7 +350,10 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
 
   // Load data
   const loadData = useCallback(async () => {
+    // 生成新的请求 ID
+    const currentRequestId = ++requestIdRef.current;
     console.log('[loadData] Called', {
+      requestId: currentRequestId,
       currentDate,
       drillPath: drillPath.map(p => ({ dim: p.dimension, val: p.value })),
       currentDimension,
@@ -379,7 +384,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
         params.append('filters', JSON.stringify(filters));
       }
 
-      console.log('[loadData] Request params:', Object.fromEntries(params));
+      console.log(`[loadData] Request ${currentRequestId} params:`, Object.fromEntries(params));
 
       const response = await fetch(`/api/hourly/data?${params}`, {
         headers: {
@@ -387,20 +392,34 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
         },
       });
 
+      // 检查是否是最新的请求
+      if (currentRequestId !== requestIdRef.current) {
+        console.log(`[loadData] Request ${currentRequestId} is stale, ignoring response (latest is ${requestIdRef.current})`);
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result: HourlyDataResponse = await response.json();
-      console.log('[loadData] Response:', { total: result.total, dataCount: result.data.length });
-      console.log('[loadData] Setting data with', result.data.length, 'rows');
+      console.log(`[loadData] Request ${currentRequestId} Response:`, { total: result.total, dataCount: result.data.length });
+      console.log(`[loadData] Request ${currentRequestId} Setting data with`, result.data.length, 'rows');
       setData(result.data);
-      console.log('[loadData] Data set complete');
+      console.log(`[loadData] Request ${currentRequestId} Data set complete`);
     } catch (err) {
-      console.error('[loadData] Error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      // 只在请求是最新的时才设置错误
+      if (currentRequestId === requestIdRef.current) {
+        console.error('[loadData] Error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+      } else {
+        console.log(`[loadData] Request ${currentRequestId} Error ignored (stale)`);
+      }
     } finally {
-      setLoading(false);
+      // 只在请求是最新的时才清除 loading
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [currentDate, drillPath, currentDimension, timezone, token]);
 
