@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Clickflare Hourly Report ETL
 
@@ -36,8 +37,9 @@ from api.cache import set_cache, init_redis
 
 # Initialize Redis client for cache operations
 # Read config for Redis connection
+_config_path = os.path.join(_backend_dir, "clickflare_etl", "config.yaml")
 try:
-    with open("config.yaml", encoding="utf-8") as f:
+    with open(_config_path, encoding="utf-8") as f:
         config_data = yaml.safe_load(f)
     redis_config = config_data.get("redis", {
         "host": "localhost",
@@ -54,7 +56,13 @@ class HourlyETL:
     PAGE_SIZE = 5000  # 增加页大小，减少 API 调用次数
     API_TIMEOUT = 120  # API 超时时间（秒）
 
-    def __init__(self, config_path: str = "config.yaml", timezone: str = "UTC", test_hours: int = 0):
+    def __init__(self, config_path: str = None, timezone: str = "UTC", test_hours: int = 0):
+        # Use dynamic config path if not provided
+        if config_path is None:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            backend_dir = os.path.dirname(script_dir)
+            config_path = os.path.join(backend_dir, "clickflare_etl", "config.yaml")
+
         self.config_path = config_path
         self.timezone = timezone
         self.test_hours = test_hours
@@ -373,7 +381,7 @@ class HourlyETL:
 def main():
     parser = argparse.ArgumentParser(description="Clickflare Hourly ETL")
     parser.add_argument("--utc8", action="store_true", help="Use UTC+8 timezone (default: UTC+0)")
-    parser.add_argument("--config", default="config.yaml", help="Config file path")
+    parser.add_argument("--config", default=None, help="Config file path (default: auto-detect)")
     parser.add_argument("--hours", type=int, default=0, help="Test mode: only pull recent N hours (0 = full day)")
     args = parser.parse_args()
 
