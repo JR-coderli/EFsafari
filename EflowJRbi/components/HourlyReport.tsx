@@ -133,10 +133,17 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
       'EST': -5,
       'PST': -8
     };
-    const offset = tzOffsetMap[tz] || 0;
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const tzTime = new Date(utcTime + (offset * 3600000));
-    return tzTime.toISOString().split('T')[0];
+    const offsetHours = tzOffsetMap[tz] || 0;
+
+    // 获取 UTC 时间戳（减去本地时区偏移）
+    const utcTimestamp = now.getTime() - (now.getTimezoneOffset() * 60000);
+    // 加上目标时区偏移
+    const tzTimestamp = utcTimestamp + (offsetHours * 3600000);
+    const tzDate = new Date(tzTimestamp);
+
+    const result = tzDate.toISOString().split('T')[0];
+    console.log('[getDateInTimezone]', { tz, offsetHours, utcTimestamp, tzTimestamp, result });
+    return result;
   };
 
   // 使用父组件传入的日期，如果没有则使用当前时区的今天
