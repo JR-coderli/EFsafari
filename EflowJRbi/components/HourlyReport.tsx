@@ -91,6 +91,7 @@ const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number
 
 interface Props {
   currentUser: UserPermission;
+  // 忽略父组件传入的日期，完全根据 timezone 计算
   selectedRange?: string;
   customDateStart?: Date;
   customDateEnd?: Date;
@@ -99,7 +100,7 @@ interface Props {
 
 type SortField = 'name' | 'impressions' | 'clicks' | 'conversions' | 'spend' | 'revenue' | 'profit' | 'ctr' | 'cvr' | 'roi' | 'cpa' | 'rpa' | 'epc' | 'epv';
 
-export default function HourlyReport({ currentUser, selectedRange = 'Today', customDateStart, customDateEnd }: Props) {
+export default function HourlyReport({ currentUser }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<HourlyDataRow[]>([]);
@@ -122,6 +123,24 @@ export default function HourlyReport({ currentUser, selectedRange = 'Today', cus
   const [editingDimIndex, setEditingDimIndex] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 根据时区计算当前日期（用于数据查询）
+  const currentDateInTimezone = useMemo(() => {
+    const now = new Date();
+    // 时区偏移量（小时）
+    const tzOffsetMap: Record<string, number> = {
+      'UTC': 0,
+      'Asia/Shanghai': 8,
+      'EST': -5,
+      'PST': -8
+    };
+    const offset = tzOffsetMap[timezone] || 0;
+    // 获取 UTC 时间
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    // 加上时区偏移
+    const tzTime = new Date(utcTime + (offset * 3600000));
+    return tzTime.toISOString().split('T')[0];
+  }, [timezone]);
 
   // Token
   const token = localStorage.getItem('addata_access_token') || '';
@@ -148,25 +167,8 @@ export default function HourlyReport({ currentUser, selectedRange = 'Today', cus
     setError(null);
 
     try {
-      // 根据时区计算正确的日期
-      const getLocalDateInTimezone = (tz: string) => {
-        const now = new Date();
-        // 转换为指定时区的日期字符串
-        const tzOffsetMap: Record<string, number> = {
-          'UTC': 0,
-          'Asia/Shanghai': 8,
-          'EST': -5,
-          'PST': -8
-        };
-        const offset = tzOffsetMap[tz] || 0;
-        // UTC时间 + 时区偏移
-        const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const tzTime = new Date(utcTime + (offset * 3600000));
-        return tzTime.toISOString().split('T')[0];
-      };
-
-      const startDate = customDateStart?.toISOString().split('T')[0] || getLocalDateInTimezone(timezone);
-      const endDate = customDateEnd?.toISOString().split('T')[0] || startDate;
+      const startDate = currentDateInTimezone;
+      const endDate = currentDateInTimezone;
 
       // 构建过滤条件
       const filters = drillPath.map(item => ({
@@ -335,7 +337,7 @@ export default function HourlyReport({ currentUser, selectedRange = 'Today', cus
 
   useEffect(() => {
     loadData();
-  }, [drillPath, activeDims, timezone, customDateStart, customDateEnd]);
+  }, [drillPath, activeDims, timezone, currentDateInTimezone]);
 
   // 初始化时加载保存的指标顺序
   useEffect(() => {
@@ -515,6 +517,10 @@ export default function HourlyReport({ currentUser, selectedRange = 'Today', cus
                 <option key={tz.value} value={tz.value}>{tz.label}</option>
               ))}
             </select>
+          </div>
+          {/* 当前日期（根据时区计算） */}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 text-indigo-700">
+            <span>{currentDateInTimezone}</span>
           </div>
           {/* 上次更新时间 */}
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600">
