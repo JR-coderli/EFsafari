@@ -117,6 +117,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   // 防止在时区切换时重复触发 loadData
   const [isTimezoneChanging, setIsTimezoneChanging] = useState(false);
   const loadDataRef = useRef<(() => Promise<void>) | null>(null);
+  // 跟踪时区切换时的目标日期，防止被父组件的 customDateStart 覆盖
+  const timezoneChangeTargetRef = useRef<string | null>(null);
 
   // 内部日期状态：使用当前时区的今天，不依赖父组件的 customDateStart
   const [currentDate, setCurrentDate] = useState(() => {
@@ -133,16 +135,28 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   useEffect(() => {
     if (customDateStart) {
       const newDate = customDateStart.toISOString().split('T')[0];
+
+      // 如果正在处理时区切换，且父组件的日期与目标日期不一致，说明父组件在时区切换后被触发
+      // 此时应该忽略父组件的日期变化，保持时区切换时设置的日期
+      if (isTimezoneChanging && timezoneChangeTargetRef.current && timezoneChangeTargetRef.current !== newDate) {
+        console.log('[Date Change] Ignoring parent date change during timezone change:', {
+          parentDate: newDate,
+          targetDate: timezoneChangeTargetRef.current
+        });
+        return;
+      }
+
       console.log('[Date Change] Parent date changed:', {
         newDate,
         oldDate: currentDate,
         timezone,
-        isTimezoneChanging
+        isTimezoneChanging,
+        targetDate: timezoneChangeTargetRef.current
       });
       setCurrentDate(newDate);
       console.log('[Date Change] setCurrentDate called');
     }
-  }, [customDateStart]);
+  }, [customDateStart, isTimezoneChanging]);
 
   // 拖动相关状态
   const [draggedMetricIndex, setDraggedMetricIndex] = useState<number | null>(null);
@@ -203,8 +217,9 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     const newDimension = activeDims[newDimensionIndex] || activeDims[0] || 'hour';
     console.log('[Timezone Change] Current dimension:', newDimension);
 
-    // 设置标志，防止 useEffect 触发 loadData
+    // 设置标志和目标日期，防止 useEffect 触发 loadData 以及防止父组件覆盖日期
     setIsTimezoneChanging(true);
+    timezoneChangeTargetRef.current = todayInNewTimezone;
 
     // 一次性更新所有状态
     setTimezone(newTimezone);
@@ -212,6 +227,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     setDrillPath(filteredPath);
 
     // 通知父组件日期已变化（用于显示）
+    // 注意：这会触发父组件的 customDateStart 变化，但我们已经设置了 timezoneChangeTargetRef 来防止覆盖
     if (onRangeChange) {
       const newDate = new Date(todayInNewTimezone + 'T00:00:00');
       console.log('[Timezone Change] Calling onRangeChange with:', todayInNewTimezone);
@@ -224,7 +240,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
 
     try {
       // 使用 setTimeout 确保状态已更新
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // 此时状态已更新，使用新的 currentDate 加载数据
       console.log('[Timezone Change] Loading data with new state...');
@@ -267,8 +283,13 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
-      setIsTimezoneChanging(false);
-      console.log('[Timezone Change] END');
+      // 延迟清除标志，确保父组件的 useEffect 已经执行完毕
+      setTimeout(() => {
+        setIsTimezoneChanging(false);
+        timezoneChangeTargetRef.current = null;
+        console.log('[Timezone Change] Flags cleared');
+      }, 200);
+      console.log('[Timezone Change] END (flags will be cleared after 200ms)');
     }
   };
 
