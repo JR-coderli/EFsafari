@@ -284,42 +284,23 @@ async def get_hourly_data(
         user_keywords = current_user.get("keywords", [])
 
         logger.info(f"[HOURLY API] User: id={current_user.get('id')}, role={user_role}, timezone={timezone}")
-        logger.info(f"[HOURLY API] Requested date range: {start_date} to {end_date}")
 
         # 获取时区偏移
         tz_offset = TIMEZONE_OFFSETS.get(timezone, 0)
 
         logger.info(f"[HOURLY API] Timezone: {timezone}, offset: {tz_offset}")
 
-        # 计算目标时区 D 日 00:00 和 23:59 对应的 UTC 时间
-        # 目标时区 D 日 00:00 = UTC D 日 (-tz_offset) 小时
-        # 如果 -tz_offset > 0（负时区偏移，如 PST UTC-8 的 -8），则在前一天
-        # 如果 -tz_offset < 0（正时区偏移，如 UTC+8 的 8），则在当天
-
-        target_dt = datetime.strptime(start_date, "%Y-%m-%d")
-
-        # 计算目标时区 D 日 00:00 对应的 UTC 时间
-        # local = UTC - tz_offset，所以 UTC = local + tz_offset
-        # EST (-5): local 00:00 = UTC 00:00 + (-5) = 前一天 19:00
-        # PST (-8): local 00:00 = UTC 00:00 + (-8) = 前一天 16:00
-        # UTC+8:    local 00:00 = UTC 00:00 + 8 = 当天 08:00
-        base_midnight = datetime(2000, 1, 1, 0, 0, 0)  # 任意日期的午夜
-        local_midnight_utc = base_midnight + timedelta(hours=tz_offset)
-        hour_offset = local_midnight_utc.hour
-        if local_midnight_utc.day != 1:  # 跨到前一天了
-            hour_offset -= 24
-
-        # start = 目标日期午夜 + offset
-        utc_start_dt = target_dt + timedelta(hours=hour_offset)
-        # end = min(当前UTC时间, start+24h)，历史日期显示全天，今天只显示到现在
+        # 查询最近48小时的 UTC 数据
+        # 这样可以覆盖所有时区从午夜到当前时间的完整范围
+        # 例如：UTC 12:00 时，UTC+8 显示 0-20点，UTC-5 显示 0-7点
         utc_now = datetime.now(timezone.utc).replace(tzinfo=None)
-        day_end = utc_start_dt + timedelta(days=1)
-        utc_end_dt = min(utc_now, day_end)
+        utc_start_dt = utc_now - timedelta(hours=48)
+        utc_end_dt = utc_now
 
         utc_start_ts = utc_start_dt.strftime("%Y-%m-%d %H:%M:%S")
         utc_end_ts = utc_end_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        logger.info(f"[HOURLY API] Target {timezone} {start_date} = UTC {utc_start_ts} to {utc_end_ts}")
+        logger.info(f"[HOURLY API] Query range (last 48h UTC): {utc_start_ts} to {utc_end_ts}")
 
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
