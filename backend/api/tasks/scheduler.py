@@ -197,8 +197,61 @@ async def daily_sync_task():
         logger.error(f"Daily sync task failed: {e}", exc_info=True)
 
 
+async def sync_lander_urls_task():
+    """
+    Scheduled task: Sync Lander URLs from ClickFlare API.
+
+    Runs daily at 06:15 to fetch all lander data and sync to
+    ad_platform.dim_lander_url_mapping table.
+    """
+    try:
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        sync_script = os.path.join(backend_dir, "sync_lander_urls.py")
+
+        logger.info("Starting Lander URLs sync task...")
+
+        # Set up environment with correct PYTHONPATH
+        import copy
+        env = copy.copy(os.environ)
+        current_pythonpath = env.get('PYTHONPATH', '')
+        env['PYTHONPATH'] = backend_dir + os.pathsep + current_pythonpath
+
+        result = subprocess.run(
+            [sys.executable, sync_script],
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minutes timeout
+            cwd=backend_dir,
+            env=env
+        )
+
+        if result.returncode == 0:
+            logger.info("Lander URLs sync completed successfully")
+            if result.stdout:
+                logger.info(f"Sync output: {result.stdout[-500:]}")
+        else:
+            logger.error(f"Lander URLs sync failed with return code {result.returncode}")
+            if result.stderr:
+                logger.error(f"Sync errors: {result.stderr}")
+
+    except subprocess.TimeoutExpired:
+        logger.error("Lander URLs sync timed out after 5 minutes")
+    except Exception as e:
+        logger.error(f"Lander URLs sync task failed: {e}", exc_info=True)
+
+
 def start_scheduler():
     """Start the APScheduler with daily sync and hourly ETL jobs."""
+    # Schedule Lander URLs sync at 06:15 daily
+    scheduler.add_job(
+        sync_lander_urls_task,
+        'cron',
+        hour=6,
+        minute=15,
+        id='lander_urls_sync',
+        replace_existing=True
+    )
+
     # Schedule daily sync at 12:00
     scheduler.add_job(
         daily_sync_task,
@@ -219,7 +272,7 @@ def start_scheduler():
     )
 
     scheduler.start()
-    logger.info("Scheduler started - daily sync at 12:00, hourly ETL every 10 minutes (both timezones)")
+    logger.info("Scheduler started - lander URLs sync at 06:15, daily sync at 12:00, hourly ETL every 10 minutes (both timezones)")
 
 
 def stop_scheduler():
