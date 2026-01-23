@@ -291,22 +291,26 @@ async def get_hourly_data(
 
         logger.info(f"[HOURLY API] Timezone: {timezone}, offset: {tz_offset}")
 
-        # 根据时区调整查询的日期范围
-        # 目标时区的 D 日 = UTC 的 D 日 + tz_offset 小时
-        # 如果 tz_offset 为负（如 UTC-8），D 日的开始可能对应 UTC 的 D-1 日
-        # 如果 tz_offset 为正（如 UTC+8），D 日的开始可能对应 UTC 的 D-1 日
+        # 计算目标时区 D 日 00:00 和 23:59 对应的 UTC 时间
+        # 目标时区 D 日 00:00 = UTC D 日 (-tz_offset) 小时
+        # 如果 -tz_offset > 0（负时区偏移，如 PST UTC-8 的 -8），则在前一天
+        # 如果 -tz_offset < 0（正时区偏移，如 UTC+8 的 8），则在当天
 
         target_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        # 计算目标时区 D 日 00:00 对应的 UTC 时间
-        utc_start = target_dt - timedelta(hours=tz_offset)
-        # 计算目标时区 D 日 23:59 对应的 UTC 时间
-        utc_end = target_dt + timedelta(days=1) - timedelta(seconds=1) - timedelta(hours=tz_offset)
 
-        adjusted_start_date = utc_start.strftime("%Y-%m-%d")
-        adjusted_end_date = utc_end.strftime("%Y-%m-%d")
+        # 计算开始时间：目标时区 D 日 00:00 的 UTC 时间
+        # 例如 PST 2026-01-23 00:00 = UTC 2026-01-23 08:00
+        utc_start_dt = target_dt + timedelta(hours=-tz_offset)
 
-        logger.info(f"[HOURLY API] Target TZ {timezone} {start_date} 00:00 = UTC {adjusted_start_date} {utc_start.strftime('%H:%M')}")
-        logger.info(f"[HOURLY API] Target TZ {timezone} {start_date} 23:59 = UTC {adjusted_end_date} {utc_end.strftime('%H:%M')}")
+        # 计算结束时间：目标时区 D 日 23:59 的 UTC 时间
+        # 例如 PST 2026-01-23 23:59 = UTC 2026-01-24 07:59
+        utc_end_dt = target_dt + timedelta(days=1) - timedelta(seconds=1) + timedelta(hours=-tz_offset)
+
+        adjusted_start_date = utc_start_dt.strftime("%Y-%m-%d")
+        adjusted_end_date = utc_end_dt.strftime("%Y-%m-%d")
+
+        logger.info(f"[HOURLY API] Target {timezone} {start_date} 00:00 = UTC {adjusted_start_date} {utc_start_dt.strftime('%H:%M')}")
+        logger.info(f"[HOURLY API] Target {timezone} {start_date} 23:59 = UTC {adjusted_end_date} {utc_end_dt.strftime('%H:%M')}")
         logger.info(f"[HOURLY API] Query range: {adjusted_start_date} to {adjusted_end_date}")
 
         permission_filter = _build_permission_filter(user_role, user_keywords)

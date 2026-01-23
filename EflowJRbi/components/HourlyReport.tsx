@@ -145,13 +145,53 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   // Token
   const token = localStorage.getItem('addata_access_token') || '';
 
-  // 时区切换时，更新父组件的日期为该时区的今天
-  const handleTimezoneChange = (newTimezone: string) => {
+  // 时区切换时，更新父组件的日期为该时区的今天，并刷新数据
+  const handleTimezoneChange = async (newTimezone: string) => {
     setTimezone(newTimezone);
     if (onRangeChange) {
       const todayInTimezone = getDateInTimezone(newTimezone);
       const date = new Date(todayInTimezone + 'T00:00:00');
       onRangeChange('Custom', date, date);
+    }
+    // 立即刷新数据
+    setLoading(true);
+    setError(null);
+    try {
+      const startDate = customDateStart?.toISOString().split('T')[0] || getDateInTimezone(newTimezone);
+      const endDate = customDateEnd?.toISOString().split('T')[0] || startDate;
+
+      const filters = drillPath.map(item => ({
+        dimension: item.dimension,
+        value: item.value
+      }));
+
+      const params = new URLSearchParams({
+        start_date: startDate,
+        end_date: endDate,
+        group_by: activeDims[0] || 'hour',
+        timezone: newTimezone,
+        limit: '1000',
+      });
+
+      if (filters.length > 0) {
+        params.append('filters', JSON.stringify(filters));
+      }
+
+      const response = await fetch(`/api/hourly/data?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result: HourlyDataResponse = await response.json();
+      setData(result.data);
+    } catch (err) {
+      console.error('Error loading hourly data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
     }
   };
 
