@@ -59,7 +59,7 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { key: 'cvr', label: 'CVR', visible: true, type: 'percent', group: 'Calculated' },
   { key: 'impressions', label: 'Impressions', visible: true, type: 'number', group: 'Basic' },
   { key: 'clicks', label: 'Clicks', visible: true, type: 'number', group: 'Basic' },
-  { key: 'epc', label: 'EPC', visible: false, type: 'money', group: 'Calculated' },
+  { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
 ];
 
 const ALL_DIMENSIONS = [
