@@ -91,7 +91,7 @@ const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number
 
 interface Props {
   currentUser: UserPermission;
-  // 忽略父组件传入的日期，完全根据 timezone 计算
+  // 使用父组件传入的日期
   selectedRange?: string;
   customDateStart?: Date;
   customDateEnd?: Date;
@@ -100,7 +100,7 @@ interface Props {
 
 type SortField = 'name' | 'impressions' | 'clicks' | 'conversions' | 'spend' | 'revenue' | 'profit' | 'ctr' | 'cvr' | 'roi' | 'cpa' | 'rpa' | 'epc' | 'epv';
 
-export default function HourlyReport({ currentUser }: Props) {
+export default function HourlyReport({ currentUser, customDateStart, customDateEnd, onRangeChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<HourlyDataRow[]>([]);
@@ -124,35 +124,36 @@ export default function HourlyReport({ currentUser }: Props) {
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 根据时区计算当前日期（用于数据查询）
-  // 当 timezone 改变时，自动重置为当天
-  const currentDateInTimezone = useMemo(() => {
+  // 根据时区计算当前日期
+  const getDateInTimezone = (tz: string) => {
     const now = new Date();
-    // 时区偏移量（小时）
     const tzOffsetMap: Record<string, number> = {
       'UTC': 0,
       'Asia/Shanghai': 8,
       'EST': -5,
       'PST': -8
     };
-    const offset = tzOffsetMap[timezone] || 0;
-    // 获取 UTC 时间
+    const offset = tzOffsetMap[tz] || 0;
     const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-    // 加上时区偏移
     const tzTime = new Date(utcTime + (offset * 3600000));
     return tzTime.toISOString().split('T')[0];
-  }, [timezone]);
+  };
 
-  // 内部管理的日期状态（当用户手动选择日期时使用）
-  const [selectedDate, setSelectedDate] = useState<string>(currentDateInTimezone);
-
-  // 当 timezone 改变时，重置为当天
-  useEffect(() => {
-    setSelectedDate(currentDateInTimezone);
-  }, [currentDateInTimezone]);
+  // 使用父组件传入的日期，如果没有则使用当前时区的今天
+  const selectedDate = customDateStart?.toISOString().split('T')[0] || getDateInTimezone(timezone);
 
   // Token
   const token = localStorage.getItem('addata_access_token') || '';
+
+  // 时区切换时，更新父组件的日期为该时区的今天
+  const handleTimezoneChange = (newTimezone: string) => {
+    setTimezone(newTimezone);
+    if (onRangeChange) {
+      const todayInTimezone = getDateInTimezone(newTimezone);
+      const date = new Date(todayInTimezone + 'T00:00:00');
+      onRangeChange('Custom', date, date);
+    }
+  };
 
   // 当前层级维度：根据下钻路径计算
   const currentDimensionIndex = drillPath.length;
@@ -346,7 +347,7 @@ export default function HourlyReport({ currentUser }: Props) {
 
   useEffect(() => {
     loadData();
-  }, [drillPath, activeDims, timezone, selectedDate]);
+  }, [drillPath, activeDims, timezone, customDateStart]);
 
   // 初始化时加载保存的指标顺序
   useEffect(() => {
@@ -519,54 +520,13 @@ export default function HourlyReport({ currentUser }: Props) {
             <label className="text-[10px] font-bold text-slate-500">Timezone:</label>
             <select
               value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
+              onChange={(e) => handleTimezoneChange(e.target.value)}
               className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               {TIMEZONES.map(tz => (
                 <option key={tz.value} value={tz.value}>{tz.label}</option>
               ))}
             </select>
-          </div>
-          {/* 日期选择器 */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                // 前一天
-                const current = new Date(selectedDate);
-                current.setDate(current.getDate() - 1);
-                setSelectedDate(current.toISOString().split('T')[0]);
-              }}
-              className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] text-slate-600 transition-colors"
-              title="Previous day"
-            >
-              <i className="fas fa-chevron-left"></i>
-            </button>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold text-indigo-700 min-w-[100px] justify-center">
-              <span>{selectedDate}</span>
-            </div>
-            <button
-              onClick={() => {
-                // 后一天
-                const current = new Date(selectedDate);
-                current.setDate(current.getDate() + 1);
-                const newDate = current.toISOString().split('T')[0];
-                // 不允许选择未来日期（超过当前时区的今天）
-                if (newDate <= currentDateInTimezone) {
-                  setSelectedDate(newDate);
-                }
-              }}
-              className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] text-slate-600 transition-colors"
-              title="Next day"
-            >
-              <i className="fas fa-chevron-right"></i>
-            </button>
-            <button
-              onClick={() => setSelectedDate(currentDateInTimezone)}
-              className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] text-slate-600 transition-colors"
-              title="Back to today"
-            >
-              Today
-            </button>
           </div>
           {/* 上次更新时间 */}
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600">
