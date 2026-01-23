@@ -148,26 +148,28 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   // 时区切换时，更新父组件的日期为该时区的今天，并刷新数据
   const handleTimezoneChange = async (newTimezone: string) => {
     setTimezone(newTimezone);
+
+    // 切换时区时重置下钻路径（因为不同时区的 hour 值不同）
+    setDrillPath([]);
+
+    // 计算新时区的今天日期
+    const todayInTimezone = getDateInTimezone(newTimezone);
+    const date = new Date(todayInTimezone + 'T00:00:00');
+
+    // 更新父组件的日期
     if (onRangeChange) {
-      const todayInTimezone = getDateInTimezone(newTimezone);
-      const date = new Date(todayInTimezone + 'T00:00:00');
       onRangeChange('Custom', date, date);
     }
-    // 立即刷新数据
+
+    // 立即刷新数据（使用新时区的今天）
     setLoading(true);
     setError(null);
     try {
-      const startDate = customDateStart?.toISOString().split('T')[0] || getDateInTimezone(newTimezone);
-      const endDate = customDateEnd?.toISOString().split('T')[0] || startDate;
-
-      const filters = drillPath.map(item => ({
-        dimension: item.dimension,
-        value: item.value
-      }));
+      const filters = []; // 已清空 drillPath，所以 filters 为空
 
       const params = new URLSearchParams({
-        start_date: startDate,
-        end_date: endDate,
+        start_date: todayInTimezone,
+        end_date: todayInTimezone,
         group_by: activeDims[0] || 'hour',
         timezone: newTimezone,
         limit: '1000',

@@ -1,0 +1,352 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { UserPermission } from '../types';
+
+interface HourlyDataRow {
+  id: string;
+  name: string;
+  level: number;
+  dimensionType: string;
+  hour: number | null;
+  timezone: string | null;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  spend: number;
+  revenue: number;
+  profit: number;
+  ctr: number;
+  cvr: number;
+  roi: number;
+  cpa: number;
+  rpa: number;
+  epc: number;
+  epv: number;
+  hasChild: boolean;
+}
+
+interface HourlyDataResponse {
+  data: HourlyDataRow[];
+  total: number;
+  dateRange: { start_date: string; end_date: string };
+}
+
+interface MetricConfig {
+  key: string;
+  label: string;
+  visible: boolean;
+  type: 'money' | 'percent' | 'number';
+  group: string;
+}
+
+const DEFAULT_METRICS: MetricConfig[] = [
+  { key: 'spend', label: 'Spend', visible: true, type: 'money', group: 'Basic' },
+  { key: 'conversions', label: 'Conversions', visible: true, type: 'number', group: 'Basic' },
+  { key: 'revenue', label: 'Revenue', visible: true, type: 'money', group: 'Basic' },
+  { key: 'profit', label: 'Profit', visible: true, type: 'profit' as const, group: 'Basic' },
+  { key: 'impressions', label: 'Impressions', visible: true, type: 'number', group: 'Basic' },
+  { key: 'clicks', label: 'Clicks', visible: true, type: 'number', group: 'Basic' },
+  { key: 'ctr', label: 'CTR', visible: true, type: 'percent', group: 'Calculated' },
+  { key: 'cvr', label: 'CVR', visible: true, type: 'percent', group: 'Calculated' },
+  { key: 'roi', label: 'ROI', visible: true, type: 'percent', group: 'Calculated' },
+  { key: 'cpa', label: 'CPA', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
+];
+
+const ALL_DIMENSIONS = [
+  { value: 'hour', label: 'Hour' },
+  { value: 'platform', label: 'Media' },
+  { value: 'adset', label: 'Adset' },
+  { value: 'offer', label: 'Offer' },
+  { value: 'advertiser', label: 'Advertiser' },
+  { value: 'campaign', label: 'Campaign' },
+];
+
+const TIMEZONES = [
+  { value: 'UTC', label: 'UTC+0' },
+  { value: 'Asia/Shanghai', label: 'UTC+8' },
+];
+
+const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number' | 'profit' }> = ({ value, type }) => {
+  const displayValue = isFinite(value) ? value : 0;
+  if (type === 'profit') {
+    const colorClass = displayValue > 0 ? 'text-emerald-600' : displayValue < 0 ? 'text-rose-600' : 'text-slate-800';
+    return <span className={`font-mono tracking-tight leading-none font-bold ${colorClass} text-[14px]`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+  }
+  if (type === 'money') return <span className="font-mono tracking-tight leading-none font-bold text-[14px] text-slate-700">${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+  if (type === 'percent') return <span className="font-mono tracking-tight leading-none font-bold text-[14px] text-slate-700">{(displayValue * 100).toFixed(2)}%</span>;
+  return <span className="font-mono tracking-tight leading-none font-bold text-[14px] text-slate-700">{Math.floor(displayValue).toLocaleString()}</span>;
+};
+
+interface Props {
+  currentUser: UserPermission;
+  selectedRange?: string;
+  customDateStart?: Date;
+  customDateEnd?: Date;
+  onRangeChange?: (range: string, start?: Date, end?: Date) => void;
+}
+
+export default function HourlyReport({ currentUser, selectedRange = 'Yesterday', customDateStart, customDateEnd }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<HourlyDataRow[]>([]);
+  const [activeDims, setActiveDims] = useState<string[]>(['hour', 'platform']);
+  const [timezone, setTimezone] = useState('UTC');
+  const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
+  const [quickFilterText, setQuickFilterText] = useState('');
+  const [hideZeroImpressions, setHideZeroImpressions] = useState(true);
+  const [etlStatus, setEtlStatus] = useState<{ utc0: any; utc8: any } | null>(null);
+
+  // Token
+  const token = localStorage.getItem('addata_access_token') || '';
+
+  // Load data
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const startDate = customDateStart?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0];
+      const endDate = customDateEnd?.toISOString().split('T')[0] || startDate;
+
+      const groupBy = activeDims.join(',');
+      const params = new URLSearchParams({
+        start_date: startDate,
+        end_date: endDate,
+        group_by: groupBy,
+        timezone: timezone,
+        limit: '1000',
+      });
+
+      const response = await fetch(`/api/hourly/data?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result: HourlyDataResponse = await response.json();
+      setData(result.data);
+    } catch (err) {
+      console.error('Error loading hourly data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load ETL status
+  const loadEtlStatus = async () => {
+    try {
+      const response = await fetch('/api/hourly/status', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const status = await response.json();
+        setEtlStatus(status);
+      }
+    } catch (err) {
+      console.error('Error loading ETL status:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [activeDims, timezone, customDateStart, customDateEnd]);
+
+  useEffect(() => {
+    loadEtlStatus();
+    const interval = setInterval(loadEtlStatus, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Filter and sort data
+  const filteredData = useMemo(() => {
+    let result = data.filter(row => {
+      if (hideZeroImpressions && row.impressions === 0) return false;
+      if (quickFilterText && !row.name.toLowerCase().includes(quickFilterText.toLowerCase())) return false;
+      return true;
+    });
+
+    // 小时降序排序（当主要维度是 hour 时）
+    if (activeDims[0] === 'hour') {
+      result = [...result].sort((a, b) => (b.hour ?? 0) - (a.hour ?? 0));
+    }
+
+    return result;
+  }, [data, quickFilterText, hideZeroImpressions, activeDims]);
+
+  // Summary
+  const summary = useMemo(() => {
+    return filteredData.reduce((acc, row) => ({
+      impressions: acc.impressions + row.impressions,
+      clicks: acc.clicks + row.clicks,
+      conversions: acc.conversions + row.conversions,
+      spend: acc.spend + row.spend,
+      revenue: acc.revenue + row.revenue,
+    }), { impressions: 0, clicks: 0, conversions: 0, spend: 0, revenue: 0 });
+  }, [filteredData]);
+
+  const visibleMetrics = metrics.filter(m => m.visible);
+
+  return (
+    <div className="flex flex-col h-full bg-[#f8fafc]">
+      {/* Header */}
+      <div className="px-8 py-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-4">
+          <h2 className="font-extrabold text-slate-800 tracking-tight text-sm uppercase italic">Hourly Insight</h2>
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] font-bold text-slate-500">Timezone:</label>
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              {TIMEZONES.map(tz => (
+                <option key={tz.value} value={tz.value}>{tz.label}</option>
+              ))}
+            </select>
+          </div>
+          {etlStatus && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-700">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>
+                {etlStatus.utc0?.last_update && `UTC0: ${etlStatus.utc0.last_update}`}
+                {etlStatus.utc8?.last_update && ` | UTC8: ${etlStatus.utc8.last_update}`}
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative w-64">
+            <input
+              type="text"
+              placeholder="Quick Search..."
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500/20"
+              value={quickFilterText}
+              onChange={(e) => setQuickFilterText(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Dimensions Bar */}
+      <div className="px-8 py-3 bg-white border-b border-slate-200 flex items-center gap-4 overflow-x-auto shrink-0">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Dimensions:</span>
+        <div className="flex items-center gap-2">
+          {activeDims.map(dim => {
+            const dimInfo = ALL_DIMENSIONS.find(d => d.value === dim);
+            return (
+              <div key={dim} className="flex items-center bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl gap-2">
+                <span className="text-xs font-black text-indigo-700">{dimInfo?.label || dim}</span>
+                <button
+                  onClick={() => setActiveDims(prev => prev.filter(d => d !== dim))}
+                  className="text-indigo-200 hover:text-rose-500"
+                >
+                  <i className="fas fa-times-circle text-xs"></i>
+                </button>
+              </div>
+            );
+          })}
+          <div className="h-4 w-px bg-slate-200 mx-2"></div>
+          {ALL_DIMENSIONS.filter(d => !activeDims.includes(d.value)).map(d => (
+            <button
+              key={d.value}
+              onClick={() => setActiveDims(prev => [...prev, d.value])}
+              className="px-3 py-1.5 border border-dashed border-slate-300 text-slate-400 rounded-xl text-[10px] font-bold hover:border-indigo-400 hover:text-indigo-500 transition-colors"
+            >
+              + {d.label}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 ml-auto">
+          <input
+            type="checkbox"
+            checked={hideZeroImpressions}
+            onChange={(e) => setHideZeroImpressions(e.target.checked)}
+            className="w-3 h-3 rounded border-slate-300 text-indigo-600"
+          />
+          <span className="text-[10px] font-bold text-slate-600">Hide Zero Impressions</span>
+        </label>
+      </div>
+
+      {/* Table */}
+      <div className="flex-1 overflow-auto p-8">
+        {loading && (
+          <div className="flex items-center justify-center h-full">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+              <span className="text-sm font-bold text-slate-600">Loading...</span>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center justify-center h-full">
+            <div className="px-6 py-4 bg-rose-100 text-rose-700 rounded-xl text-sm font-bold">
+              <i className="fas fa-exclamation-triangle mr-2"></i>
+              {error}
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <table className="w-full text-left border-collapse bg-white rounded-2xl shadow-sm overflow-hidden">
+            <thead>
+              <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200">
+                <th className="px-4 py-4 text-left">Name</th>
+                {visibleMetrics.map(m => (
+                  <th key={m.key} className="px-4 py-4 text-right">{m.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {/* 汇总行放在顶部 */}
+              {filteredData.length > 0 && (
+                <tr className="bg-slate-100 font-bold">
+                  <td className="px-4 py-3 text-left">
+                    <span className="text-[11px] font-black uppercase text-slate-700 tracking-widest">Total</span>
+                  </td>
+                  {visibleMetrics.map(m => {
+                    const value = summary[m.key as keyof typeof summary] || 0;
+                    return (
+                      <td key={m.key} className="px-4 py-3 text-right">
+                        <MetricValue value={value} type={m.type} />
+                      </td>
+                    );
+                  })}
+                </tr>
+              )}
+              {filteredData.map(row => (
+                <tr key={row.id} className="group hover:bg-violet-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col">
+                      <span className="text-[13px] font-bold text-slate-800">{row.name}</span>
+                      {row.hour !== null && <span className="text-[9px] text-slate-400">Hour: {row.hour}</span>}
+                      <span className="text-[8px] text-slate-400 uppercase tracking-wider">
+                        {ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label || row.dimensionType}
+                      </span>
+                    </div>
+                  </td>
+                  {visibleMetrics.map(m => (
+                    <td key={m.key} className="px-4 py-3 text-right group-hover:bg-violet-50">
+                      <MetricValue value={row[m.key as keyof HourlyDataRow] as number} type={m.type} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {!loading && !error && filteredData.length === 0 && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-slate-400 text-sm">No data found</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

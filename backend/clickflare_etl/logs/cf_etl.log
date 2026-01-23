@@ -326,3 +326,153 @@
 2026-01-11 01:43:49 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-09
 2026-01-11 01:43:49 [INFO] [CF_ETL] Rows inserted: 10572
 2026-01-11 01:43:49 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:04:43 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:04:43 [INFO] [CF_ETL] ETL Job Started for report_date: 2026-01-18
+2026-01-20 01:04:43 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:04:43 [INFO] [CF_ETL] Step 1: Connecting to ClickHouse...
+2026-01-20 01:04:43 [INFO] [CF_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-20 01:04:44 [INFO] [CF_ETL] ClickHouse connection initialized
+2026-01-20 01:04:44 [INFO] [CF_ETL] Step 2: Initializing API client...
+2026-01-20 01:04:44 [INFO] [CF_ETL] Clickflare API client initialized
+2026-01-20 01:04:44 [INFO] [CF_ETL] Step 3: Extracting data from Clickflare API (PASS 1)...
+2026-01-20 01:04:44 [INFO] [CF_ETL] Extracting data for 2026-01-18
+2026-01-20 01:05:17 [INFO] [CF_ETL] Extracted 7632 raw rows from API
+2026-01-20 01:05:17 [INFO] [CF_ETL] Step 3.5: Extracting data from Clickflare API (PASS 2 - landing)...
+2026-01-20 01:05:17 [INFO] [CF_ETL] Extracting data (PASS 2) for 2026-01-18
+2026-01-20 01:05:32 [INFO] [CF_ETL] Extracted 5681 raw rows from API (PASS 2)
+2026-01-20 01:05:32 [INFO] [CF_ETL] Step 3.6: Merging PASS 1 and PASS 2 data...
+2026-01-20 01:05:32 [INFO] [CF_ETL] Merging 7632 pass1 rows with 5681 pass2 rows
+2026-01-20 01:05:32 [INFO] [CF_ETL] Merged landing data for 5647/7632 rows
+2026-01-20 01:05:32 [INFO] [CF_ETL] Step 4: Transforming data...
+2026-01-20 01:05:32 [INFO] [CF_ETL] Transforming data...
+2026-01-20 01:05:32 [INFO] [CF_ETL] Transformed 7632 rows
+2026-01-20 01:05:32 [INFO] [CF_ETL] Step 4.5: Fetching and merging MTG data...
+2026-01-20 01:05:32 [INFO] [CF_ETL] Fetching MTG data from account: Account1
+2026-01-20 01:05:34 [INFO] [CF_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-20 01:05:35 [INFO] [CF_ETL] Downloaded 1033225 bytes of data
+2026-01-20 01:05:35 [INFO] [CF_ETL] Parsed 4420 data rows from TSV
+2026-01-20 01:05:35 [INFO] [CF_ETL] Fetching MTG data from account: Account2
+2026-01-20 01:05:36 [INFO] [CF_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-20 01:05:37 [INFO] [CF_ETL] Downloaded 362954 bytes of data
+2026-01-20 01:05:37 [INFO] [CF_ETL] Parsed 1597 data rows from TSV
+2026-01-20 01:05:37 [INFO] [CF_ETL] Fetching MTG data from account: Account3
+2026-01-20 01:05:38 [INFO] [CF_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-20 01:05:38 [INFO] [CF_ETL] Downloaded 9769 bytes of data
+2026-01-20 01:05:38 [INFO] [CF_ETL] Parsed 63 data rows from TSV
+2026-01-20 01:05:38 [INFO] [CF_ETL] Fetched MTG data from 3/3 accounts
+2026-01-20 01:05:38 [INFO] [CF_ETL] Merging 6080 MTG rows into 7632 CF rows...
+2026-01-20 01:05:38 [INFO] [CF_ETL] Aggregated MTG data into 165 unique AdsetIDs
+2026-01-20 01:05:38 [INFO] [CF_ETL] MTG merge complete: 162 matched (updated CF rows), 3 unmatched (created new rows)
+2026-01-20 01:05:38 [INFO] [CF_ETL] Total MTG spend: $43249.85, Merged spend in data: $43249.85, New rows created: 3
+2026-01-20 01:05:38 [INFO] [CF_ETL] MTG data merged successfully
+2026-01-20 01:05:38 [INFO] [CF_ETL] Step 5: Deleting existing data...
+2026-01-20 01:05:38 [INFO] [CF_ETL] Deleting ALL existing data for 2026-01-18
+2026-01-20 01:05:38 [INFO] [CF_ETL] Existing data deleted successfully
+2026-01-20 01:05:38 [INFO] [CF_ETL] Step 6: Loading data into ClickHouse...
+2026-01-20 01:05:38 [INFO] [CF_ETL] Inserting 7635 rows into ad_platform.dwd_marketing_report_daily
+2026-01-20 01:05:38 [INFO] [CF_ETL] First row data: {'reportDate': datetime.date(2026, 1, 18), 'dataSource': 'Clickflare', 'Media': 'Tiktok', 'MediaID': '6901c6250aa75f0012a81904', 'offer': '#bigbang-(24990)-CPL-Edeka DE-*PO4€*【TT-50leads】', 'offerID': '694916f798d6c300121a45cd', 'advertiser': 'Bigbangads', 'advertiserID': '6949113fdbfd9c00122465e4', 'lander': 'EDEKA DE [-v2-yN 5×100 linkout] # funmatch # path/s2/1/edeka/v2-de', 'landerID': '695cd6a92226d500120adae2', 'Campaign': '1853827833405873', 'CampaignID': 'EDK01', 'Adset': 'SOI_TK_CID3af2_TT_BC54_AC05_EDK_260109_EDK01', 'AdsetID': '1854613909789777', 'Ads': 'offer-Edeka-SP-720-1280-260107-CQF-4_STnQAtiM.mp4', 'AdsID': '1854613916125713', 'impressions': 1, 'clicks': 0, 'conversions': 0, 'revenue': 0.0, 'spend': 0.13782609, 'm_imp': 1, 'm_clicks': 0, 'm_conv': 0}
+2026-01-20 01:05:39 [INFO] [CF_ETL] Data inserted successfully
+2026-01-20 01:05:39 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:05:39 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-18
+2026-01-20 01:05:39 [INFO] [CF_ETL] Rows inserted: 7635
+2026-01-20 01:05:39 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:18:12 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:18:12 [INFO] [CF_ETL] ETL Job Started for report_date: 2026-01-18
+2026-01-20 01:18:12 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:18:12 [INFO] [CF_ETL] Step 1: Connecting to ClickHouse...
+2026-01-20 01:18:12 [INFO] [CF_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-20 01:18:12 [INFO] [CF_ETL] ClickHouse connection initialized
+2026-01-20 01:18:12 [INFO] [CF_ETL] Step 2: Initializing API client...
+2026-01-20 01:18:12 [INFO] [CF_ETL] Clickflare API client initialized
+2026-01-20 01:18:12 [INFO] [CF_ETL] Step 3: Extracting data from Clickflare API (PASS 1)...
+2026-01-20 01:18:12 [INFO] [CF_ETL] Extracting data for 2026-01-18
+2026-01-20 01:18:49 [INFO] [CF_ETL] Extracted 7632 raw rows from API
+2026-01-20 01:18:49 [INFO] [CF_ETL] Step 3.5: Extracting data from Clickflare API (PASS 2 - landing)...
+2026-01-20 01:18:49 [INFO] [CF_ETL] Extracting data (PASS 2) for 2026-01-18
+2026-01-20 01:19:04 [INFO] [CF_ETL] Extracted 5681 raw rows from API (PASS 2)
+2026-01-20 01:19:04 [INFO] [CF_ETL] Step 3.6: Merging PASS 1 and PASS 2 data...
+2026-01-20 01:19:04 [INFO] [CF_ETL] Merging 7632 pass1 rows with 5681 pass2 rows
+2026-01-20 01:19:04 [INFO] [CF_ETL] Merged landing data for 5647/7632 rows
+2026-01-20 01:19:04 [INFO] [CF_ETL] Step 4: Transforming data...
+2026-01-20 01:19:04 [INFO] [CF_ETL] Transforming data...
+2026-01-20 01:19:04 [INFO] [CF_ETL] Transformed 7632 rows
+2026-01-20 01:19:04 [INFO] [CF_ETL] Step 4.5: Fetching and merging MTG data...
+2026-01-20 01:19:04 [INFO] [CF_ETL] Fetching MTG data from account: Account1
+2026-01-20 01:19:05 [INFO] [CF_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-20 01:19:06 [INFO] [CF_ETL] Downloaded 1033225 bytes of data
+2026-01-20 01:19:06 [INFO] [CF_ETL] Parsed 4420 data rows from TSV
+2026-01-20 01:19:06 [INFO] [CF_ETL] Fetching MTG data from account: Account2
+2026-01-20 01:19:07 [INFO] [CF_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-20 01:19:10 [INFO] [CF_ETL] Downloaded 362954 bytes of data
+2026-01-20 01:19:10 [INFO] [CF_ETL] Parsed 1597 data rows from TSV
+2026-01-20 01:19:10 [INFO] [CF_ETL] Fetching MTG data from account: Account3
+2026-01-20 01:19:11 [INFO] [CF_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-20 01:19:13 [INFO] [CF_ETL] Downloaded 9769 bytes of data
+2026-01-20 01:19:13 [INFO] [CF_ETL] Parsed 63 data rows from TSV
+2026-01-20 01:19:13 [INFO] [CF_ETL] Fetched MTG data from 3/3 accounts
+2026-01-20 01:19:13 [INFO] [CF_ETL] Merging 6080 MTG rows into 7632 CF rows...
+2026-01-20 01:19:13 [INFO] [CF_ETL] Aggregated MTG data into 165 unique AdsetIDs
+2026-01-20 01:19:13 [INFO] [CF_ETL] MTG merge complete: 162 matched (updated CF rows), 3 unmatched (created new rows)
+2026-01-20 01:19:13 [INFO] [CF_ETL] Total MTG spend: $43249.85, Merged spend in data: $43499.60, New rows created: 3
+2026-01-20 01:19:13 [INFO] [CF_ETL] MTG data merged successfully
+2026-01-20 01:19:13 [INFO] [CF_ETL] Step 5: Deleting existing data...
+2026-01-20 01:19:13 [INFO] [CF_ETL] Deleting ALL existing data for 2026-01-18
+2026-01-20 01:19:14 [INFO] [CF_ETL] Existing data deleted successfully
+2026-01-20 01:19:14 [INFO] [CF_ETL] Step 6: Loading data into ClickHouse...
+2026-01-20 01:19:14 [INFO] [CF_ETL] Inserting 7635 rows into ad_platform.dwd_marketing_report_daily
+2026-01-20 01:19:14 [INFO] [CF_ETL] First row data: {'reportDate': datetime.date(2026, 1, 18), 'dataSource': 'Clickflare', 'Media': 'Tiktok', 'MediaID': '6901c6250aa75f0012a81904', 'offer': '#bigbang-(24990)-CPL-Edeka DE-*PO4€*【TT-50leads】', 'offerID': '694916f798d6c300121a45cd', 'advertiser': 'Bigbangads', 'advertiserID': '6949113fdbfd9c00122465e4', 'lander': 'EDEKA DE [-v2-yN 5×100 linkout] # funmatch # path/s2/1/edeka/v2-de', 'landerID': '695cd6a92226d500120adae2', 'Campaign': '1853827833405873', 'CampaignID': 'EDK01', 'Adset': 'SOI_TK_CID3af2_TT_BC54_AC05_EDK_260109_EDK01', 'AdsetID': '1854613909789777', 'Ads': 'offer-Edeka-SP-720-1280-260107-CQF-4_STnQAtiM.mp4', 'AdsID': '1854613916125713', 'impressions': 1, 'clicks': 0, 'conversions': 0, 'revenue': 0.0, 'spend': 0.13782609, 'm_imp': 1, 'm_clicks': 0, 'm_conv': 0}
+2026-01-20 01:19:14 [INFO] [CF_ETL] Data inserted successfully
+2026-01-20 01:19:14 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:19:14 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-18
+2026-01-20 01:19:14 [INFO] [CF_ETL] Rows inserted: 7635
+2026-01-20 01:19:14 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:28:00 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:28:00 [INFO] [CF_ETL] ETL Job Started for report_date: 2026-01-18
+2026-01-20 01:28:00 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:28:00 [INFO] [CF_ETL] Step 1: Connecting to ClickHouse...
+2026-01-20 01:28:00 [INFO] [CF_ETL] Connecting to ClickHouse: 43.160.248.9:8123
+2026-01-20 01:28:00 [INFO] [CF_ETL] ClickHouse connection initialized
+2026-01-20 01:28:00 [INFO] [CF_ETL] Step 2: Initializing API client...
+2026-01-20 01:28:00 [INFO] [CF_ETL] Clickflare API client initialized
+2026-01-20 01:28:00 [INFO] [CF_ETL] Step 3: Extracting data from Clickflare API (PASS 1)...
+2026-01-20 01:28:00 [INFO] [CF_ETL] Extracting data for 2026-01-18
+2026-01-20 01:28:35 [INFO] [CF_ETL] Extracted 7632 raw rows from API
+2026-01-20 01:28:35 [INFO] [CF_ETL] Step 3.5: Extracting data from Clickflare API (PASS 2 - landing)...
+2026-01-20 01:28:35 [INFO] [CF_ETL] Extracting data (PASS 2) for 2026-01-18
+2026-01-20 01:28:50 [INFO] [CF_ETL] Extracted 5681 raw rows from API (PASS 2)
+2026-01-20 01:28:50 [INFO] [CF_ETL] Step 3.6: Merging PASS 1 and PASS 2 data...
+2026-01-20 01:28:50 [INFO] [CF_ETL] Merging 7632 pass1 rows with 5681 pass2 rows
+2026-01-20 01:28:50 [INFO] [CF_ETL] Merged landing data for 5647/7632 rows
+2026-01-20 01:28:50 [INFO] [CF_ETL] Step 4: Transforming data...
+2026-01-20 01:28:50 [INFO] [CF_ETL] Transforming data...
+2026-01-20 01:28:50 [INFO] [CF_ETL] Transformed 7632 rows
+2026-01-20 01:28:50 [INFO] [CF_ETL] Step 4.5: Fetching and merging MTG data...
+2026-01-20 01:28:50 [INFO] [CF_ETL] Fetching MTG data from account: Account1
+2026-01-20 01:28:51 [INFO] [CF_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-20 01:28:52 [INFO] [CF_ETL] Downloaded 1033225 bytes of data
+2026-01-20 01:28:52 [INFO] [CF_ETL] Parsed 4420 data rows from TSV
+2026-01-20 01:28:52 [INFO] [CF_ETL] Fetching MTG data from account: Account2
+2026-01-20 01:28:52 [INFO] [CF_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-20 01:28:58 [INFO] [CF_ETL] Downloaded 362954 bytes of data
+2026-01-20 01:28:58 [INFO] [CF_ETL] Parsed 1597 data rows from TSV
+2026-01-20 01:28:58 [INFO] [CF_ETL] Fetching MTG data from account: Account3
+2026-01-20 01:28:59 [INFO] [CF_ETL] Response code: 200, message: Generate success, please use type = 2 to get data
+2026-01-20 01:28:59 [INFO] [CF_ETL] Downloaded 9769 bytes of data
+2026-01-20 01:28:59 [INFO] [CF_ETL] Parsed 63 data rows from TSV
+2026-01-20 01:28:59 [INFO] [CF_ETL] Fetched MTG data from 3/3 accounts
+2026-01-20 01:28:59 [INFO] [CF_ETL] Merging 6080 MTG rows into 7632 CF rows...
+2026-01-20 01:29:00 [INFO] [CF_ETL] Aggregated MTG data into 165 unique AdsetIDs
+2026-01-20 01:29:00 [INFO] [CF_ETL] MTG merge complete: 162 matched (updated CF rows), 3 unmatched (created new rows)
+2026-01-20 01:29:00 [INFO] [CF_ETL] Total MTG spend: $43249.85, Merged spend in data: $43252.85, New rows created: 3
+2026-01-20 01:29:00 [INFO] [CF_ETL] MTG data merged successfully
+2026-01-20 01:29:00 [INFO] [CF_ETL] Step 5: Deleting existing data...
+2026-01-20 01:29:00 [INFO] [CF_ETL] Deleting ALL existing data for 2026-01-18
+2026-01-20 01:29:00 [INFO] [CF_ETL] Existing data deleted successfully
+2026-01-20 01:29:00 [INFO] [CF_ETL] Step 6: Loading data into ClickHouse...
+2026-01-20 01:29:00 [INFO] [CF_ETL] Inserting 7635 rows into ad_platform.dwd_marketing_report_daily
+2026-01-20 01:29:00 [INFO] [CF_ETL] First row data: {'reportDate': datetime.date(2026, 1, 18), 'dataSource': 'Clickflare', 'Media': 'Tiktok', 'MediaID': '6901c6250aa75f0012a81904', 'offer': '#bigbang-(24990)-CPL-Edeka DE-*PO4€*【TT-50leads】', 'offerID': '694916f798d6c300121a45cd', 'advertiser': 'Bigbangads', 'advertiserID': '6949113fdbfd9c00122465e4', 'lander': 'EDEKA DE [-v2-yN 5×100 linkout] # funmatch # path/s2/1/edeka/v2-de', 'landerID': '695cd6a92226d500120adae2', 'Campaign': '1853827833405873', 'CampaignID': 'EDK01', 'Adset': 'SOI_TK_CID3af2_TT_BC54_AC05_EDK_260109_EDK01', 'AdsetID': '1854613909789777', 'Ads': 'offer-Edeka-SP-720-1280-260107-CQF-4_STnQAtiM.mp4', 'AdsID': '1854613916125713', 'impressions': 1, 'clicks': 0, 'conversions': 0, 'revenue': 0.0, 'spend': 0.13782609, 'm_imp': 1, 'm_clicks': 0, 'm_conv': 0}
+2026-01-20 01:29:00 [INFO] [CF_ETL] Data inserted successfully
+2026-01-20 01:29:00 [INFO] [CF_ETL] ============================================================
+2026-01-20 01:29:00 [INFO] [CF_ETL] ETL Job Completed for report_date: 2026-01-18
+2026-01-20 01:29:00 [INFO] [CF_ETL] Rows inserted: 7635
+2026-01-20 01:29:00 [INFO] [CF_ETL] ============================================================

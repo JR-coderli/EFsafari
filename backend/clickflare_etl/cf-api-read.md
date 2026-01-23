@@ -42,17 +42,19 @@
 
 ## 3. groupBy 可用维度
 
-| 需求字段 | groupBy 值 |
-|----------|-----------|
-| 日期 | `date` |
-| 流量来源 | `trafficSourceID` |
-| Offer | `offerID` |
-| 广告网络 | `affiliateNetworkID` |
-| Lander | `landingID` |
-| trackingField1 | `trackingField1` |
-| trackingField2 | `trackingField2` |
-| trackingField5 | `trackingField5` |
-| trackingField6 | `trackingField6` |
+| 需求字段 | groupBy 值 | 说明 |
+|----------|-----------|------|
+| 日期 | `date` | 按天聚合（YYYY-MM-DD） |
+| 日期时间（小时级） | `dateTime` | 精确到小时（YYYY-MM-DD HH:mm:ss） |
+| 小时 | `hourOfDay` | 一天中的小时（0-23），跨多天会聚合同一小时 |
+| 流量来源 | `trafficSourceID` | |
+| Offer | `offerID` | |
+| 广告网络 | `affiliateNetworkID` | |
+| Lander | `landingID` | |
+| trackingField1 | `trackingField1` | |
+| trackingField2 | `trackingField2` | |
+| trackingField5 | `trackingField5` | |
+| trackingField6 | `trackingField6` | |
 
 **完整 groupBy 可选值：**
 ```
@@ -145,7 +147,9 @@ curl --request POST \
 
 | 本地字段 | API groupBy | API metrics/响应字段 | 说明 |
 |----------|-------------|---------------------|------|
-| reportDate | `date` | `date` | 报告日期 |
+| reportDate | `date` | `date` | 报告日期（天级） |
+| reportDateTime | `dateTime` | `dateTime` | 报告日期时间（小时级） |
+| reportHour | `hourOfDay` | `hourOfDay` | 小时（0-23） |
 | Media | `trafficSourceID` | `trafficSourceName` | 流量来源名称 |
 | MediaID | `trafficSourceID` | `trafficSourceID` | 流量来源 ID |
 | offer | `offerID` | `offerName` | Offer 名称 |
@@ -187,3 +191,66 @@ curl --request POST \
 - 所有字段已验证：
   - ✅ groupBy: `date`, `trafficSourceID`, `offerID`, `affiliateNetworkID`, `trackingField1`, `trackingField2`, `trackingField5`, `trackingField6`
   - ✅ metrics: `uniqueVisits`, `uniqueClicks`, `conversions`, `revenue`, `trafficSourceName`, `offerName`, `affiliateNetworkName`
+
+---
+
+## 10. Lander 列表 API（获取 Lander URL）
+
+Report API 不支持直接获取 Lander URL，需要通过独立的 Lander 列表 API 获取。
+
+### 基本信息
+
+| 项目 | 值 |
+|------|-----|
+| API 文档 | https://developers.clickflare.io/#/paths/api-landings/get |
+| API 端点 | `GET https://public-api.clickflare.io/api/landings` |
+| 认证方式 | Header: `api-key` |
+
+### 请求示例
+
+```bash
+curl --request GET \
+  --url 'https://public-api.clickflare.io/api/landings' \
+  --header 'Accept: application/json' \
+  --header 'api-key: YOUR_API_KEY'
+```
+
+### 响应字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `workspace_id` | any | 工作区 ID |
+| `user_id` | number | 用户 ID |
+| `domain_id` | string | 域名 ID |
+| `name` | string | Lander 名称 |
+| `url` | string | **Lander URL 地址** |
+| `cta_count` | number | CTA 数量 |
+| `notes` | string | 备注 |
+| `is_prelander` | boolean | 是否是 Pre-lander |
+| `tracking_info` | object | 追踪信息（含 `tracking_domain_id`） |
+
+### 响应示例
+
+```json
+[
+  {
+    "workspace_id": null,
+    "user_id": 12345,
+    "domain_id": "abc123",
+    "name": "My Landing Page",
+    "url": "https://example.com/landing",
+    "cta_count": 1,
+    "notes": "test lander",
+    "is_prelander": false,
+    "tracking_info": {
+      "tracking_domain_id": "domain_xxx"
+    }
+  }
+]
+```
+
+### 使用场景
+
+1. 调用 `GET /api/landings` 获取所有 Lander 列表及 URL
+2. 使用返回的 Lander ID 与 Report API 中的 `landingID` 进行关联
+3. 可在本地建立 Lander ID → URL 的映射表
