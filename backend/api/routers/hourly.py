@@ -290,17 +290,22 @@ async def get_hourly_data(
 
         logger.info(f"[HOURLY API] Timezone: {timezone}, offset: {tz_offset}")
 
-        # 查询最近48小时的 UTC 数据
-        # 这样可以覆盖所有时区从午夜到当前时间的完整范围
-        # 例如：UTC 12:00 时，UTC+8 显示 0-20点，UTC-5 显示 0-7点
+        # 计算查询范围：本地今天 00:00 到当前时间（转换为 UTC）
+        # 公式：local_midnight_utc = utc_midnight - tz_offset
+        # UTC+8 (offset=8): 00:00 - 8h = 昨天 16:00
+        # EST (offset=-5): 00:00 - (-5)h = 今天 05:00
+        # PST (offset=-8): 00:00 - (-8)h = 今天 08:00
+        utc_today_midnight = datetime.now(dt_timezone.utc).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
         utc_now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
-        utc_start_dt = utc_now - timedelta(hours=48)
+
+        # 本地今天 00:00 对应的 UTC 时间
+        utc_start_dt = utc_today_midnight - timedelta(hours=tz_offset)
         utc_end_dt = utc_now
 
         utc_start_ts = utc_start_dt.strftime("%Y-%m-%d %H:%M:%S")
         utc_end_ts = utc_end_dt.strftime("%Y-%m-%d %H:%M:%S")
 
-        logger.info(f"[HOURLY API] Query range (last 48h UTC): {utc_start_ts} to {utc_end_ts}")
+        logger.info(f"[HOURLY API] Query range for {timezone}: UTC {utc_start_ts} to {utc_end_ts}")
 
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
