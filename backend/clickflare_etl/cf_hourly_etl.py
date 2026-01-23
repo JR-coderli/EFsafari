@@ -301,6 +301,7 @@ class HourlyETL:
             print(f"TEST MODE: Only pulling recent {self.test_hours} hours")
         print("=" * 60)
         print("[INFO] Storing UTC data only, timezone conversion done at query time")
+        print("[INFO] Using safe ETL mode: fetch -> delete -> insert (prevents data loss on API failure)")
 
         # 使用 UTC 时间获取数据（避免服务器本地时区影响）
         utc_now = datetime.now(timezone.utc)
@@ -321,19 +322,26 @@ class HourlyETL:
         print(f"[Time Range] UTC: {start_dt_utc.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt_utc.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"[Time Range] API (UTC+8): {start_dt.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        print("\n[Step 1/4] Deleting existing UTC data...")
-        self._delete_existing_data(start_dt_utc, end_dt_utc)
-
-        print("\n[Step 2/4] Fetching data from Clickflare API (using UTC+8)...")
+        # ========== 新流程：先拉取数据，成功后再删除旧数据 ==========
+        print("\n[Step 1/4] Fetching data from Clickflare API (using UTC+8)...")
         # 临时使用 UTC+8 获取数据
         original_timezone = self.timezone
         self.timezone = "Asia/Shanghai"
-        raw_data = self._fetch_api_data(start_dt, end_dt)
-        self.timezone = original_timezone  # 恢复原始设置
+        try:
+            raw_data = self._fetch_api_data(start_dt, end_dt)
+        except Exception as e:
+            print(f"\n[ERROR] Failed to fetch data from API: {e}")
+            print("[INFO] Old data preserved due to API failure")
+            raise
+        finally:
+            self.timezone = original_timezone  # 恢复原始设置
 
-        print(f"\n[Step 3/4] Transforming {len(raw_data):,} records to UTC...")
+        print(f"\n[Step 2/4] Transforming {len(raw_data):,} records to UTC...")
         transformed_data = self._transform_data(raw_data)
-        print(f"[Step 3/4] Transformed to {len(transformed_data):,} UTC records")
+        print(f"[Step 2/4] Transformed to {len(transformed_data):,} UTC records")
+
+        print("\n[Step 3/4] Deleting existing UTC data...")
+        self._delete_existing_data(start_dt_utc, end_dt_utc)
 
         print("\n[Step 4/4] Inserting data to ClickHouse...")
         self._insert_data(transformed_data)
