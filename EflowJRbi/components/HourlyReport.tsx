@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { UserPermission } from '../types';
 
@@ -278,7 +278,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   }, [currentDimension]);
 
   // Load data
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    console.log('[loadData] Called with currentDate:', currentDate);
     setLoading(true);
     setError(null);
 
@@ -304,6 +305,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
         params.append('filters', JSON.stringify(filters));
       }
 
+      console.log('[loadData] Request params:', Object.fromEntries(params));
+
       const response = await fetch(`/api/hourly/data?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -315,14 +318,15 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
       }
 
       const result: HourlyDataResponse = await response.json();
+      console.log('[loadData] Response total:', result.total);
       setData(result.data);
     } catch (err) {
-      console.error('Error loading hourly data:', err);
+      console.error('[loadData] Error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentDate, drillPath, currentDimension, timezone, token]);
 
   // Load ETL status
   const loadEtlStatus = async () => {
