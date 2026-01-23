@@ -5,7 +5,7 @@ Hourly Report API router.
 """
 from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 import logging
 
 from api.database import get_db
@@ -293,7 +293,7 @@ async def get_hourly_data(
         # 查询最近48小时的 UTC 数据
         # 这样可以覆盖所有时区从午夜到当前时间的完整范围
         # 例如：UTC 12:00 时，UTC+8 显示 0-20点，UTC-5 显示 0-7点
-        utc_now = datetime.now(timezone.utc).replace(tzinfo=None)
+        utc_now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
         utc_start_dt = utc_now - timedelta(hours=48)
         utc_end_dt = utc_now
 
