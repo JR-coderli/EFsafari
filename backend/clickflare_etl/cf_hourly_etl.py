@@ -298,17 +298,23 @@ class HourlyETL:
         utc_now = datetime.now(timezone.utc)
 
         if self.test_hours > 0:
-            start_dt = utc_now - timedelta(hours=self.test_hours)
-            end_dt = utc_now
+            start_dt_utc = utc_now - timedelta(hours=self.test_hours)
+            end_dt_utc = utc_now
         else:
             # 获取今天 UTC 的 0 点到现在
-            start_dt = utc_now.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_dt = utc_now
+            start_dt_utc = utc_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_dt_utc = utc_now
 
-        print(f"[Time Range] {start_dt.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+        # 将 UTC 时间转换为 UTC+8 用于 API 请求
+        # API 用 UTC+8 时区执行查询，所以需要把 UTC 时间 +8 小时
+        start_dt = start_dt_utc + timedelta(hours=8)
+        end_dt = end_dt_utc + timedelta(hours=8)
+
+        print(f"[Time Range] UTC: {start_dt_utc.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt_utc.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"[Time Range] API (UTC+8): {start_dt.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
 
         print("\n[Step 1/4] Deleting existing UTC data...")
-        self._delete_existing_data(start_dt, end_dt)
+        self._delete_existing_data(start_dt_utc, end_dt_utc)
 
         print("\n[Step 2/4] Fetching data from Clickflare API (using UTC+8)...")
         # 临时使用 UTC+8 获取数据
@@ -330,8 +336,8 @@ class HourlyETL:
             etl_status = {
                 "last_update": now,
                 "timezone": tz,
-                "start_date": start_dt.strftime("%Y-%m-%d"),
-                "end_date": end_dt.strftime("%Y-%m-%d"),
+                "start_date": start_dt_utc.strftime("%Y-%m-%d"),
+                "end_date": end_dt_utc.strftime("%Y-%m-%d"),
                 "record_count": len(transformed_data)
             }
             set_cache(f"hourly_etl:last_update:{tz}", etl_status, ttl=24*3600)
@@ -342,8 +348,8 @@ class HourlyETL:
                 sum(impressions) as impressions, sum(clicks) as clicks,
                 sum(conversions) as conversions, sum(spend) as spend, sum(revenue) as revenue
             FROM {self.ch_config['database']}.hourly_report
-            WHERE reportDate >= '{start_dt.strftime('%Y-%m-%d')}'
-                AND reportDate <= '{end_dt.strftime('%Y-%m-%d')}'
+            WHERE reportDate >= '{start_dt_utc.strftime('%Y-%m-%d')}'
+                AND reportDate <= '{end_dt_utc.strftime('%Y-%m-%d')}'
                 AND timezone = 'UTC'
             GROUP BY reportDate ORDER BY reportDate
             """
