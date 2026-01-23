@@ -192,6 +192,9 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     const newDimension = activeDims[newDimensionIndex] || activeDims[0] || 'hour';
     console.log('[Timezone Change] Current dimension:', newDimension);
 
+    // 先更新 currentDate，然后再加载数据
+    setCurrentDate(todayInNewTimezone);
+
     // 通知父组件日期已变化（用于显示）
     if (onRangeChange) {
       const newDate = new Date(todayInNewTimezone + 'T00:00:00');
@@ -204,13 +207,13 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     setError(null);
 
     try {
-      // 使用新时区的今天加载数据
-      await loadDataForTimezone(newTimezone, todayInNewTimezone, filteredPath, newDimension);
+      // 使用当前的 currentDate 加载数据（已在上面更新）
+      await loadDataForTimezone(newTimezone, filteredPath, newDimension);
       console.log('[Timezone Change] First load complete');
 
       // 短暂延迟后再次刷新，确保状态已同步
       setTimeout(async () => {
-        await loadDataForTimezone(newTimezone, todayInNewTimezone, filteredPath, newDimension);
+        await loadDataForTimezone(newTimezone, filteredPath, newDimension);
         console.log('[Timezone Change] Second load complete');
       }, 100);
 
@@ -225,8 +228,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   };
 
   // 辅助函数：为指定时区和日期加载数据
-  const loadDataForTimezone = async (tz: string, dateStr: string, path: DrillPathItem[], dimension: string) => {
-    console.log('[Load Data]', { tz, dateStr, path, dimension });
+  const loadDataForTimezone = useCallback(async (tz: string, path: DrillPathItem[], dimension: string) => {
+    console.log('[Load Data]', { tz, currentDate, path, dimension });
 
     const filters = path.map(item => ({
       dimension: item.dimension,
@@ -234,8 +237,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     }));
 
     const params = new URLSearchParams({
-      start_date: dateStr,
-      end_date: dateStr,
+      start_date: currentDate,
+      end_date: currentDate,
       group_by: dimension,
       timezone: tz,
       limit: '1000',
@@ -259,7 +262,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     const result: HourlyDataResponse = await response.json();
     console.log('[Load Data] Response:', { total: result.total, dataCount: result.data.length });
     setData(result.data);
-  };
+  }, [currentDate, token]);
 
   // 当前层级维度：根据下钻路径计算
   const currentDimensionIndex = drillPath.length;
