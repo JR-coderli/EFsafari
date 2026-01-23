@@ -14,7 +14,7 @@ import sys
 import yaml
 import argparse
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any
 
 # Add api directory to PYTHONPATH
@@ -294,16 +294,16 @@ class HourlyETL:
         print("=" * 60)
         print("[INFO] Storing UTC data only, timezone conversion done at query time")
 
-        # 始终使用 UTC+8 时区获取数据（因为 API 只支持这个时区）
-        today = datetime.now()
+        # 使用 UTC 时间获取数据（避免服务器本地时区影响）
+        utc_now = datetime.now(timezone.utc)
 
         if self.test_hours > 0:
-            start_dt = today - timedelta(hours=self.test_hours)
-            end_dt = today
+            start_dt = utc_now - timedelta(hours=self.test_hours)
+            end_dt = utc_now
         else:
-            # 获取今天 UTC+8 的 0 点到现在
-            start_dt = today.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_dt = today
+            # 获取今天 UTC 的 0 点到现在
+            start_dt = utc_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_dt = utc_now
 
         print(f"[Time Range] {start_dt.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -325,7 +325,7 @@ class HourlyETL:
         self._insert_data(transformed_data)
 
         # 更新缓存（所有时区共享同一个 UTC 数据源的更新时间）
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         for tz in ["UTC", "Asia/Shanghai", "EST", "PST"]:
             etl_status = {
                 "last_update": now,
