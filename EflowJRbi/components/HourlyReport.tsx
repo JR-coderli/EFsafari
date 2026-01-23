@@ -126,6 +126,15 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     return new Date(tzTimestamp).toISOString().split('T')[0];
   });
 
+  // 监听父组件传入的日期变化（用户手动选择日期时）
+  useEffect(() => {
+    if (customDateStart) {
+      const newDate = customDateStart.toISOString().split('T')[0];
+      console.log('[Date Change] Parent date changed:', { newDate, timezone });
+      setCurrentDate(newDate);
+    }
+  }, [customDateStart]);
+
   // 拖动相关状态
   const [draggedMetricIndex, setDraggedMetricIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
