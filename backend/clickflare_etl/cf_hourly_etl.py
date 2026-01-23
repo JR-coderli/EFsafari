@@ -184,8 +184,7 @@ class HourlyETL:
     def _transform_data(self, raw_data: List[Dict]) -> List[Dict]:
         """转换 API 数据为数据库格式
 
-        只存储 UTC 时区的数据，查询时根据需要转换时区。
-        Clickflare API 返回的是 UTC+8 时区的数据，需要转换为 UTC 存储。
+        API 使用 UTC 时区，返回的 dateTime 就是 UTC 时间，直接存储即可。
         """
         transformed = []
 
@@ -193,23 +192,20 @@ class HourlyETL:
             date_time_str = item.get("dateTime", "")
             try:
                 dt = datetime.strptime(date_time_str, "%Y-%m-%d %H:%M:%S")
-                report_date_utc8 = dt.date()
-                report_hour_utc8 = dt.hour
+                report_date = dt.date()
+                report_hour = dt.hour
             except (ValueError, TypeError):
                 date_str = item.get("date", "")
                 hour_of_day = item.get("hourOfDay", 0)
                 try:
-                    report_date_utc8 = datetime.strptime(date_str, "%Y-%m-%d").date()
-                    report_hour_utc8 = int(hour_of_day)
+                    report_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    report_hour = int(hour_of_day)
                 except (ValueError, TypeError):
                     continue
 
-            # 将 UTC+8 转换为 UTC（减 8 小时）
-            utc_dt = datetime.combine(report_date_utc8, datetime.min.time()) + timedelta(hours=report_hour_utc8) - timedelta(hours=8)
-
             record = {
-                "reportDate": utc_dt.date(),
-                "reportHour": utc_dt.hour,
+                "reportDate": report_date,
+                "reportHour": report_hour,
                 "timezone": "UTC",
                 "Media": item.get("trafficSourceName", ""),
                 "MediaID": item.get("trafficSourceID", ""),
@@ -303,7 +299,7 @@ class HourlyETL:
         print("[INFO] Storing UTC data only, timezone conversion done at query time")
         print("[INFO] Using safe ETL mode: fetch -> delete -> insert (prevents data loss on API failure)")
 
-        # 使用 UTC 时间获取数据（避免服务器本地时区影响）
+        # 使用 UTC 时间获取数据
         utc_now = datetime.now(timezone.utc)
 
         if self.test_hours > 0:
@@ -314,19 +310,18 @@ class HourlyETL:
             start_dt_utc = utc_now.replace(hour=0, minute=0, second=0, microsecond=0)
             end_dt_utc = utc_now
 
-        # 将 UTC 时间转换为 UTC+8 用于 API 请求
-        # API 用 UTC+8 时区执行查询，所以需要把 UTC 时间 +8 小时
-        start_dt = start_dt_utc + timedelta(hours=8)
-        end_dt = end_dt_utc + timedelta(hours=8)
+        # API 使用 UTC 时区，直接使用 UTC 时间（不需要转换）
+        start_dt = start_dt_utc
+        end_dt = end_dt_utc
 
         print(f"[Time Range] UTC: {start_dt_utc.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt_utc.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"[Time Range] API (UTC+8): {start_dt.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"[Time Range] API (UTC): {start_dt.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
 
         # ========== 新流程：先拉取数据，成功后再删除旧数据 ==========
-        print("\n[Step 1/4] Fetching data from Clickflare API (using UTC+8)...")
-        # 临时使用 UTC+8 获取数据
+        print("\n[Step 1/4] Fetching data from Clickflare API (using UTC)...")
+        # 使用 UTC 时区获取数据
         original_timezone = self.timezone
-        self.timezone = "Asia/Shanghai"
+        self.timezone = "UTC"
         try:
             raw_data = self._fetch_api_data(start_dt, end_dt)
         except Exception as e:
@@ -336,9 +331,9 @@ class HourlyETL:
         finally:
             self.timezone = original_timezone  # 恢复原始设置
 
-        print(f"\n[Step 2/4] Transforming {len(raw_data):,} records to UTC...")
+        print(f"\n[Step 2/4] Processing {len(raw_data):,} records...")
         transformed_data = self._transform_data(raw_data)
-        print(f"[Step 2/4] Transformed to {len(transformed_data):,} UTC records")
+        print(f"[Step 2/4] Processed {len(transformed_data):,} records")
 
         print("\n[Step 3/4] Deleting existing UTC data...")
         self._delete_existing_data(start_dt_utc, end_dt_utc)
