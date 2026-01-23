@@ -114,6 +114,9 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   const [sortBy, setSortBy] = useState<SortField>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [refreshing, setRefreshing] = useState(false);
+  // 防止在时区切换时重复触发 loadData
+  const [isTimezoneChanging, setIsTimezoneChanging] = useState(false);
+  const loadDataRef = useRef<(() => Promise<void>) | null>(null);
 
   // 内部日期状态：使用当前时区的今天，不依赖父组件的 customDateStart
   const [currentDate, setCurrentDate] = useState(() => {
@@ -130,8 +133,14 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   useEffect(() => {
     if (customDateStart) {
       const newDate = customDateStart.toISOString().split('T')[0];
-      console.log('[Date Change] Parent date changed:', { newDate, timezone });
+      console.log('[Date Change] Parent date changed:', {
+        newDate,
+        oldDate: currentDate,
+        timezone,
+        isTimezoneChanging
+      });
       setCurrentDate(newDate);
+      console.log('[Date Change] setCurrentDate called');
     }
   }, [customDateStart]);
 
@@ -171,13 +180,16 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   const handleTimezoneChange = async (newTimezone: string) => {
     console.log('[Timezone Change] START', { from: timezone, to: newTimezone });
 
+    // 防止重复触发
+    if (isTimezoneChanging) {
+      console.log('[Timezone Change] Already changing, skipping');
+      return;
+    }
+
     // 计算新时区的今天日期
     const todayInNewTimezone = getDateInTimezone(newTimezone);
     console.log('[Timezone Change] New timezone today:', todayInNewTimezone);
     console.log('[Timezone Change] Old currentDate:', currentDate);
-
-    setTimezone(newTimezone);
-    setCurrentDate(todayInNewTimezone); // 更新内部日期状态
 
     // 过滤掉 hour 维度的筛选（因为不同时区的 hour 值不同）
     const filteredPath = drillPath.filter(item => item.dimension !== 'hour');
@@ -185,15 +197,19 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
       original: drillPath.map(p => ({ dim: p.dimension, val: p.value })),
       filtered: filteredPath.map(p => ({ dim: p.dimension, val: p.value }))
     });
-    setDrillPath(filteredPath);
 
     // 计算当前应该显示的维度：根据筛选后的路径计算
     const newDimensionIndex = filteredPath.length;
     const newDimension = activeDims[newDimensionIndex] || activeDims[0] || 'hour';
     console.log('[Timezone Change] Current dimension:', newDimension);
 
-    // 先更新 currentDate，然后再加载数据
+    // 设置标志，防止 useEffect 触发 loadData
+    setIsTimezoneChanging(true);
+
+    // 一次性更新所有状态
+    setTimezone(newTimezone);
     setCurrentDate(todayInNewTimezone);
+    setDrillPath(filteredPath);
 
     // 通知父组件日期已变化（用于显示）
     if (onRangeChange) {
@@ -207,24 +223,53 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     setError(null);
 
     try {
-      // 使用当前的 currentDate 加载数据（已在上面更新）
-      await loadDataForTimezone(newTimezone, filteredPath, newDimension);
-      console.log('[Timezone Change] First load complete');
+      // 使用 setTimeout 确保状态已更新
+      await new Promise(resolve => setTimeout(resolve, 50));
 
-      // 短暂延迟后再次刷新，确保状态已同步
-      setTimeout(async () => {
-        await loadDataForTimezone(newTimezone, filteredPath, newDimension);
-        console.log('[Timezone Change] Second load complete');
-      }, 100);
+      // 此时状态已更新，使用新的 currentDate 加载数据
+      console.log('[Timezone Change] Loading data with new state...');
+      const filters = filteredPath.map(item => ({
+        dimension: item.dimension,
+        value: item.value
+      }));
+
+      const params = new URLSearchParams({
+        start_date: todayInNewTimezone,  // 直接使用计算的日期
+        end_date: todayInNewTimezone,
+        group_by: newDimension,
+        timezone: newTimezone,
+        limit: '1000',
+      });
+
+      if (filters.length > 0) {
+        params.append('filters', JSON.stringify(filters));
+      }
+
+      console.log('[Timezone Change] Request params:', Object.fromEntries(params));
+
+      const response = await fetch(`/api/hourly/data?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        console.error('[Timezone Change] HTTP Error:', response.status, response.statusText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result: HourlyDataResponse = await response.json();
+      console.log('[Timezone Change] Response:', { total: result.total, dataCount: result.data.length });
+      console.log('[Timezone Change] Setting data...');
+      setData(result.data);
+      console.log('[Timezone Change] Data set complete');
 
     } catch (err) {
       console.error('[Timezone Change] Error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
+      setIsTimezoneChanging(false);
+      console.log('[Timezone Change] END');
     }
-
-    console.log('[Timezone Change] END');
   };
 
   // 辅助函数：为指定时区和日期加载数据
@@ -282,7 +327,12 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
 
   // Load data
   const loadData = useCallback(async () => {
-    console.log('[loadData] Called with currentDate:', currentDate);
+    console.log('[loadData] Called', {
+      currentDate,
+      drillPath: drillPath.map(p => ({ dim: p.dimension, val: p.value })),
+      currentDimension,
+      timezone
+    });
     setLoading(true);
     setError(null);
 
@@ -321,8 +371,10 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
       }
 
       const result: HourlyDataResponse = await response.json();
-      console.log('[loadData] Response total:', result.total);
+      console.log('[loadData] Response:', { total: result.total, dataCount: result.data.length });
+      console.log('[loadData] Setting data with', result.data.length, 'rows');
       setData(result.data);
+      console.log('[loadData] Data set complete');
     } catch (err) {
       console.error('[loadData] Error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -459,8 +511,18 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   };
 
   useEffect(() => {
+    // 如果正在切换时区，不触发 loadData（由 handleTimezoneChange 处理）
+    if (isTimezoneChanging) {
+      console.log('[useEffect] Skipping loadData due to timezone change');
+      return;
+    }
     loadData();
-  }, [drillPath, activeDims, timezone, currentDate]);
+  }, [drillPath, activeDims, timezone, currentDate, isTimezoneChanging]);
+
+  // 调试：监听 data 状态变化
+  useEffect(() => {
+    console.log('[Data State Changed]', { dataLength: data.length, loading, error });
+  }, [data]);
 
   // 初始化时加载保存的指标顺序
   useEffect(() => {
@@ -559,6 +621,14 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
 
   // Filter and sort data
   const filteredData = useMemo(() => {
+    console.log('[filteredData] Computing...', {
+      dataLength: data.length,
+      quickFilterText,
+      hideZeroImpressions,
+      sortBy,
+      sortOrder,
+      currentDimension
+    });
     let result = data.filter(row => {
       if (hideZeroImpressions && row.impressions === 0) return false;
       if (quickFilterText && !row.name.toLowerCase().includes(quickFilterText.toLowerCase())) return false;
@@ -594,6 +664,11 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
 
     return result;
   }, [data, quickFilterText, hideZeroImpressions, sortBy, sortOrder, currentDimension]);
+
+  // 调试：监听 filteredData 状态变化
+  useEffect(() => {
+    console.log('[filteredData] Changed', { length: filteredData.length });
+  }, [filteredData]);
 
   // Summary
   const summary = useMemo(() => {
