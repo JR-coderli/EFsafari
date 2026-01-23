@@ -284,36 +284,30 @@ async def get_hourly_data(
         user_keywords = current_user.get("keywords", [])
 
         logger.info(f"[HOURLY API] User: id={current_user.get('id')}, role={user_role}, timezone={timezone}")
-        logger.info(f"[HOURLY API] Original date range: {start_date} to {end_date}")
+        logger.info(f"[HOURLY API] Requested date range: {start_date} to {end_date}")
 
         # 获取时区偏移
         tz_offset = TIMEZONE_OFFSETS.get(timezone, 0)
 
-        logger.info(f"[HOURLY API] Timezone conversion: timezone={timezone}, tz_offset={tz_offset}")
+        logger.info(f"[HOURLY API] Timezone: {timezone}, offset: {tz_offset}")
 
-        # 调整日期范围以适应时区转换
-        # 对于正偏移量（如 UTC+8），需要扩展到前一天的数据
-        # 因为 UTC+8 的 00:00-07:59 实际上是 UTC 前一天的 16:00-23:59
-        if tz_offset > 0:
-            # 需要包含前一天的数据来覆盖目标时区的完整一天
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d") - timedelta(days=1)
-            adjusted_start_date = start_dt.strftime("%Y-%m-%d")
-            # end_date 保持不变，因为我们仍然查询到当天的数据
-            adjusted_end_date = end_date
-            logger.info(f"[HOURLY API] Adjusted date range for positive offset: {adjusted_start_date} to {adjusted_end_date}")
-        elif tz_offset < 0:
-            # 对于负偏移量（如 EST UTC-5），需要包含后一天的数据
-            # 因为 EST 的 16:00-23:59 实际上是 UTC 下一天的 21:00-04:59
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
-            adjusted_start_date = start_date
-            adjusted_end_date = end_dt.strftime("%Y-%m-%d")
-            logger.info(f"[HOURLY API] Adjusted date range for negative offset: {adjusted_start_date} to {adjusted_end_date}")
-        else:
-            # UTC 不需要调整
-            adjusted_start_date = start_date
-            adjusted_end_date = end_date
-            logger.info(f"[HOURLY API] No date adjustment needed for UTC")
+        # 根据时区调整查询的日期范围
+        # 目标时区的 D 日 = UTC 的 D 日 + tz_offset 小时
+        # 如果 tz_offset 为负（如 UTC-8），D 日的开始可能对应 UTC 的 D-1 日
+        # 如果 tz_offset 为正（如 UTC+8），D 日的开始可能对应 UTC 的 D-1 日
+
+        target_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        # 计算目标时区 D 日 00:00 对应的 UTC 时间
+        utc_start = target_dt - timedelta(hours=tz_offset)
+        # 计算目标时区 D 日 23:59 对应的 UTC 时间
+        utc_end = target_dt + timedelta(days=1) - timedelta(seconds=1) - timedelta(hours=tz_offset)
+
+        adjusted_start_date = utc_start.strftime("%Y-%m-%d")
+        adjusted_end_date = utc_end.strftime("%Y-%m-%d")
+
+        logger.info(f"[HOURLY API] Target TZ {timezone} {start_date} 00:00 = UTC {adjusted_start_date} {utc_start.strftime('%H:%M')}")
+        logger.info(f"[HOURLY API] Target TZ {timezone} {start_date} 23:59 = UTC {adjusted_end_date} {utc_end.strftime('%H:%M')}")
+        logger.info(f"[HOURLY API] Query range: {adjusted_start_date} to {adjusted_end_date}")
 
         permission_filter = _build_permission_filter(user_role, user_keywords)
 
@@ -334,13 +328,13 @@ async def get_hourly_data(
 
             if dim == "hour":
                 # hour 维度需要反向转换：用户看到的时区小时 -> UTC 小时
-                # UTC小时 = 目标时区小时 + 偏移量
+                # UTC小时 = 目标时区小时 - 偏移量
                 try:
                     if ":" in str(value):
                         hour_val = int(value.split(":")[0])
                     else:
                         hour_val = int(value)
-                    utc_hour = (hour_val + tz_offset + 24) % 24
+                    utc_hour = (hour_val - tz_offset + 24) % 24
                     base_conditions.append(f"{column} = {utc_hour}")
                 except (ValueError, IndexError):
                     base_conditions.append(f"{column} = {value}")
@@ -357,10 +351,10 @@ async def get_hourly_data(
         # 根据主维度选择分组表达式
         if primary_dim == "hour":
             # 对于 hour 维度，使用时区转换后的小时
-            # 公式: UTC小时 - 偏移量 = 目标时区小时
-            # 例如: UTC 13 - (-8) = 21 (PST)
-            # 例如: UTC 13 - 8 = 5 (UTC+8 的第二天早上)
-            group_expr = f"((reportHour - {tz_offset} + 24) % 24)"
+            # 公式: UTC小时 + 偏移量 = 目标时区小时
+            # PST (UTC-8): UTC 0 + (-8) + 24 = 16, UTC 7 + (-8) = -1 + 24 = 23
+            # UTC+8: UTC 0 + 8 = 8, UTC 15 + 8 = 23
+            group_expr = f"((reportHour + {tz_offset} + 24) % 24)"
             logger.info(f"[HOURLY API] Hour dimension: group_expr={group_expr}, tz_offset={tz_offset}")
         else:
             # 其他维度使用原始列
