@@ -308,16 +308,9 @@ async def get_hourly_data(
 
         # 对于需要跨 UTC 日查询的时区（如 PST/EST），确保包含两天数据
         # PST 23日需要 UTC 23日 08:00-23:59 和 UTC 24日 00:00-07:59
-        if tz_offset < 0:
-            # 负时区（PST/EST）需要查询两天数据
-            adjusted_start_date = utc_start_dt.strftime("%Y-%m-%d")
-            # 多查一天以确保覆盖晚间时段
-            next_day = utc_end_dt + timedelta(days=1)
-            adjusted_end_date = next_day.strftime("%Y-%m-%d")
-        else:
-            # 正时区（UTC+8）一天数据就够了
-            adjusted_start_date = utc_start_dt.strftime("%Y-%m-%d")
-            adjusted_end_date = utc_end_dt.strftime("%Y-%m-%d")
+        # utc_end_dt 已经是正确的结束日期，不需要再加一天
+        adjusted_start_date = utc_start_dt.strftime("%Y-%m-%d")
+        adjusted_end_date = utc_end_dt.strftime("%Y-%m-%d")
 
         logger.info(f"[HOURLY API] Target {timezone} {start_date} 00:00 = UTC {adjusted_start_date} {utc_start_dt.strftime('%H:%M')}")
         logger.info(f"[HOURLY API] Target {timezone} {start_date} 23:59 = UTC {adjusted_end_date} {utc_end_dt.strftime('%H:%M')}")
