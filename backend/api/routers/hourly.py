@@ -298,17 +298,22 @@ async def get_hourly_data(
 
         target_dt = datetime.strptime(start_date, "%Y-%m-%d")
 
-        # 计算开始时间：目标时区 D 日 00:00 的 UTC 时间
-        # 例如 PST 2026-01-23 00:00 = UTC 2026-01-23 08:00
-        utc_start_dt = target_dt + timedelta(hours=-tz_offset)
+        # 计算目标时区 D 日 00:00 对应的 UTC 时间
+        # local = UTC - tz_offset，所以 UTC = local + tz_offset
+        # EST (-5): local 00:00 = UTC 00:00 + (-5) = 前一天 19:00
+        # PST (-8): local 00:00 = UTC 00:00 + (-8) = 前一天 16:00
+        # UTC+8:    local 00:00 = UTC 00:00 + 8 = 当天 08:00
+        base_midnight = datetime(2000, 1, 1, 0, 0, 0)  # 任意日期的午夜
+        local_midnight_utc = base_midnight + timedelta(hours=tz_offset)
+        hour_offset = local_midnight_utc.hour
+        if local_midnight_utc.day != 1:  # 跨到前一天了
+            hour_offset -= 24
 
-        # 计算开始时间：目标时区 D 日 00:00 的 UTC 时间
-        # 计算结束时间：目标时区 D+1 日 00:00 的 UTC 时间（不包含 D 日 23:59 之后的数据）
-        # EST 2026-01-23 00:00 = UTC 2026-01-23 05:00, 结束 = UTC 2026-01-24 05:00
-        # PST 2026-01-23 00:00 = UTC 2026-01-23 08:00, 结束 = UTC 2026-01-24 08:00
+        # start = 目标日期午夜 + offset
+        utc_start_dt = target_dt + timedelta(hours=hour_offset)
+        # end = start + 24小时（完整的本地日）
         utc_end_dt = utc_start_dt + timedelta(days=1)
 
-        # 使用完整时间戳过滤：>= start, < end（不包含结束时刻）
         utc_start_ts = utc_start_dt.strftime("%Y-%m-%d %H:%M:%S")
         utc_end_ts = utc_end_dt.strftime("%Y-%m-%d %H:%M:%S")
 
