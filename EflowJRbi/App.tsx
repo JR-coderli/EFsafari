@@ -1611,7 +1611,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                 {loading && (
                   <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
                     <div className="flex flex-col items-center gap-3">
-                      <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                      <div className="w-10 h-10 border-[3px] border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
                       <span className="text-sm font-bold text-slate-600">Loading...</span>
                     </div>
                   </div>
