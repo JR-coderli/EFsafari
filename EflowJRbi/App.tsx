@@ -407,6 +407,9 @@ const LoginPage: React.FC<{ onLogin: (user: UserPermission) => void }> = ({ onLo
 };
 
 const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }> = ({ currentUser, onLogout }) => {
+  // Debug: Log currentUser on mount
+  console.log('Dashboard mounted with currentUser:', JSON.stringify(currentUser, null, 2));
+  console.log('currentUser.showRevenue:', currentUser.showRevenue, 'type:', typeof currentUser.showRevenue);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<AdRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -781,7 +784,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       if (sortOrder === 'desc') {
         setSortOrder('asc');
       } else if (sortOrder === 'asc') {
-        setSortColumn('revenue');
+        // 重置为默认排序列（使用第一个可见的列）
+        const defaultSortColumn = visibleMetrics.find(m => m.key === 'spend')?.key || visibleMetrics[0]?.key || 'spend';
+        setSortColumn(defaultSortColumn as SortColumn);
         setSortOrder('desc');
       }
     } else {
@@ -830,6 +835,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
+  const dragItemKey = useRef<string | null>(null);
+  const dragOverItemKey = useRef<string | null>(null);
 
   // 用户专属的存储键
   const getUserStorageKey = (userId: string) => `ad_tech_saved_views_user_${userId}`;
@@ -1130,14 +1137,18 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   };
 
   const handleMetricReorder = () => {
-    if (dragItem.current !== null && dragOverItem.current !== null) {
+    if (dragItemKey.current !== null && dragOverItemKey.current !== null) {
       const copyListItems = [...metrics];
-      const dragItemContent = copyListItems[dragItem.current];
-      copyListItems.splice(dragItem.current, 1);
-      copyListItems.splice(dragOverItem.current, 0, dragItemContent);
-      dragItem.current = dragOverItem.current;
-      dragOverItem.current = null;
-      setMetrics(copyListItems);
+      const fromIndex = copyListItems.findIndex(m => m.key === dragItemKey.current);
+      const toIndex = copyListItems.findIndex(m => m.key === dragOverItemKey.current);
+      if (fromIndex !== -1 && toIndex !== -1) {
+        const dragItemContent = copyListItems[fromIndex];
+        copyListItems.splice(fromIndex, 1);
+        copyListItems.splice(toIndex, 0, dragItemContent);
+        setMetrics(copyListItems);
+      }
+      dragItemKey.current = null;
+      dragOverItemKey.current = null;
     }
   };
 
@@ -1268,14 +1279,21 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     const formData = new FormData(e.currentTarget);
     const keywords = (formData.get('keywords') as string).split(',').map(k => k.trim()).filter(Boolean);
     const role = formData.get('role') as string;
+
+    // 直接使用 editingUser 的 showRevenue 值，因为 checkbox 是受控组件
+    // 如果没有 editingUser（新建用户），默认为 true
+    const showRevenue = editingUser?.showRevenue !== false;
+
     const userData = {
       name: formData.get('name') as string,
       username: formData.get('username') as string,
       password: formData.get('password') as string,
       email: formData.get('email') as string,
       role: role,
-      keywords: keywords
+      keywords: keywords,
+      showRevenue: showRevenue
     };
+    console.log('Saving user:', { id: editingUser?.id, showRevenue, editingUserShowRevenue: editingUser?.showRevenue });
 
     try {
       if (useLocalUsers) {
@@ -1291,11 +1309,15 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         localStorage.setItem('ad_tech_users', JSON.stringify(updated));
       } else {
         // Use API
+        console.log('Calling API with userData:', userData);
         if (editingUser) {
           const updatedUser = await usersApi.updateUser(editingUser.id, userData);
+          console.log('API returned updatedUser:', JSON.stringify(updatedUser, null, 2));
+          console.log('updatedUser.showRevenue:', updatedUser.showRevenue, 'type:', typeof updatedUser.showRevenue);
           setUsers(users.map(u => u.id === editingUser.id ? updatedUser : u));
         } else {
           const newUser = await usersApi.createUser(userData);
+          console.log('API returned newUser:', JSON.stringify(newUser, null, 2));
           setUsers([...users, newUser]);
         }
       }
@@ -1327,7 +1349,15 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     }
   };
 
-  const visibleMetrics = metrics.filter(m => m.visible);
+  const visibleMetrics = metrics.filter(m => {
+    if (!m.visible) return false;
+    // 如果用户没有权限查看收入，隐藏 revenue 相关列
+    if (currentUser.showRevenue === false) {
+      const revenueKeys = ['revenue', 'profit', 'epa', 'epc', 'epv', 'roi', 'm_epc', 'm_epv', 'm_epa'];
+      return !revenueKeys.includes(m.key);
+    }
+    return true;
+  });
 
   return (
     <div className="flex h-screen bg-white overflow-hidden text-slate-900 font-sans">
@@ -1378,14 +1408,16 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                   <i className="fas fa-calendar-alt w-4 text-center text-xs"></i>
                   <span className="text-xs font-bold">Dates Report</span>
                 </button>
-                <button
-                  onClick={() => { setCurrentPage('hourly'); setPerformanceSubPage('hourly'); }}
-                  className={`w-full flex items-center gap-4 px-6 py-3 transition-colors ${currentPage === 'hourly' ? 'text-indigo-400 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800/30'}`}
-                >
-                  <span className="w-2"></span>
-                  <i className="fas fa-clock w-4 text-center text-xs"></i>
-                  <span className="text-xs font-bold">Hourly Insight</span>
-                </button>
+                {currentUser.showRevenue !== false && (
+                  <button
+                    onClick={() => { setCurrentPage('hourly'); setPerformanceSubPage('hourly'); }}
+                    className={`w-full flex items-center gap-4 px-6 py-3 transition-colors ${currentPage === 'hourly' ? 'text-indigo-400 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800/30'}`}
+                  >
+                    <span className="w-2"></span>
+                    <i className="fas fa-clock w-4 text-center text-xs"></i>
+                    <span className="text-xs font-bold">Hourly Insight</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -1938,7 +1970,11 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <button onClick={() => { setEditingUser(u); setShowUserModal(true); }} className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center hover:bg-indigo-100 transition-colors"><i className="fas fa-edit text-xs"></i></button>
+                          <button onClick={() => {
+                            console.log('Editing user:', u);
+                            setEditingUser(u);
+                            setShowUserModal(true);
+                          }} className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center hover:bg-indigo-100 transition-colors"><i className="fas fa-edit text-xs"></i></button>
                           <button onClick={() => deleteUser(u.id)} className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center hover:bg-rose-100 transition-colors"><i className="fas fa-trash-alt text-xs"></i></button>
                         </div>
                       </div>
@@ -1991,6 +2027,25 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                 <input name="keywords" defaultValue={editingUser?.keywords?.join(', ') || ''} placeholder="e.g. ZP, Zp, zp" className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" />
                 <p className="text-[9px] text-slate-400 font-bold mt-1 italic">* OPS: Adset, OPS02: Platform, Business: Offer. Empty = all access.</p>
               </div>
+              <div className="flex items-center gap-3 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                <input
+                  type="checkbox"
+                  name="showRevenue"
+                  id="showRevenue"
+                  checked={editingUser?.showRevenue !== false}
+                  onChange={(e) => {
+                    console.log('Checkbox changed:', e.target.checked, 'editingUser.showRevenue:', editingUser?.showRevenue);
+                    // 更新 editingUser 的 showRevenue 值
+                    if (editingUser) {
+                      setEditingUser({ ...editingUser, showRevenue: e.target.checked });
+                    }
+                  }}
+                  className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-50"
+                />
+                <label htmlFor="showRevenue" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                  Show Revenue Columns <span className="text-slate-400 font-normal">(Revenue, Profit, EPA, EPC, etc.)</span>
+                </label>
+              </div>
             </div>
             <div className="mt-8 flex gap-3">
               <button type="button" onClick={() => setShowUserModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
@@ -2014,20 +2069,32 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                   <div key={groupName} className="mb-6">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 block">{groupName} Metrics</span>
                     <div className="space-y-2">
-                      {metrics.filter(m => m.group === groupName).map(m => (
-                        <label key={m.key} className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${m.visible ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 bg-white'}`}>
-                          <input type="checkbox" checked={m.visible} onChange={() => setMetrics(prev => prev.map(p => p.key === m.key ? { ...p, visible: !p.visible } : p))} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-50" />
-                          <span className="text-xs font-bold text-slate-700">{m.label}</span>
-                        </label>
-                      ))}
+                      {metrics.filter(m => m.group === groupName).map(m => {
+                        const revenueKeys = ['revenue', 'profit', 'epa', 'epc', 'epv', 'roi', 'm_epc', 'm_epv', 'm_epa'];
+                        const isRevenueMetric = revenueKeys.includes(m.key);
+                        const isHiddenByPermission = currentUser.showRevenue === false && isRevenueMetric;
+
+                        if (isHiddenByPermission) return null;  // 完全隐藏没有权限的列
+
+                        return (
+                          <label key={m.key} className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-all ${m.visible ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 bg-white'}`}>
+                            <input type="checkbox" checked={m.visible} onChange={() => setMetrics(prev => prev.map(p => p.key === m.key ? { ...p, visible: !p.visible } : p))} className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-50" />
+                            <span className="text-xs font-bold text-slate-700">{m.label}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
               <div className="w-[280px] bg-indigo-50/20 rounded-2xl border border-indigo-100 p-5 flex flex-col overflow-y-auto custom-scrollbar">
                 <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 mb-4 block">Selected Order</span>
-                {metrics.filter(m => m.visible).map((m, idx) => (
-                   <div key={m.key} draggable onDragStart={() => dragItem.current = idx} onDragEnter={() => dragOverItem.current = idx} onDragEnd={handleMetricReorder} onDragOver={e => e.preventDefault()} className="p-3 bg-white border border-indigo-200 rounded-xl flex items-center gap-3 shadow-sm mb-2 cursor-grab">
+                {metrics.filter(m => {
+                  if (!m.visible) return false;
+                  const revenueKeys = ['revenue', 'profit', 'epa', 'epc', 'epv', 'roi', 'm_epc', 'm_epv', 'm_epa'];
+                  return !(currentUser.showRevenue === false && revenueKeys.includes(m.key));
+                }).map((m, idx) => (
+                   <div key={m.key} draggable onDragStart={() => dragItemKey.current = m.key} onDragEnter={() => dragOverItemKey.current = m.key} onDragEnd={handleMetricReorder} onDragOver={e => e.preventDefault()} className="p-3 bg-white border border-indigo-200 rounded-xl flex items-center gap-3 shadow-sm mb-2 cursor-grab">
                       <i className="fas fa-grip-vertical text-indigo-300 text-xs"></i>
                       <span className="text-xs font-bold text-slate-700 truncate flex-1">{m.label}</span>
                    </div>

@@ -58,24 +58,32 @@ class ViewService:
 
         view_id = f"view_{int(datetime.now().timestamp() * 1000)}"
         now = datetime.now()
+        now_str = now.strftime('%Y-%m-%d %H:%M:%S')
 
         table_name = self._get_table_name()
         client = self.db.connect()
 
-        # Insert data using row-oriented format
-        # Let ClickHouse auto-detect column order from table definition
-        data = [[
-            view_id,
-            user_id,
-            view_create.name,
-            view_create.dimensions,
-            view_create.visible_metrics,
-            1 if view_create.color_mode else 0,
-            1 if view_create.is_default else 0,
-            now,
-            None
-        ]]
-        client.insert(table_name, data)
+        # Format dimensions array for ClickHouse
+        if view_create.dimensions:
+            escaped_dims = ', '.join([f"'{d}'" for d in view_create.dimensions])
+            dims_str = f"[{escaped_dims}]"
+        else:
+            dims_str = "[]"
+
+        # Format visible_metrics array
+        if view_create.visible_metrics:
+            escaped_metrics = ', '.join([f"'{m}'" for m in view_create.visible_metrics])
+            metrics_str = f"[{escaped_metrics}]"
+        else:
+            metrics_str = "[]"
+
+        # Use SQL INSERT for better compatibility
+        insert_sql = f"""
+            INSERT INTO {table_name} (id, user_id, name, dimensions, visible_metrics, color_mode, is_default, view_type, created_at)
+            VALUES ('{view_id}', '{user_id}', '{view_create.name}', {dims_str}, {metrics_str},
+            {1 if view_create.color_mode else 0}, {1 if view_create.is_default else 0}, 'performance', '{now_str}')
+        """
+        client.command(insert_sql)
 
         return self.get_view(view_id)
 

@@ -17,6 +17,7 @@ class UserBase(BaseModel):
     email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')
     role: UserRole = 'ops'
     keywords: List[str] = Field(default_factory=list, description="Keywords for filtering data. Empty means no restriction.")
+    showRevenue: bool = Field(default=True, description="Whether user can see revenue-related columns (Revenue, Profit, EPA, EPC, etc.)")
 
 
 class UserCreate(UserBase):
@@ -31,6 +32,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     role: Optional[UserRole] = None
     keywords: Optional[List[str]] = None
+    showRevenue: Optional[bool] = None
 
 
 class UserInDB(UserBase):

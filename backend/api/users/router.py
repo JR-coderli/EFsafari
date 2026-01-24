@@ -56,6 +56,7 @@ async def create_new_user(
             "email": new_user.email,
             "role": new_user.role,
             "keywords": new_user.keywords,
+            "showRevenue": new_user.showRevenue,
             "created_at": new_user.created_at.isoformat(),
             "updated_at": None
         }
@@ -85,6 +86,11 @@ async def update_user_info(
             updates["role"] = user_update.role
         if user_update.keywords is not None:
             updates["keywords"] = user_update.keywords
+        if user_update.showRevenue is not None:
+            updates["showRevenue"] = user_update.showRevenue
+
+        logger.info(f"Updating user {user_id} with updates: {updates}")
+        print(f"DEBUG: Updating user {user_id} with updates: {updates}")
 
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
@@ -94,6 +100,8 @@ async def update_user_info(
         if not updated_user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        print(f"DEBUG: Updated user showRevenue: {updated_user.showRevenue}")
+
         return {
             "id": updated_user.id,
             "name": updated_user.name,
@@ -101,6 +109,7 @@ async def update_user_info(
             "email": updated_user.email,
             "role": updated_user.role,
             "keywords": updated_user.keywords,
+            "showRevenue": updated_user.showRevenue,
             "created_at": updated_user.created_at.isoformat(),
             "updated_at": updated_user.updated_at.isoformat() if updated_user.updated_at else None
         }

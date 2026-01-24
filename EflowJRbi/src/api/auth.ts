@@ -30,6 +30,7 @@ interface ApiUser {
   role: string;
   keywords?: string[];
   allowed_keywords?: string[];
+  showRevenue?: boolean;
   created_at: string;
   updated_at: string | null;
 }
@@ -42,6 +43,7 @@ interface User {
   email: string;
   role: string;
   keywords: string[];
+  showRevenue?: boolean;
 }
 
 // Convert API user to frontend User (handles both keywords and allowed_keywords field names)
@@ -53,6 +55,7 @@ function toFrontendUser(apiUser: ApiUser): User {
     email: apiUser.email,
     role: apiUser.role,
     keywords: apiUser.keywords || apiUser.allowed_keywords || [],
+    showRevenue: apiUser.showRevenue,
   };
 }
 
@@ -279,6 +282,7 @@ export const usersApi = {
       password?: string;
       role?: string;
       keywords?: string[];
+      showRevenue?: boolean;
     }
   ): Promise<User> {
     const token = tokenManager.getToken();
@@ -289,6 +293,7 @@ export const usersApi = {
     if (updates.password !== undefined) body.password = updates.password;
     if (updates.role !== undefined) body.role = updates.role;
     if (updates.keywords !== undefined) body.keywords = updates.keywords;
+    if (updates.showRevenue !== undefined) body.showRevenue = updates.showRevenue;
 
     const response = await fetch(`/api/users/${userId}`, {
       method: 'PUT',

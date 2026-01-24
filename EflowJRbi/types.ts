@@ -108,4 +108,5 @@ export interface UserPermission {
   email: string;
   role: UserRole;
   keywords: string[];
+  showRevenue?: boolean;  // 是否显示收入相关列 (revenue, profit, epa, epc 等)
 }

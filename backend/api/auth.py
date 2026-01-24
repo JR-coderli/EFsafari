@@ -94,6 +94,7 @@ async def get_current_user(
         "email": user.email,
         "role": user.role,
         "keywords": user.keywords,
+        "showRevenue": user.showRevenue,
         "created_at": user.created_at.isoformat(),
         "updated_at": user.updated_at.isoformat() if user.updated_at else None
     }

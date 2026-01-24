@@ -57,6 +57,7 @@ class UserService:
                 email String,
                 role Enum('admin', 'ops', 'ops02', 'business'),
                 keywords Array(String),
+                show_revenue UInt8 DEFAULT 1,
                 created_at DateTime,
                 updated_at Nullable(DateTime)
             ) ENGINE = MergeTree()
@@ -77,6 +78,17 @@ class UserService:
             # Table might already have the correct schema or other issue
             logger.debug(f"Could not alter role column (might already be correct): {e}")
 
+        # Try to add show_revenue column to existing tables
+        try:
+            alter_sql = f"""
+                ALTER TABLE {table_name}
+                ADD COLUMN IF NOT EXISTS show_revenue UInt8 DEFAULT 1
+            """
+            client.command(alter_sql)
+            logger.info(f"Table {table_name} show_revenue column added")
+        except Exception as e:
+            logger.debug(f"Could not add show_revenue column (might already exist): {e}")
+
         logger.info(f"Table {table_name} ensured")
 
     def init_admin_user(self):
@@ -94,6 +106,7 @@ class UserService:
             password_hash=hash_password("password"),
             role='admin',
             keywords=[],
+            showRevenue=True,
             created_at=datetime.now(),
             updated_at=None
         )
@@ -124,11 +137,14 @@ class UserService:
         # Role is now a string literal
         role_value = user.role if isinstance(user.role, str) else str(user.role)
 
+        # showRevenue: 1 for True, 0 for False
+        show_revenue_value = 1 if getattr(user, 'showRevenue', True) else 0
+
         # Escape special characters in string fields
         name_escaped = user.name.replace("\\", "\\\\").replace("'", "''")
 
         insert_sql = f"""
-            INSERT INTO {table_name} (id, name, username, password_hash, email, role, keywords, created_at, updated_at)
+            INSERT INTO {table_name} (id, name, username, password_hash, email, role, keywords, show_revenue, created_at, updated_at)
             VALUES (
                 '{user.id}',
                 '{name_escaped}',
@@ -137,6 +153,7 @@ class UserService:
                 '{user.email}',
                 '{role_value}',
                 {keywords_str},
+                {show_revenue_value},
                 '{created_at_str}',
                 {updated_at_str}
             )
@@ -151,6 +168,10 @@ class UserService:
         result = client.query(f"SELECT * FROM {table_name} WHERE username = '{username}' LIMIT 1")
         for row in result.named_results():
             keywords = list(row["keywords"]) if row["keywords"] else []
+            # show_revenue: 1 = True, 0 = False, default to True if not present
+            show_revenue_raw = row.get("show_revenue", 1)
+            show_revenue = bool(show_revenue_raw)
+            print(f"DEBUG get_user_by_username: show_revenue_raw = {show_revenue_raw}, show_revenue = {show_revenue}")
             print(f"DEBUG get_user_by_username: keywords = {keywords}, type = {type(keywords)}")
             user = UserInDB(
                 id=row["id"],
@@ -160,10 +181,12 @@ class UserService:
                 email=row["email"],
                 role=row["role"],
                 keywords=keywords,
+                showRevenue=show_revenue,
                 created_at=row["created_at"],
                 updated_at=row.get("updated_at")
             )
-            print(f"DEBUG get_user_by_username: user.keywords = {user.keywords}")
+            print(f"DEBUG get_user_by_username: user.showRevenue = {user.showRevenue}")
+            print(f"DEBUG get_user_by_username: user.model_dump() = {user.model_dump()}")
             return user
         print(f"DEBUG: get_user_by_username: no user found")
         return None
@@ -174,6 +197,7 @@ class UserService:
         client = self.db.connect()
         result = client.query(f"SELECT * FROM {table_name} WHERE id = '{user_id}' LIMIT 1")
         for row in result.named_results():
+            show_revenue = bool(row.get("show_revenue", 1))
             return UserInDB(
                 id=row["id"],
                 name=row["name"],
@@ -182,6 +206,7 @@ class UserService:
                 email=row["email"],
                 role=row["role"],
                 keywords=list(row["keywords"]) if row["keywords"] else [],
+                showRevenue=show_revenue,
                 created_at=row["created_at"],
                 updated_at=row.get("updated_at")
             )
@@ -191,7 +216,7 @@ class UserService:
         """Get all users."""
         table_name = self._get_table_name()
         client = self.db.connect()
-        result = client.query(f"SELECT id, name, username, email, role, keywords, created_at, updated_at FROM {table_name} ORDER BY created_at DESC")
+        result = client.query(f"SELECT id, name, username, email, role, keywords, show_revenue, created_at, updated_at FROM {table_name} ORDER BY created_at DESC")
         users = []
         for row in result.named_results():
             users.append({
@@ -201,6 +226,7 @@ class UserService:
                 "email": row["email"],
                 "role": row["role"],
                 "keywords": list(row["keywords"]) if row["keywords"] else [],
+                "showRevenue": bool(row.get("show_revenue", 1)),
                 "created_at": row["created_at"].isoformat() if hasattr(row["created_at"], 'isoformat') else str(row["created_at"]),
                 "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") and hasattr(row["updated_at"], 'isoformat') else (row.get("updated_at") if row.get("updated_at") else None)
             })
@@ -224,6 +250,7 @@ class UserService:
             password_hash=hash_password(user_create.password),
             role=user_create.role,
             keywords=user_create.keywords,
+            showRevenue=user_create.showRevenue,
             created_at=datetime.now(),
             updated_at=None
         )
@@ -237,6 +264,7 @@ class UserService:
             email=new_user.email,
             role=new_user.role,
             keywords=new_user.keywords,
+            showRevenue=new_user.showRevenue,
             created_at=new_user.created_at,
             updated_at=None
         )
@@ -274,6 +302,10 @@ class UserService:
                 update_fields.append(f"keywords = [{formatted_items}]")
             else:
                 update_fields.append("keywords = []")
+        if "showRevenue" in updates:
+            # Convert boolean to 1/0 for ClickHouse
+            show_revenue_val = 1 if updates["showRevenue"] else 0
+            update_fields.append(f"show_revenue = {show_revenue_val}")
 
         if not update_fields:
             return user
@@ -297,6 +329,7 @@ class UserService:
             email=updated_user.email,
             role=updated_user.role,
             keywords=updated_user.keywords,
+            showRevenue=updated_user.showRevenue,
             created_at=updated_user.created_at,
             updated_at=updated_user.updated_at
         )
