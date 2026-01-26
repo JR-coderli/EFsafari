@@ -160,7 +160,13 @@ async def hourly_etl_task():
         success = await run_hourly_etl("UTC")
 
         if success:
-            logger.info("Hourly ETL task completed successfully (both timezones)")
+            # 清除 hourly 相关缓存，确保下次请求获取最新数据
+            from api.cache import delete_cache
+            try:
+                deleted = delete_cache("hourly:*")
+                logger.info(f"Hourly ETL task completed successfully (both timezones), cleared {deleted} hourly cache entries")
+            except Exception as cache_err:
+                logger.warning(f"Hourly ETL completed but cache clearing failed: {cache_err}")
         else:
             logger.warning("Hourly ETL task completed with warnings")
 
