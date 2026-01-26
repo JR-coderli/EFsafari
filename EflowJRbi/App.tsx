@@ -412,6 +412,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   console.log('Dashboard mounted with currentUser:', JSON.stringify(currentUser, null, 2));
   console.log('currentUser.showRevenue:', currentUser.showRevenue, 'type:', typeof currentUser.showRevenue);
   const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);  // 专门用于刷新按钮的状态
   const [data, setData] = useState<AdRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [useMock, setUseMock] = useState(false);  // Fallback to mock if API fails
@@ -936,14 +937,16 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const handleRefreshData = useCallback(async () => {
     if (currentPage !== 'performance' || activeDims.length === 0) return;
 
-    setLoading(true);
+    setIsRefreshing(true);
     setError(null);
+
+    const startTime = Date.now();
 
     try {
       const currentLevel = activeFilters.length;
       if (currentLevel >= activeDims.length) {
         setData([]);
-        setLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
@@ -955,7 +958,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       const errorMsg = err instanceof Error ? err.message : 'Failed to refresh data';
       setError(errorMsg);
     } finally {
-      setLoading(false);
+      // 确保至少显示 500ms 的 loading 状态，让用户能看到刷新效果
+      const elapsed = Date.now() - startTime;
+      const minDelay = Math.max(0, 500 - elapsed);
+      setTimeout(() => setIsRefreshing(false), minDelay);
     }
   }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentPage]);
 
@@ -1695,15 +1701,15 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                   <button
                     type="button"
                     onClick={handleRefreshData}
-                    disabled={loading}
+                    disabled={isRefreshing}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-                      loading
+                      isRefreshing
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700'
                     }`}
                   >
-                    <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
-                    <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+                    <i className={`fas fa-sync-alt ${isRefreshing ? 'animate-spin' : ''}`}></i>
+                    <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                   </button>
                   <div className="relative w-64">
                      <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
