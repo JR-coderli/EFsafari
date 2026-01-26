@@ -10,6 +10,7 @@ import { dailyReportApi, dashboardApi, onConnectionStatusChange, type Connection
 import { viewsApi } from './src/api/views';
 import DailyReport from './components/DailyReport';
 import HourlyReport from './components/HourlyReport';
+import Config from './components/Config';
 
 interface Filter {
   dimension: Dimension;
@@ -420,7 +421,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [editingDimIndex, setEditingDimIndex] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
-  type PageType = 'performance' | 'permissions' | 'daily_report' | 'hourly';
+  type PageType = 'performance' | 'permissions' | 'daily_report' | 'hourly' | 'config';
   const [currentPage, setCurrentPage] = useState<PageType>('performance');
   // Performance 子菜单状态
   const [performanceSubPage, setPerformanceSubPage] = useState<'dates' | 'hourly'>('dates');
@@ -1459,6 +1460,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
               {isSidebarOpen && <span className="text-sm font-bold">Permissions</span>}
             </button>
           )}
+          {currentUser.role === 'admin' && (
+            <button onClick={() => setCurrentPage('config')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'config' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
+              <i className="fas fa-cog w-5 text-center"></i>
+              {isSidebarOpen && <span className="text-sm font-bold">Config</span>}
+            </button>
+          )}
         </nav>
         <div className="p-4 border-t border-slate-700/50">
           <button onClick={onLogout} className="w-full flex items-center gap-4 px-2 py-3 hover:bg-slate-800 rounded-lg text-rose-400 transition-colors">
@@ -1475,7 +1482,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             <h2 className="font-extrabold text-slate-800 tracking-tight ml-2 uppercase italic text-sm">
               {currentPage === 'performance' && performanceSubPage === 'dates' ? 'Dates Report' :
                currentPage === 'hourly' ? 'Hourly Insight' :
-               currentPage === 'daily_report' ? 'Daily Report' : 'Permissions'}
+               currentPage === 'daily_report' ? 'Daily Report' :
+               currentPage === 'config' ? 'Config' : 'Permissions'}
             </h2>
             {(currentPage === 'performance' || currentPage === 'daily_report' || currentPage === 'hourly') && (
               <DatePicker
@@ -1947,6 +1955,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             }}
             currentUser={currentUser}
           />
+        ) : currentPage === 'config' ? (
+          <Config currentUser={currentUser} />
         ) : (
           <div className="flex-1 p-12 overflow-auto bg-slate-50/50">
              <div className="max-w-6xl mx-auto space-y-6">

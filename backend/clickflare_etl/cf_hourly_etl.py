@@ -181,12 +181,48 @@ class HourlyETL:
         print(f"[API] Total records fetched: {len(all_items):,}")
         return all_items
 
+    def _get_hourly_special_media(self) -> List[str]:
+        """获取 hourly 特殊媒体列表，这些媒体的 spend = revenue
+
+        可在配置文件的 etl.hourly_special_media 中配置，或使用默认值。
+        默认值从 Redis 或环境变量读取，支持动态更新。
+        """
+        # 默认特殊媒体关键词
+        default_keywords = ["mintegral", "hastraffic", "jmmobi", "brainx"]
+
+        # 尝试从配置文件读取
+        configured_media = self.etl_config.get("hourly_special_media", [])
+
+        # 尝试从 Redis 读取动态配置
+        try:
+            from api.cache import get_cache
+            cached_media = get_cache("config:hourly_special_media")
+            if cached_media:
+                configured_media = cached_media
+        except Exception:
+            pass
+
+        # 合并配置和默认值
+        all_media = list(set(configured_media + default_keywords))
+        return all_media
+
+    def _is_special_media(self, media_name: str) -> bool:
+        """检查是否为特殊媒体（关键词匹配）"""
+        if not media_name:
+            return False
+        media_lower = media_name.lower()
+        special_keywords = self._get_hourly_special_media()
+        return any(keyword in media_lower for keyword in special_keywords)
+
     def _transform_data(self, raw_data: List[Dict]) -> List[Dict]:
         """转换 API 数据为数据库格式
 
         API 使用 UTC 时区，返回的 dateTime 就是 UTC 时间，直接存储即可。
+
+        特殊媒体处理：对于 hourly_special_media 中的媒体，spend = revenue
         """
         transformed = []
+        special_media_count = 0
 
         for item in raw_data:
             date_time_str = item.get("dateTime", "")
@@ -203,11 +239,21 @@ class HourlyETL:
                 except (ValueError, TypeError):
                     continue
 
+            media_name = item.get("trafficSourceName", "")
+            revenue = float(item.get("revenue", 0))
+            spend = float(item.get("cost", 0))
+
+            # 特殊媒体：spend = revenue
+            is_special = self._is_special_media(media_name)
+            if is_special:
+                spend = revenue
+                special_media_count += 1
+
             record = {
                 "reportDate": report_date,
                 "reportHour": report_hour,
                 "timezone": "UTC",
-                "Media": item.get("trafficSourceName", ""),
+                "Media": media_name,
                 "MediaID": item.get("trafficSourceID", ""),
                 "offer": item.get("offerName", ""),
                 "offerID": item.get("offerID", ""),
@@ -220,10 +266,13 @@ class HourlyETL:
                 "impressions": item.get("uniqueVisits", 0),
                 "clicks": item.get("uniqueClicks", 0),
                 "conversions": item.get("conversions", 0),
-                "spend": float(item.get("cost", 0)),
-                "revenue": float(item.get("revenue", 0))
+                "spend": spend,
+                "revenue": revenue
             }
             transformed.append(record)
+
+        if special_media_count > 0:
+            print(f"[Special Media] Applied spend=revenue to {special_media_count:,} records")
 
         return transformed
 
