@@ -584,10 +584,9 @@ const DailyReport: React.FC<DailyReportProps> = ({
 
         rows.push(dateRow);
 
-        // Level 1: Media level (children of date) - sort by revenue DESC, filter out zero revenue
+        // Level 1: Media level (children of date) - sort by revenue DESC
         if (isExpanded && dateNode._children) {
           const sortedMedia = Object.entries(dateNode._children)
-            .filter(([_, mediaNode]) => mediaNode._metrics.revenue > 0)
             .sort((a, b) => b[1]._metrics.revenue - a[1]._metrics.revenue);
           for (const [media, mediaNode] of sortedMedia) {
             const mediaRow = hierarchyNodeToAdRow(media, mediaNode, 1, dateRow.id);
@@ -608,8 +607,6 @@ const DailyReport: React.FC<DailyReportProps> = ({
         if (!dateNode._children) continue;
 
         for (const [media, mediaNode] of Object.entries(dateNode._children)) {
-          // Skip media with zero revenue
-          if (mediaNode._metrics.revenue <= 0) continue;
           // Create media level node if not exists
           if (!mediaHierarchy[media]) {
             mediaHierarchy[media] = {
