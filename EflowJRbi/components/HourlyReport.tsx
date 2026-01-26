@@ -109,7 +109,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   const [timezone, setTimezone] = useState('UTC');
   const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
   const [quickFilterText, setQuickFilterText] = useState('');
-  const [hideZeroImpressions, setHideZeroImpressions] = useState(true);
+  const [hideZeroImpressions, setHideZeroImpressions] = useState(true);  // 隐藏 impressions < 20 且 revenue = 0 的数据
   const [etlStatus, setEtlStatus] = useState<{ utc: any; utc8: any; est: any; pst: any } | null>(null);
   const [sortBy, setSortBy] = useState<SortField>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -585,7 +585,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   // Filter and sort data
   const filteredData = useMemo(() => {
     let result = data.filter(row => {
-      if (hideZeroImpressions && row.impressions === 0) return false;
+      // 隐藏 impressions < 20 且 revenue = 0 的数据
+      if (hideZeroImpressions && row.impressions < 20 && row.revenue === 0) return false;
       if (quickFilterText && !row.name.toLowerCase().includes(quickFilterText.toLowerCase())) return false;
       return true;
     });
@@ -824,14 +825,14 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
             </button>
           ))}
         </div>
-        <label className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 ml-auto">
+        <label className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 ml-auto" title="Hide rows with impressions < 20 and revenue = 0">
           <input
             type="checkbox"
             checked={hideZeroImpressions}
             onChange={(e) => setHideZeroImpressions(e.target.checked)}
             className="w-3 h-3 rounded border-slate-300 text-indigo-600"
           />
-          <span className="text-[10px] font-bold text-slate-600">Hide Zero</span>
+          <span className="text-[10px] font-bold text-slate-600">Hide Low</span>
         </label>
       </div>
 
