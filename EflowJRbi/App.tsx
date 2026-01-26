@@ -464,7 +464,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   type SortOrder = 'asc' | 'desc' | null;
   const [sortColumn, setSortColumn] = useState<SortColumn>('revenue');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [hideZeroImpressions, setHideZeroImpressions] = useState(true);
+  const [hideZeroImpressions, setHideZeroImpressions] = useState(true);  // 隐藏 impressions < 20 且 revenue = 0 的数据
   const [colorMode, setColorMode] = useState(false);
 
   // ETL status state
@@ -705,25 +705,26 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         // 空格分隔的关键词 = OR 查询（例如 "im mx" 匹配包含 im 或 mx 的行）
         const searchTerms = quickFilterText.toLowerCase().trim().split(/\s+/).filter(k => k);
         const matchesFilter = searchTerms.length === 0 || searchTerms.some(term => row.name.toLowerCase().includes(term));
-        // Hide rows with zero impressions
-        const hasImpressions = !hideZeroImpressions || row.impressions > 0;
+        // 隐藏 impressions < 20 且 revenue = 0 的数据
+        const shouldShow = !hideZeroImpressions || !(row.impressions < 20 && row.revenue === 0);
 
-        if (matchesFilter && hasImpressions) {
+        if (matchesFilter && shouldShow) {
           results.push(row);
         }
 
         // Include expanded children - sort each child group independently
         if (expandedDimRows.has(row.id) && row.children) {
           let childRows = row.children || [];
-          // Filter by impressions first
-          childRows = childRows.filter(child => !hideZeroImpressions || child.impressions > 0);
+          // 过滤 impressions < 20 且 revenue = 0 的数据
+          childRows = childRows.filter(child => !hideZeroImpressions || !(child.impressions < 20 && child.revenue === 0));
           // Sort the children (will use date sort if child dimension is 'date')
           childRows = sortRows(childRows);
           childRows.forEach(child => {
             results.push(child);
             // Include grandchildren if also expanded - sort them too
             if (expandedDimRows.has(child.id) && child.children) {
-              let grandchildRows = child.children.filter(gc => !hideZeroImpressions || gc.impressions > 0);
+              // 过滤 impressions < 20 且 revenue = 0 的数据
+              let grandchildRows = child.children.filter(gc => !hideZeroImpressions || !(gc.impressions < 20 && gc.revenue === 0));
               grandchildRows = sortRows(grandchildRows);
               grandchildRows.forEach(grandchild => {
                 results.push(grandchild);
