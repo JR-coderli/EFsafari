@@ -825,14 +825,17 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
             </button>
           ))}
         </div>
-        <label className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 ml-auto" title="Hide rows with impressions < 20 and revenue = 0">
-          <input
-            type="checkbox"
-            checked={hideZeroImpressions}
-            onChange={(e) => setHideZeroImpressions(e.target.checked)}
-            className="w-3 h-3 rounded border-slate-300 text-indigo-600"
-          />
-          <span className="text-[10px] font-bold text-slate-600">Hide Low</span>
+        <label className="flex flex-col gap-0.5 px-2 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 ml-auto" title="Hide rows with impressions < 20 and revenue = 0">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={hideZeroImpressions}
+              onChange={(e) => setHideZeroImpressions(e.target.checked)}
+              className="w-3 h-3 rounded border-slate-300 text-indigo-600"
+            />
+            <span className="text-[10px] font-bold text-slate-600">Hide Low</span>
+          </div>
+          <span className="text-[8px] text-slate-400 leading-tight">Default filter imp&lt;20 &amp; rev=0</span>
         </label>
       </div>
 

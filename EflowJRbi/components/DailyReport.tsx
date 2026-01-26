@@ -876,6 +876,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
             >
               {hierarchyOrder === 'date-media' ? 'Date ⇄ Media' : 'Media ⇄ Date'}
             </button>
+            <span className="text-[8px] text-slate-400 ml-1">Default filter imp&lt;20 &amp; rev=0</span>
             <button
               onClick={() => setSyncModal({ ...syncModal, isOpen: true })}
               className="text-[11px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1"

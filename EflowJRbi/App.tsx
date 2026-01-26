@@ -1582,7 +1582,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           <>
             <div className="px-8 py-5 bg-white border-b border-slate-200 flex flex-col gap-4 z-30 shadow-sm shrink-0">
               <div className="flex items-center gap-4 overflow-x-auto no-scrollbar pb-1">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Pivot Layout:</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Pivot Layout:</span>
+                  <span className="text-[8px] text-slate-400 leading-tight">Default filter imp&lt;20 &amp; rev=0</span>
+                </div>
                 <div className="flex items-center gap-2">
                   {activeDims.map((dim, idx) => {
                     const dimLabel = ALL_DIMENSIONS.find(d => d.value === dim)?.label;
