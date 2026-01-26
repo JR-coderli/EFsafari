@@ -246,39 +246,93 @@ async def sync_lander_urls_task():
         logger.error(f"Lander URLs sync task failed: {e}", exc_info=True)
 
 
+# Scheduler lock file to prevent multiple workers from starting it
+_SCHEDULER_LOCK_FILE = "/tmp/bicode_scheduler.lock"
+_scheduler_lock_fd = None
+
+
+def _acquire_scheduler_lock() -> bool:
+    """Acquire an exclusive lock to ensure only one worker runs the scheduler."""
+    global _scheduler_lock_fd
+    import os
+    import fcntl
+
+    try:
+        _scheduler_lock_fd = open(_SCHEDULER_LOCK_FILE, 'w')
+        # Try to acquire exclusive lock (non-blocking)
+        fcntl.lockf(_scheduler_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Write PID to lock file
+        _scheduler_lock_fd.write(str(os.getpid()))
+        _scheduler_lock_fd.flush()
+        logger.info(f"[SCHEDULER] Acquired exclusive lock (PID={os.getpid()})")
+        return True
+    except (IOError, OSError):
+        # Lock is held by another process
+        _scheduler_lock_fd.close()
+        _scheduler_lock_fd = None
+        logger.debug("[SCHEDULER] Another worker already holds the scheduler lock")
+        return False
+
+
+def _release_scheduler_lock():
+    """Release the scheduler lock."""
+    global _scheduler_lock_fd
+    if _scheduler_lock_fd:
+        try:
+            import fcntl
+            fcntl.lockf(_scheduler_lock_fd, fcntl.LOCK_UN)
+            _scheduler_lock_fd.close()
+        except Exception:
+            pass
+        _scheduler_lock_fd = None
+
+
 def start_scheduler():
-    """Start the APScheduler with daily sync and hourly ETL jobs."""
-    # Schedule Lander URLs sync at 06:15 daily
-    scheduler.add_job(
-        sync_lander_urls_task,
-        'cron',
-        hour=6,
-        minute=15,
-        id='lander_urls_sync',
-        replace_existing=True
-    )
+    """Start the APScheduler with daily sync and hourly ETL jobs.
 
-    # Schedule daily sync at 12:00
-    scheduler.add_job(
-        daily_sync_task,
-        'cron',
-        hour=12,
-        minute=0,
-        id='daily_report_sync',
-        replace_existing=True
-    )
+    Uses file locking to ensure only one worker starts the scheduler
+    in a multi-worker environment (gunicorn).
+    """
+    # Try to acquire lock - only one worker will succeed
+    if not _acquire_scheduler_lock():
+        logger.info("[SCHEDULER] Scheduler already running in another worker, skipping")
+        return
 
-    # Schedule hourly ETL every 10 minutes
-    scheduler.add_job(
-        hourly_etl_task,
-        'interval',
-        minutes=10,
-        id='hourly_etl_sync',
-        replace_existing=True
-    )
+    try:
+        # Schedule Lander URLs sync at 06:15 daily
+        scheduler.add_job(
+            sync_lander_urls_task,
+            'cron',
+            hour=6,
+            minute=15,
+            id='lander_urls_sync',
+            replace_existing=True
+        )
 
-    scheduler.start()
-    logger.info("Scheduler started - lander URLs sync at 06:15, daily sync at 12:00, hourly ETL every 10 minutes (both timezones)")
+        # Schedule daily sync at 12:00
+        scheduler.add_job(
+            daily_sync_task,
+            'cron',
+            hour=12,
+            minute=0,
+            id='daily_report_sync',
+            replace_existing=True
+        )
+
+        # Schedule hourly ETL every 10 minutes
+        scheduler.add_job(
+            hourly_etl_task,
+            'interval',
+            minutes=10,
+            id='hourly_etl_sync',
+            replace_existing=True
+        )
+
+        scheduler.start()
+        logger.info("Scheduler started - lander URLs sync at 06:15, daily sync at 12:00, hourly ETL every 10 minutes (both timezones)")
+    except Exception as e:
+        _release_scheduler_lock()
+        raise
 
 
 def stop_scheduler():
@@ -286,3 +340,4 @@ def stop_scheduler():
     if scheduler.running:
         scheduler.shutdown()
         logger.info("Scheduler stopped")
+    _release_scheduler_lock()
