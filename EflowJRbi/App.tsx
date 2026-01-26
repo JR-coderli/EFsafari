@@ -932,6 +932,33 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     }
   }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentUser, useMock, currentPage, isInitialized]);
 
+  // 专门的刷新函数，强制加载数据（绕过条件检查）
+  const handleRefreshData = useCallback(async () => {
+    if (currentPage !== 'performance' || activeDims.length === 0) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const currentLevel = activeFilters.length;
+      if (currentLevel >= activeDims.length) {
+        setData([]);
+        setLoading(false);
+        return;
+      }
+
+      // 直接调用 API 加载数据，不使用任何缓存
+      const rawData = await apiLoadRootData(activeDims, activeFilters, selectedRange, customDateStart, customDateEnd);
+      setData(rawData);
+    } catch (err) {
+      console.error('Error refreshing data:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Failed to refresh data';
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentPage]);
+
   // Trigger loadRootData when dependencies change（初始化完成后）
   useEffect(() => {
     if (currentPage !== 'performance') return;
@@ -1665,17 +1692,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                   </label>
                 </div>
                 <div className="flex gap-2 items-center">
-                  <div className="relative w-64">
-                     <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                     <input type="text" placeholder="Quick Search..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none" value={quickFilterText} onChange={(e) => setQuickFilterText(e.target.value)} />
-                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (currentPage === 'performance') {
-                        loadRootData();
-                      }
-                    }}
+                    onClick={handleRefreshData}
                     disabled={loading}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
                       loading
@@ -1686,6 +1705,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
                     <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
                   </button>
+                  <div className="relative w-64">
+                     <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                     <input type="text" placeholder="Quick Search..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none" value={quickFilterText} onChange={(e) => setQuickFilterText(e.target.value)} />
+                  </div>
                 </div>
               </div>
             </div>
