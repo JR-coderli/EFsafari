@@ -6,7 +6,7 @@ import { AdRow, Dimension, MetricConfig, SavedView, UserPermission, DailyBreakdo
 import { generateMockReport } from './mockData';
 import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoadDailyData } from './src/api/hooks';
 import { authApi, usersApi, tokenManager } from './src/api/auth';
-import { dailyReportApi, dashboardApi } from './src/api/client';
+import { dailyReportApi, dashboardApi, onConnectionStatusChange, type ConnectionStatus } from './src/api/client';
 import { viewsApi } from './src/api/views';
 import DailyReport from './components/DailyReport';
 import HourlyReport from './components/HourlyReport';
@@ -414,6 +414,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [data, setData] = useState<AdRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [useMock, setUseMock] = useState(false);  // Fallback to mock if API fails
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected');
   // 初始不设置维度，等待默认视图加载完成后才设置
   const [activeDims, setActiveDims] = useState<Dimension[]>([]);
   const [editingDimIndex, setEditingDimIndex] = useState<number | null>(null);
@@ -504,6 +505,14 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       setError(null);
     }
   }, [currentUser.id]);
+
+  // Subscribe to connection status changes
+  useEffect(() => {
+    const unsubscribe = onConnectionStatusChange((status) => {
+      setConnectionStatus(status);
+    });
+    return unsubscribe;
+  }, []);
 
   // Load ETL status on mount and refresh periodically
   useEffect(() => {
@@ -910,8 +919,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
       setError(errorMsg);
 
-      // Auto-fallback to mock on other API errors
-      setUseMock(true);
+      // Don't auto-fallback to mock - let retry mechanism handle it
+      // Users can manually enable mock mode via UI if needed
       setLoading(false);
       return;
     } finally {
@@ -1377,6 +1386,21 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           </button>
         </div>
       )}
+
+      {/* Connection Status Indicator */}
+      {connectionStatus === 'retrying' && (
+        <div className="fixed top-4 right-4 z-50 bg-amber-50 text-amber-800 px-4 py-2.5 rounded-lg shadow-lg border border-amber-200 flex items-center gap-3 animate-pulse">
+          <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-sm font-medium">正在重连服务器...</span>
+        </div>
+      )}
+      {connectionStatus === 'failed' && (
+        <div className="fixed top-4 right-4 z-50 bg-rose-50 text-rose-800 px-4 py-2.5 rounded-lg shadow-lg border border-rose-200 flex items-center gap-3">
+          <i className="fas fa-exclamation-triangle text-rose-600"></i>
+          <span className="text-sm font-medium">服务器连接失败，请刷新页面重试</span>
+        </div>
+      )}
+
       <aside className={`bg-[#1e293b] text-slate-400 flex flex-col shrink-0 transition-all ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-6 border-b border-slate-700/50 flex items-center gap-3">
           <div className="w-8 h-8 bg-indigo-500 rounded-lg text-white flex items-center justify-center font-bold text-xs">EF</div>

@@ -1,0 +1,44 @@
+# Systemd service configuration for Bicode Backend API
+# Install: sudo cp bicode-api.service /etc/systemd/system/bicode-api.service
+# Reload: sudo systemctl daemon-reload
+# Enable: sudo systemctl enable bicode-api.service
+# Start: sudo systemctl start bicode-api.service
+
+[Unit]
+Description=Bicode Backend API
+After=network.target clickhouse-server.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/bicode/backend
+Environment="PATH=/opt/bicode/backend/venv/bin"
+
+# Multi-worker configuration with gunicorn
+ExecStart=/opt/bicode/backend/venv/bin/gunicorn \
+    api.main:app \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8001 \
+    --timeout 120 \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
+    --log-level info \
+    --access-logfile /var/log/bicode/access.log \
+    --error-logfile /var/log/bicode/error.log
+
+# Create log directory if not exists
+ExecStartPre=/bin/mkdir -p /var/log/bicode
+
+# Extended timeout for slow startups
+TimeoutStartSec=90
+TimeoutStopSec=60
+
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

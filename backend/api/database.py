@@ -1,11 +1,154 @@
 """
-ClickHouse database connection and query module.
+ClickHouse database connection and query module with connection pooling.
 """
 from typing import Optional, List, Dict, Any
 import clickhouse_connect
 from contextlib import contextmanager
 import yaml
 import os
+import threading
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class ClickHousePool:
+    """ClickHouse connection pool for managing multiple concurrent connections."""
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        database: str,
+        username: str,
+        password: str,
+        secure: bool = False,
+        pool_size: int = 10,
+        connect_timeout: int = 15,
+        send_receive_timeout: int = 60
+    ):
+        """Initialize connection pool.
+
+        Args:
+            host: ClickHouse host
+            port: ClickHouse port
+            database: Database name
+            username: Username
+            password: Password
+            secure: Use SSL/TLS
+            pool_size: Maximum number of connections in pool
+            connect_timeout: Connection timeout in seconds
+            send_receive_timeout: Query timeout in seconds
+        """
+        self.host = host
+        self.port = port
+        self.database = database
+        self.username = username
+        self.password = password
+        self.secure = secure
+        self.pool_size = pool_size
+        self.connect_timeout = connect_timeout
+        self.send_receive_timeout = send_receive_timeout
+
+        self._pool: List[clickhouse_connect.driver.Client] = []
+        self._lock = threading.Lock()
+        self._created = 0
+
+    def _create_client(self) -> clickhouse_connect.driver.Client:
+        """Create a new ClickHouse client connection."""
+        return clickhouse_connect.get_client(
+            host=self.host,
+            port=self.port,
+            database=self.database,
+            username=self.username,
+            password=self.password,
+            secure=self.secure,
+            connect_timeout=self.connect_timeout,
+            send_receive_timeout=self.send_receive_timeout,
+        )
+
+    def get_client(self) -> clickhouse_connect.driver.Client:
+        """Get a connection from the pool.
+
+        Returns:
+            ClickHouse client connection. If pool is exhausted, creates a temporary connection.
+        """
+        with self._lock:
+            if self._pool:
+                return self._pool.pop()
+            if self._created < self.pool_size:
+                self._created += 1
+                return self._create_client()
+            # Pool exhausted - create temporary connection (will be closed when returned)
+            logger.warning("Connection pool exhausted, creating temporary connection")
+            return self._create_client()
+
+    def return_client(self, client: clickhouse_connect.driver.Client):
+        """Return a connection to the pool.
+
+        Args:
+            client: The client connection to return
+        """
+        with self._lock:
+            # Check if we have room in pool for this connection
+            if len(self._pool) < self.pool_size and self._created >= self.pool_size:
+                self._pool.append(client)
+            else:
+                # Pool is full or this was a temporary connection - close it
+                try:
+                    client.close()
+                except Exception as e:
+                    logger.debug(f"Error closing temporary connection: {e}")
+
+    def close_all(self):
+        """Close all connections in the pool."""
+        with self._lock:
+            for client in self._pool:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            self._pool.clear()
+            self._created = 0
+
+    @contextmanager
+    def connection(self):
+        """Context manager for getting and returning a connection.
+
+        Usage:
+            with pool.connection() as client:
+                result = client.query("SELECT * FROM table")
+        """
+        client = self.get_client()
+        try:
+            yield client
+        finally:
+            self.return_client(client)
+
+
+# Global connection pool instance
+_ch_pool: Optional[ClickHousePool] = None
+
+
+def get_connection_pool() -> ClickHousePool:
+    """Get or create the global connection pool instance."""
+    global _ch_pool
+    if _ch_pool is None:
+        # Create from ClickHouseClient configuration
+        client = ClickHouseClient()
+        _ch_pool = ClickHousePool(
+            host=client.host,
+            port=client.port,
+            database=client.database,
+            username=client.username,
+            password=client.password,
+            secure=client.secure,
+            pool_size=10,           # Maximum 10 connections
+            connect_timeout=15,     # 15 seconds to connect
+            send_receive_timeout=60 # 60 seconds for query
+        )
+        logger.info(f"ClickHouse connection pool created: host={client.host}, pool_size=10")
+    return _ch_pool
 
 
 class ClickHouseClient:
@@ -40,7 +183,7 @@ class ClickHouseClient:
         self._client: Optional[clickhouse_connect.driver.Client] = None
 
     def connect(self) -> clickhouse_connect.driver.Client:
-        """Establish and return ClickHouse connection."""
+        """Establish and return ClickHouse connection (deprecated - use get_client context manager)."""
         if self._client is None:
             self._client = clickhouse_connect.get_client(
                 host=self.host,
@@ -49,19 +192,17 @@ class ClickHouseClient:
                 username=self.username,
                 password=self.password,
                 secure=self.secure,
-                connect_timeout=10,
-                send_receive_timeout=30
+                connect_timeout=15,
+                send_receive_timeout=60
             )
         return self._client
 
     @contextmanager
     def get_client(self):
-        """Context manager for ClickHouse client."""
-        client = self.connect()
-        try:
+        """Context manager for ClickHouse client using connection pool."""
+        pool = get_connection_pool()
+        with pool.connection() as client:
             yield client
-        finally:
-            pass
 
     def close(self):
         """Close ClickHouse connection."""

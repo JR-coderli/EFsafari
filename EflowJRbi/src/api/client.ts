@@ -2,7 +2,11 @@
  * API Client for AdData Dashboard Backend
  *
  * Handles all HTTP communication with the FastAPI backend.
+ * Includes automatic retry with exponential backoff for transient failures.
  */
+
+// Connection status type
+export type ConnectionStatus = 'connected' | 'retrying' | 'failed';
 
 // API base URL - uses proxy in development, direct URL in production
 const API_BASE_URL = import.meta.env.PROD
@@ -14,8 +18,75 @@ function getAuthToken(): string | null {
   return localStorage.getItem('addata_access_token');
 }
 
-// Request wrapper with error handling
-async function request<T>(
+// Retry configuration
+const MAX_RETRIES = 5;
+const BASE_DELAY = 1000; // 1 second
+const MAX_DELAY = 16000; // 16 seconds
+
+// Connection state management
+class ConnectionState {
+  private currentStatus: ConnectionStatus = 'connected';
+  private listeners: Set<(status: ConnectionStatus) => void> = new Set();
+
+  getStatus(): ConnectionStatus {
+    return this.currentStatus;
+  }
+
+  setStatus(status: ConnectionStatus) {
+    this.currentStatus = status;
+    this.listeners.forEach(cb => cb(status));
+  }
+
+  subscribe(callback: (status: ConnectionStatus) => void): () => void {
+    this.listeners.add(callback);
+    // Return unsubscribe function
+    return () => this.listeners.delete(callback);
+  }
+}
+
+// Global connection state
+const connectionState = new ConnectionState();
+
+// Export functions to access connection status
+export function getConnectionStatus(): ConnectionStatus {
+  return connectionState.getStatus();
+}
+
+export function onConnectionStatusChange(callback: (status: ConnectionStatus) => void): () => void {
+  return connectionState.subscribe(callback);
+}
+
+// Helper: delay with promise
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Helper: calculate exponential backoff delay
+function getRetryDelay(attempt: number): number {
+  const delay = BASE_DELAY * Math.pow(2, attempt);
+  return Math.min(delay, MAX_DELAY);
+}
+
+// Check if error is retryable
+function isRetryableError(error: Error): boolean {
+  const msg = error.message.toLowerCase();
+
+  // Don't retry authentication errors
+  if (msg.includes('401') || msg.includes('not authenticated') || msg.includes('unauthorized')) {
+    return false;
+  }
+
+  // Don't retry client errors (4xx except 408, 429)
+  if (msg.includes('http 4') && !msg.includes('408') && !msg.includes('429')) {
+    return false;
+  }
+
+  // Retry on network errors, timeout, 5xx, 408, 429
+  return true;
+}
+
+// Core request function with retry logic
+async function requestWithRetry<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -37,24 +108,57 @@ async function request<T>(
     headers,
   };
 
-  try {
-    const response = await fetch(url, defaultOptions);
+  let lastError: Error | null = null;
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || errorData.error || `HTTP ${response.status}: ${response.statusText}`
-      );
-    }
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, defaultOptions);
 
-    return response.json();
-  } catch (error) {
-    if (error instanceof TypeError) {
-      // Network error or CORS issue
-      throw new Error('Failed to connect to API server. Please ensure the backend is running.');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.detail || errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(errorMsg);
+      }
+
+      // Success - update status and return data
+      connectionState.setStatus('connected');
+      return response.json();
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Check if error is retryable
+      if (!isRetryableError(lastError)) {
+        // Not retryable - throw immediately
+        throw lastError;
+      }
+
+      // Last attempt failed - mark as failed
+      if (attempt === MAX_RETRIES - 1) {
+        connectionState.setStatus('failed');
+        throw lastError;
+      }
+
+      // Show retrying status
+      connectionState.setStatus('retrying');
+
+      // Wait before retry (exponential backoff)
+      const retryDelay = getRetryDelay(attempt);
+      await delay(retryDelay);
     }
-    throw error;
   }
+
+  // Should never reach here, but TypeScript needs it
+  connectionState.setStatus('failed');
+  throw lastError || new Error('Request failed');
+}
+
+// Legacy request function (for backward compatibility, no retry)
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  return requestWithRetry<T>(endpoint, options);
 }
 
 // Query parameter builder
