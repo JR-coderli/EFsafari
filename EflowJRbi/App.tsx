@@ -1669,6 +1669,23 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                      <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                      <input type="text" placeholder="Quick Search..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none" value={quickFilterText} onChange={(e) => setQuickFilterText(e.target.value)} />
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentPage === 'performance') {
+                        loadRootData();
+                      }
+                    }}
+                    disabled={loading}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                      loading
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700'
+                    }`}
+                  >
+                    <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
+                    <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+                  </button>
                 </div>
               </div>
             </div>
