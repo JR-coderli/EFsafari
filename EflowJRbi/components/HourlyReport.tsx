@@ -689,7 +689,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
             }`}
           >
             <i className={`fas fa-sync-alt ${refreshing ? 'animate-spin' : ''}`}></i>
-            <span>{refreshing ? '同步中...' : '同步新数据'}</span>
+            <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
           <div className="relative w-64">
             <input
