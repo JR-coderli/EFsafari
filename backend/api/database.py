@@ -143,11 +143,11 @@ def get_connection_pool() -> ClickHousePool:
             username=client.username,
             password=client.password,
             secure=client.secure,
-            pool_size=10,           # Maximum 10 connections
+            pool_size=20,           # Maximum 20 connections (for 50 concurrent users)
             connect_timeout=15,     # 15 seconds to connect
             send_receive_timeout=60 # 60 seconds for query
         )
-        logger.info(f"ClickHouse connection pool created: host={client.host}, pool_size=10")
+        logger.info(f"ClickHouse connection pool created: host={client.host}, pool_size=20")
     return _ch_pool
 
 

@@ -18,7 +18,7 @@ Environment="PATH=/opt/bicode/backend/venv/bin"
 # Multi-worker configuration with gunicorn
 ExecStart=/opt/bicode/backend/venv/bin/gunicorn \
     api.main:app \
-    --workers 4 \
+    --workers 6 \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:8001 \
     --timeout 120 \
