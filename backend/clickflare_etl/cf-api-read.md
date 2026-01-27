@@ -254,3 +254,125 @@ curl --request GET \
 1. 调用 `GET /api/landings` 获取所有 Lander 列表及 URL
 2. 使用返回的 Lander ID 与 Report API 中的 `landingID` 进行关联
 3. 可在本地建立 Lander ID → URL 的映射表
+
+---
+
+## 11. Offer 列表 API（获取 Offer 详情）
+
+Report API 不支持直接获取 Offer URL、Payout 等详细信息，需要通过独立的 Offer 列表 API 获取。
+
+### 基本信息
+
+| 项目 | 值 |
+|------|-----|
+| API 文档 | https://developers.clickflare.io/#/paths/api-offers/get |
+| API 端点 | `GET https://public-api.clickflare.io/api/offers` |
+| 认证方式 | Header: `api-key` |
+
+### 请求参数
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| `fields[]` | array[string] | 可选，指定返回的字段 |
+| `page` | number | 页码（>= 1） |
+| `pageSize` | number | 每页数量（>= 1） |
+| `search` | string | 搜索关键词 |
+
+### 请求示例
+
+```bash
+curl --request GET \
+  --url 'https://public-api.clickflare.io/api/offers' \
+  --header 'Accept: application/json' \
+  --header 'api-key: YOUR_API_KEY'
+```
+
+### 响应字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `workspace_id` | any | 工作区 ID |
+| `user_id` | number | 用户 ID |
+| `name` | string | **Offer 名称** |
+| `url` | string | **Offer URL 地址** |
+| `notes` | string | 备注 |
+| `keywords` | array[object] | 关键词列表 |
+| `payout` | object | **Payout 配置**（见下方详情） |
+| `direct` | boolean | 是否直链 |
+| `affiliateNetworkID` | string | **关联的广告网络 ID** |
+| `conversionTracking` | object | 转化追踪配置 |
+| `staticUrl` | string/null | **静态 URL**（固定链接） |
+| `keywordBuilderMode` | string | 关键词模式：`free_form` / `keyword_builder` |
+| `tags` | array[string] | **标签列表** |
+
+### payout 对象详情
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `type` | string | **Payout 类型**：`manual`（手动）/ `auto`（自动） |
+| `payout` | number | **Payout 金额** |
+| `currency` | string | **货币类型**：`USD`、`EUR`、`CNY` 等 |
+| `geo` | array[object] | 按地区的 Payout 配置 |
+
+### 响应示例
+
+```json
+[
+  {
+    "workspace_id": null,
+    "user_id": 12345,
+    "name": "My Offer",
+    "url": "https://offer.example.com/click?id={clickid}",
+    "notes": "High converting offer",
+    "keywords": [
+      {
+        "id": "kw_001",
+        "name": "clickid",
+        "weight": 1,
+        "collapsed": true,
+        "encodedQueryString": "clickid={clickid}"
+      }
+    ],
+    "payout": {
+      "type": "manual",
+      "payout": 0.5,
+      "currency": "USD",
+      "geo": [
+        {
+          "location": "US",
+          "payout": 0.8,
+          "currency": "USD"
+        }
+      ]
+    },
+    "direct": false,
+    "affiliateNetworkID": "67f644e65c657a0012e1a4bd",
+    "conversionTracking": {
+      "trackingDomainID": "domain_xxx",
+      "trackingMethod": "S2S",
+      "includeAdditionalParams": false
+    },
+    "staticUrl": null,
+    "keywordBuilderMode": "free_form",
+    "tags": ["CPA", "Mobile"]
+  }
+]
+```
+
+### 重点字段说明
+
+| 需求 | 字段 | 说明 |
+|------|------|------|
+| Offer URL | `url` | Offer 的目标链接 |
+| 静态 URL | `staticUrl` | 固定的静态链接（如有） |
+| Payout 金额 | `payout.payout` | 单次转化的收益金额 |
+| Payout 类型 | `payout.type` | `manual` 手动设置 / `auto` 自动从回传获取 |
+| 货币 | `payout.currency` | 如 `USD`、`EUR` |
+| 广告网络 | `affiliateNetworkID` | 可与 Report API 的 `affiliateNetworkID` 关联 |
+| 标签 | `tags` | Offer 的分类标签 |
+
+### 使用场景
+
+1. 调用 `GET /api/offers` 获取所有 Offer 的详情（URL、Payout、标签等）
+2. 使用返回的 Offer ID 与 Report API 中的 `offerID` 进行关联
+3. 获取 Payout 配置用于成本/收益计算
