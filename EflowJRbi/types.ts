@@ -79,6 +79,12 @@ export interface AdRow {
   filterPath?: Array<{ dimension: Dimension; value: string }>;
   // Spend manual adjustment (non-zero if manually edited)
   spend_manual?: number;
+  // Lander URL (for lander dimension)
+  landerUrl?: string;
+  // Offer details (for offer dimension)
+  offerUrl?: string;
+  offerNotes?: string;
+  offerId?: string;
 }
 
 export interface MetricConfig {

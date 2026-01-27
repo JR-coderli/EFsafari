@@ -6,7 +6,7 @@ import { AdRow, Dimension, MetricConfig, SavedView, UserPermission, DailyBreakdo
 import { generateMockReport } from './mockData';
 import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoadDailyData } from './src/api/hooks';
 import { authApi, usersApi, tokenManager } from './src/api/auth';
-import { dailyReportApi, dashboardApi, onConnectionStatusChange, type ConnectionStatus } from './src/api/client';
+import { dailyReportApi, dashboardApi, offersApi, onConnectionStatusChange, type ConnectionStatus } from './src/api/client';
 import { viewsApi } from './src/api/views';
 import DailyReport from './components/DailyReport';
 import HourlyReport from './components/HourlyReport';
@@ -484,6 +484,11 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [isInitialized, setIsInitialized] = useState(false);
   const hasLoadedDataAfterInit = useRef(false);
 
+  // Offer 详情映射 (offer_id -> {url, notes, ...})
+  const [offerDetailsMap, setOfferDetailsMap] = useState<Record<string, { url: string; notes: string }>>({});
+  const [offerIdsToFetch, setOfferIdsToFetch] = useState<Set<string>>(new Set());
+  const [copiedOfferUrl, setCopiedOfferUrl] = useState<string | null>(null);
+
   // Computed display string for the date picker - varies by page
   const dateDisplayString = useMemo(() => {
     if (currentPage === 'daily_report') {
@@ -546,6 +551,51 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
     return () => clearInterval(interval);
   }, []);
+
+  // Load offer details when data changes (for offer dimension)
+  useEffect(() => {
+    const loadOfferDetails = async () => {
+      // 只在 performance 页面加载
+      if (currentPage !== 'performance') return;
+
+      // 收集所有 offer 名称
+      const offerNames = new Set<string>();
+      const collectOfferNames = (rows: AdRow[]) => {
+        rows.forEach(row => {
+          if (row.dimensionType === 'offer') {
+            offerNames.add(row.name);
+          }
+          if (row.children && row.children.length > 0) {
+            collectOfferNames(row.children);
+          }
+        });
+      };
+      collectOfferNames(data);
+
+      if (offerNames.size === 0) return;
+
+      try {
+        // 获取所有 offers 详情
+        const result = await offersApi.getDetails();
+
+        // 建立 name -> {url, notes} 的映射
+        const detailsMap: Record<string, { url: string; notes: string }> = {};
+        result.data.forEach(offer => {
+          detailsMap[offer.name] = {
+            url: offer.url,
+            notes: offer.notes
+          };
+        });
+
+        setOfferDetailsMap(detailsMap);
+      } catch (err) {
+        console.error('Failed to load offer details:', err);
+      }
+    };
+
+    loadOfferDetails();
+  }, [data, currentPage]);
+
 
   // Get row text for copy - only return the dimension name
   const getRowText = (row: RowData): string => {
@@ -1831,6 +1881,56 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                                           >
                                             <i className="fas fa-external-link-alt text-[10px] text-indigo-400 hover:text-indigo-600"></i>
                                           </a>
+                                        );
+                                      }
+                                    }
+                                    return null;
+                                  })()}
+                                  {/* Offer 复制 URL 和 Notes 预览 */}
+                                  {(() => {
+                                    if (row.dimensionType === 'offer') {
+                                      const offerDetail = offerDetailsMap[row.name];
+                                      const isCopied = copiedOfferUrl === row.name;
+                                      if (offerDetail?.url || offerDetail?.notes) {
+                                        return (
+                                          <>
+                                            {/* 复制 URL 按钮 */}
+                                            {offerDetail?.url && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  navigator.clipboard.writeText(offerDetail.url);
+                                                  setCopiedOfferUrl(row.name);
+                                                  setTimeout(() => setCopiedOfferUrl(null), 1500);
+                                                }}
+                                                className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-all duration-200 z-10 ${
+                                                  isCopied
+                                                    ? 'bg-green-500 scale-110'
+                                                    : 'hover:bg-green-100'
+                                                }`}
+                                                title={isCopied ? 'Copied!' : 'Copy Offer URL'}
+                                              >
+                                                <i className={`fas ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px] ${isCopied ? 'text-white' : 'text-green-500 hover:text-green-600'}`}></i>
+                                              </button>
+                                            )}
+                                            {/* Notes 预览 Tooltip */}
+                                            {offerDetail?.notes && (
+                                              <div className="group/notes shrink-0 relative z-[9999]">
+                                                <div className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-amber-100 transition-colors cursor-help">
+                                                  <i className="fas fa-sticky-note text-[10px] text-amber-500 hover:text-amber-600"></i>
+                                                </div>
+                                                {/* Tooltip */}
+                                                <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover/notes:block">
+                                                  <div className="bg-slate-800 text-white text-xs rounded-lg px-4 py-3 max-w-md whitespace-normal shadow-xl border border-slate-600">
+                                                    <div className="font-semibold text-amber-400 mb-2 text-sm">Notes:</div>
+                                                    <div className="text-slate-200 break-words whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">{offerDetail.notes}</div>
+                                                    {/* 小箭头 */}
+                                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-slate-800 rotate-45"></div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </>
                                         );
                                       }
                                     }

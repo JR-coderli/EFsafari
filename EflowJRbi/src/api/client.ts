@@ -525,4 +525,46 @@ export const dailyReportApi = {
   },
 };
 
+/**
+ * Offers API endpoints
+ */
+export const offersApi = {
+  /**
+   * Get offers details map (offer_id -> {url, notes, ...})
+   */
+  async getDetailsMap(offerIds?: string) {
+    const queryParams = offerIds ? buildQueryParams({ offer_ids: offerIds }) : '';
+    return request<{ data: Record<string, {
+      name: string;
+      url: string;
+      notes: string;
+      payout_type: string;
+      payout_amount: number;
+      payout_currency: string;
+      affiliate_network_id: string;
+      static_url: string;
+      tags: string[];
+    }> }>(`/offers/details-map?${queryParams}`);
+  },
+
+  /**
+   * Get offers details list
+   */
+  async getDetails(offerIds?: string) {
+    const queryParams = offerIds ? buildQueryParams({ offer_ids: offerIds }) : '';
+    return request<{ data: Array<{
+      offer_id: string;
+      name: string;
+      url: string;
+      notes: string;
+      payout_type: string;
+      payout_amount: number;
+      payout_currency: string;
+      affiliate_network_id: string;
+      static_url: string;
+      tags: string[];
+    }> }>(`/offers/details?${queryParams}`);
+  },
+};
+
 export default dashboardApi;
