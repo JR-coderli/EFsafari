@@ -13,17 +13,47 @@ import requests
 import clickhouse_connect
 import yaml
 import logging
+import os
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# 设置日志目录
+LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, "sync_lander_urls.log")
+
+# 配置日志（同时输出到文件和控制台）
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# 清除已有的 handlers
+logger.handlers.clear()
+
+# 文件 handler（自动轮转，最大 10MB，保留 5 个备份）
+file_handler = RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=10*1024*1024,  # 10MB
+    backupCount=5,
+    encoding='utf-8'
+)
+file_handler.setLevel(logging.INFO)
+file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
+
+# 控制台 handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
+logger.addHandler(console_handler)
 
 # ClickFlare API 配置
 CF_API_KEY = "406561a67ff45389757647c936537da98f6c89a11776566dbe6efc8241c357f9.da59c8abbd8fbf4af7c3a5c72612d871a30273fa"
 CF_LANDER_URL = "https://public-api.clickflare.io/api/landings"
 
 # 读取 ClickHouse 配置
-config_path = "E:/code/bicode/backend/api/config.yaml"
+config_path = os.path.join(os.path.dirname(__file__), "api", "config.yaml")
 with open(config_path, "r", encoding="utf-8") as f:
     config = yaml.safe_load(f)
 
@@ -39,6 +69,7 @@ client = clickhouse_connect.get_client(
 
 def fetch_landers_from_cf():
     """从 ClickFlare API 获取所有 Lander 数据"""
+    logger.info("="*60)
     logger.info("Fetching landers from ClickFlare API...")
     response = requests.get(CF_LANDER_URL, headers={
         "Accept": "application/json",
@@ -50,7 +81,7 @@ def fetch_landers_from_cf():
         return []
 
     data = response.json()
-    logger.info(f"Fetched {len(data)} landers from ClickFlare")
+    logger.info(f"Fetched {len(data)} landers from ClickFlare API")
     return data
 
 
@@ -74,8 +105,8 @@ def sync_to_clickhouse(landers):
             now                            # updated_at
         ])
 
-    # 删除旧数据 (可选，如果想保留历史可以注释掉)
-    logger.info("Deleting old data...")
+    # 删除旧数据
+    logger.info("Deleting old data (TRUNCATE)...")
     client.command("TRUNCATE TABLE ad_platform.dim_lander_url_mapping")
 
     # 批量插入新数据
@@ -90,6 +121,11 @@ def sync_to_clickhouse(landers):
 
 def main():
     """主函数"""
+    start_time = datetime.now()
+    logger.info("="*60)
+    logger.info(f"Lander URL Sync Started at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("="*60)
+
     try:
         # 获取数据
         landers = fetch_landers_from_cf()
@@ -97,13 +133,27 @@ def main():
         # 同步到数据库
         sync_to_clickhouse(landers)
 
-        logger.info("Lander URL sync completed successfully!")
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+
+        logger.info("="*60)
+        logger.info(f"Lander URL Sync Completed Successfully!")
+        logger.info(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Duration: {duration:.2f} seconds")
+        logger.info("="*60)
+        return 0
 
     except Exception as e:
-        logger.error(f"Error during sync: {e}")
+        end_time = datetime.now()
+        logger.error("="*60)
+        logger.error(f"Lander URL Sync Failed!")
+        logger.error(f"Error: {e}")
+        logger.error(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.error("="*60)
         import traceback
         traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    exit(main())

@@ -21,6 +21,7 @@ from api.routers.views import router as views_router
 from api.routers.hourly import router as hourly_router
 from api.routers.config import router as config_router
 from api.routers.offers import router as offers_router
+from api.routers.scheduler_status import router as scheduler_status_router
 from api.cache import init_redis
 
 
@@ -124,6 +125,7 @@ app.include_router(views_router)
 app.include_router(hourly_router)
 app.include_router(config_router)
 app.include_router(offers_router)
+app.include_router(scheduler_status_router)
 
 
 @app.get("/test")

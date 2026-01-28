@@ -15,8 +15,42 @@ import sys
 import yaml
 import argparse
 import requests
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any
+from logging.handlers import RotatingFileHandler
+
+# ==================== 配置日志 ====================
+LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, "cf_hourly_etl.log")
+
+# 配置日志（同时输出到文件和控制台）
+logger = logging.getLogger("cf_hourly_etl")
+logger.setLevel(logging.INFO)
+
+# 清除已有的 handlers
+logger.handlers.clear()
+
+# 文件 handler（自动轮转，最大 50MB，保留 5 个备份）
+file_handler = RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=50*1024*1024,  # 50MB
+    backupCount=5,
+    encoding='utf-8'
+)
+file_handler.setLevel(logging.INFO)
+file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
+
+# 控制台 handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
+logger.addHandler(console_handler)
+# ==================== 日志配置完成 ====================
 
 # Add api directory to PYTHONPATH
 # Get the script's directory and find the backend/api directory
@@ -47,7 +81,7 @@ try:
     })
     init_redis(redis_config)
 except Exception as e:
-    print(f"[WARNING] Failed to initialize Redis: {e}")
+    logger.warning(f"Failed to initialize Redis: {e}")
 
 
 class HourlyETL:
@@ -120,7 +154,7 @@ class HourlyETL:
             TTL reportDate + INTERVAL 1 MONTH
             """
         self.ch_client.command(create_sql)
-        print("[Table] Table ready (CREATE IF NOT EXISTS)")
+        logger.info("[Table] Table ready (CREATE IF NOT EXISTS)")
 
     def _get_group_by_config(self) -> List[str]:
         return ["dateTime", "trafficSourceID", "offerID", "affiliateNetworkID",
@@ -154,8 +188,7 @@ class HourlyETL:
 
         while page <= max_pages:
             request_data = self._build_api_request(start_dt, end_dt, page)
-            sys.stdout.write(f"\r[API] Fetching page {page}... ")
-            sys.stdout.flush()
+            logger.info(f"[API] Fetching page {page}...")
 
             try:
                 response = requests.post(url, json=request_data, headers=headers, timeout=self.API_TIMEOUT)
@@ -164,21 +197,21 @@ class HourlyETL:
 
                 items = result.get("items", [])
                 if not items:
-                    print(f"No more data")
+                    logger.info("No more data")
                     break
 
                 all_items.extend(items)
-                print(f"Page {page}: {len(items):,} records, Total: {len(all_items):,}")
+                logger.info(f"Page {page}: {len(items):,} records, Total: {len(all_items):,}")
 
                 if len(items) < self.PAGE_SIZE:
                     break
 
                 page += 1
             except requests.exceptions.RequestException as e:
-                print(f"\n[ERROR] API request failed: {e}")
+                logger.error(f"[ERROR] API request failed: {e}")
                 raise
 
-        print(f"[API] Total records fetched: {len(all_items):,}")
+        logger.info(f"[API] Total records fetched: {len(all_items):,}")
         return all_items
 
     def _get_hourly_special_media(self) -> List[str]:
@@ -272,7 +305,7 @@ class HourlyETL:
             transformed.append(record)
 
         if special_media_count > 0:
-            print(f"[Special Media] Applied spend=revenue to {special_media_count:,} records")
+            logger.info(f"[Special Media] Applied spend=revenue to {special_media_count:,} records")
 
         return transformed
 
@@ -286,14 +319,13 @@ class HourlyETL:
             DELETE WHERE reportDate >= '{start_date}'
                 AND reportDate <= '{end_date}'
             """
-        sys.stdout.write(f"[DELETE] Deleting ALL data for {start_date} to {end_date}... ")
-        sys.stdout.flush()
+        logger.info(f"[DELETE] Deleting ALL data for {start_date} to {end_date}...")
         self.ch_client.command(delete_sql)
-        print("Done")
+        logger.info("Delete completed")
 
     def _insert_data(self, data: List[Dict]):
         if not data:
-            print("[INSERT] No data to insert")
+            logger.warning("[INSERT] No data to insert")
             return
 
         columns = ["reportDate", "reportHour", "timezone", "Media", "MediaID",
@@ -321,8 +353,7 @@ class HourlyETL:
 
             while retries < max_retries and not success:
                 try:
-                    sys.stdout.write(f"\r[INSERT] Inserting {min(i + batch_size, total_rows):,}/{total_rows:,} rows... ")
-                    sys.stdout.flush()
+                    logger.info(f"[INSERT] Inserting {min(i + batch_size, total_rows):,}/{total_rows:,} rows...")
                     self.ch_client.insert(
                         table=f'{self.ch_config["database"]}.hourly_report',
                         data=batch,
@@ -333,20 +364,23 @@ class HourlyETL:
                 except Exception as e:
                     retries += 1
                     if retries >= max_retries:
-                        print(f"\n[ERROR] Failed to insert batch after {max_retries} retries: {e}")
+                        logger.error(f"[ERROR] Failed to insert batch after {max_retries} retries: {e}")
                         raise
-                    print(f"\n[RETRY] Retry {retries}/{max_retries}...")
+                    logger.warning(f"[RETRY] Retry {retries}/{max_retries}...")
 
-        print(f"Done! Total: {total_inserted:,} rows")
+        logger.info(f"Insert completed! Total: {total_inserted:,} rows")
 
     def run(self):
-        print("=" * 60)
-        print(f"Hourly ETL - Timezone: UTC")
+        start_time = datetime.now()
+
+        logger.info("=" * 60)
+        logger.info(f"Hourly ETL Started - Timezone: {self.timezone}")
         if self.test_hours > 0:
-            print(f"TEST MODE: Only pulling recent {self.test_hours} hours")
-        print("=" * 60)
-        print("[INFO] Storing UTC data only, timezone conversion done at query time")
-        print("[INFO] Using safe ETL mode: fetch -> delete -> insert (prevents data loss on API failure)")
+            logger.info(f"TEST MODE: Only pulling recent {self.test_hours} hours")
+        logger.info(f"Start Time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("=" * 60)
+        logger.info("[INFO] Storing UTC data only, timezone conversion done at query time")
+        logger.info("[INFO] Using safe ETL mode: fetch -> delete -> insert (prevents data loss on API failure)")
 
         # 使用 UTC 时间获取数据
         utc_now = datetime.now(timezone.utc)
@@ -363,31 +397,31 @@ class HourlyETL:
         start_dt = start_dt_utc
         end_dt = end_dt_utc
 
-        print(f"[Time Range] UTC: {start_dt_utc.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt_utc.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"[Time Range] API (UTC): {start_dt.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"[Time Range] UTC: {start_dt_utc.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt_utc.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"[Time Range] API (UTC): {start_dt.strftime('%Y-%m-%d %H:%M:%S')} - {end_dt.strftime('%Y-%m-%d %H:%M:%S')}")
 
         # ========== 新流程：先拉取数据，成功后再删除旧数据 ==========
-        print("\n[Step 1/4] Fetching data from Clickflare API (using UTC)...")
+        logger.info("[Step 1/4] Fetching data from Clickflare API (using UTC)...")
         # 使用 UTC 时区获取数据
         original_timezone = self.timezone
         self.timezone = "UTC"
         try:
             raw_data = self._fetch_api_data(start_dt, end_dt)
         except Exception as e:
-            print(f"\n[ERROR] Failed to fetch data from API: {e}")
-            print("[INFO] Old data preserved due to API failure")
+            logger.error(f"[ERROR] Failed to fetch data from API: {e}")
+            logger.info("[INFO] Old data preserved due to API failure")
             raise
         finally:
             self.timezone = original_timezone  # 恢复原始设置
 
-        print(f"\n[Step 2/4] Processing {len(raw_data):,} records...")
+        logger.info(f"[Step 2/4] Processing {len(raw_data):,} records...")
         transformed_data = self._transform_data(raw_data)
-        print(f"[Step 2/4] Processed {len(transformed_data):,} records")
+        logger.info(f"[Step 2/4] Processed {len(transformed_data):,} records")
 
-        print("\n[Step 3/4] Deleting existing UTC data...")
+        logger.info("[Step 3/4] Deleting existing UTC data...")
         self._delete_existing_data(start_dt_utc, end_dt_utc)
 
-        print("\n[Step 4/4] Inserting data to ClickHouse...")
+        logger.info("[Step 4/4] Inserting data to ClickHouse...")
         self._insert_data(transformed_data)
 
         # 更新缓存（所有时区共享同一个 UTC 数据源的更新时间）
@@ -415,17 +449,25 @@ class HourlyETL:
             """
         result = self.ch_client.query(summary_sql)
 
-        print("\n" + "=" * 60)
-        print("ETL SUMMARY")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("ETL SUMMARY")
+        logger.info("=" * 60)
         for row in result.named_results():
-            print(f"Date: {row['reportDate']} (UTC, all other timezones calculated at query time)")
-            print(f"  Impressions: {row['impressions']:,}")
-            print(f"  Clicks:      {row['clicks']:,}")
-            print(f"  Conversions: {row['conversions']:,}")
-            print(f"  Spend:       ${row['spend']:,.2f}")
-            print(f"  Revenue:     ${row['revenue']:,.2f}")
-        print("=" * 60)
+            logger.info(f"Date: {row['reportDate']} (UTC, all other timezones calculated at query time)")
+            logger.info(f"  Impressions: {row['impressions']:,}")
+            logger.info(f"  Clicks:      {row['clicks']:,}")
+            logger.info(f"  Conversions: {row['conversions']:,}")
+            logger.info(f"  Spend:       ${row['spend']:,.2f}")
+            logger.info(f"  Revenue:     ${row['revenue']:,.2f}")
+
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+
+        logger.info("=" * 60)
+        logger.info(f"Hourly ETL Completed Successfully!")
+        logger.info(f"End Time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Duration: {duration:.2f} seconds")
+        logger.info("=" * 60)
 
         return True
 
@@ -444,9 +486,9 @@ def main():
         success = etl.run()
         sys.exit(0 if success else 1)
     except Exception as e:
-        print(f"[ERROR] ETL failed: {e}")
+        logger.error(f"[ERROR] ETL failed: {e}")
         import traceback
-        traceback.print_exc()
+        logger.error(traceback.format_exc())
         sys.exit(1)
 
 

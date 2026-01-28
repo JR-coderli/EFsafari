@@ -12,6 +12,7 @@ import sys
 import os
 import signal
 import time
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +204,73 @@ async def daily_sync_task():
         logger.error(f"Daily sync task failed: {e}", exc_info=True)
 
 
+async def sync_offers_task():
+    """
+    Scheduled task: Sync Offers from ClickFlare API.
+
+    Runs daily at 05:15 to fetch all offers and sync to
+    ad_platform.clickflare_offers_details table.
+    """
+    start_time = datetime.now()
+    logger.info("="*60)
+    logger.info(f"[SCHEDULED TASK] Offers Sync Started at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("="*60)
+
+    try:
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        etl_dir = os.path.join(backend_dir, "clickflare_etl")
+        etl_script = os.path.join(etl_dir, "cf_offers_etl.py")
+
+        # Set up environment with correct PYTHONPATH
+        import copy
+        env = copy.copy(os.environ)
+        current_pythonpath = env.get('PYTHONPATH', '')
+        env['PYTHONPATH'] = backend_dir + os.pathsep + current_pythonpath
+
+        result = subprocess.run(
+            [sys.executable, etl_script],
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minutes timeout
+            cwd=etl_dir,
+            env=env
+        )
+
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+
+        if result.returncode == 0:
+            logger.info("="*60)
+            logger.info(f"[SCHEDULED TASK] Offers Sync Completed Successfully!")
+            logger.info(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Duration: {duration:.2f} seconds")
+            if result.stdout:
+                # 从输出中提取统计信息
+                for line in result.stdout.split('\n'):
+                    if 'Fetched' in line or 'inserted' in line or 'ETL 执行' in line:
+                        logger.info(f"  {line.strip()}")
+            logger.info("="*60)
+        else:
+            logger.error("="*60)
+            logger.error(f"[SCHEDULED TASK] Offers Sync Failed!")
+            logger.error(f"Return code: {result.returncode}")
+            logger.error(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            if result.stderr:
+                logger.error(f"Errors: {result.stderr}")
+            logger.error("="*60)
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"[SCHEDULED TASK] Offers Sync timed out after 5 minutes")
+    except Exception as e:
+        end_time = datetime.now()
+        logger.error("="*60)
+        logger.error(f"[SCHEDULED TASK] Offers Sync Failed with Exception!")
+        logger.error(f"Error: {e}")
+        logger.error(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.error("="*60)
+        logger.error(traceback.format_exc())
+
+
 async def sync_lander_urls_task():
     """
     Scheduled task: Sync Lander URLs from ClickFlare API.
@@ -210,11 +278,14 @@ async def sync_lander_urls_task():
     Runs daily at 06:15 to fetch all lander data and sync to
     ad_platform.dim_lander_url_mapping table.
     """
+    start_time = datetime.now()
+    logger.info("="*60)
+    logger.info(f"[SCHEDULED TASK] Lander URLs Sync Started at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("="*60)
+
     try:
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         sync_script = os.path.join(backend_dir, "sync_lander_urls.py")
-
-        logger.info("Starting Lander URLs sync task...")
 
         # Set up environment with correct PYTHONPATH
         import copy
@@ -231,19 +302,39 @@ async def sync_lander_urls_task():
             env=env
         )
 
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+
         if result.returncode == 0:
-            logger.info("Lander URLs sync completed successfully")
+            logger.info("="*60)
+            logger.info(f"[SCHEDULED TASK] Lander URLs Sync Completed Successfully!")
+            logger.info(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Duration: {duration:.2f} seconds")
             if result.stdout:
-                logger.info(f"Sync output: {result.stdout[-500:]}")
+                # 从输出中提取统计信息
+                for line in result.stdout.split('\n'):
+                    if 'Fetched' in line or 'Inserting' in line or 'Total records' in line or 'Sync complete' in line:
+                        logger.info(f"  {line.strip()}")
+            logger.info("="*60)
         else:
-            logger.error(f"Lander URLs sync failed with return code {result.returncode}")
+            logger.error("="*60)
+            logger.error(f"[SCHEDULED TASK] Lander URLs Sync Failed!")
+            logger.error(f"Return code: {result.returncode}")
+            logger.error(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
             if result.stderr:
-                logger.error(f"Sync errors: {result.stderr}")
+                logger.error(f"Errors: {result.stderr}")
+            logger.error("="*60)
 
     except subprocess.TimeoutExpired:
-        logger.error("Lander URLs sync timed out after 5 minutes")
+        logger.error(f"[SCHEDULED TASK] Lander URLs Sync timed out after 5 minutes")
     except Exception as e:
-        logger.error(f"Lander URLs sync task failed: {e}", exc_info=True)
+        end_time = datetime.now()
+        logger.error("="*60)
+        logger.error(f"[SCHEDULED TASK] Lander URLs Sync Failed with Exception!")
+        logger.error(f"Error: {e}")
+        logger.error(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.error("="*60)
+        logger.error(traceback.format_exc())
 
 
 # Scheduler lock file to prevent multiple workers from starting it
@@ -299,6 +390,16 @@ def start_scheduler():
         return
 
     try:
+        # Schedule Offers sync at 05:15 daily
+        scheduler.add_job(
+            sync_offers_task,
+            'cron',
+            hour=5,
+            minute=15,
+            id='offers_sync',
+            replace_existing=True
+        )
+
         # Schedule Lander URLs sync at 06:15 daily
         scheduler.add_job(
             sync_lander_urls_task,
@@ -329,7 +430,7 @@ def start_scheduler():
         )
 
         scheduler.start()
-        logger.info("Scheduler started - lander URLs sync at 06:15, daily sync at 12:00, hourly ETL every 10 minutes (both timezones)")
+        logger.info("Scheduler started - offers sync at 05:15, lander URLs sync at 06:15, daily sync at 12:00, hourly ETL every 10 minutes (both timezones)")
     except Exception as e:
         _release_scheduler_lock()
         raise

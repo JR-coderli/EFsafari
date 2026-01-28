@@ -89,7 +89,7 @@ class ClickflareOffersETL:
 
     def insert_to_clickhouse(self, offers: list) -> int:
         """
-        批量插入数据到 ClickHouse
+        先清空旧数据，再批量插入新数据到 ClickHouse
 
         Args:
             offers: Offer 数据列表
@@ -99,6 +99,11 @@ class ClickflareOffersETL:
         """
         if not offers:
             return 0
+
+        # 先清空旧数据（覆盖更新）
+        logger.info("清空旧数据...")
+        self.ch_client.command(f"TRUNCATE TABLE ad_platform.{self.table}")
+        logger.info("旧数据已清空")
 
         # 转换数据
         transformed_data = [self.transform_offer(offer) for offer in offers]

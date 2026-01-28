@@ -15,6 +15,18 @@ interface SpecialMediaConfig {
   hourly_special_media: string[];
 }
 
+interface SchedulerTask {
+  name: string;
+  schedule: string;
+  icon: string;
+  color: string;
+  last_run: string | null;
+  last_status: 'success' | 'failed' | 'unknown';
+  duration: number | null;
+  record_count: number | null;
+  error_message: string | null;
+}
+
 const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
@@ -25,10 +37,17 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [schedulerTasks, setSchedulerTasks] = useState<Record<string, SchedulerTask>>({});
+  const [selectedTaskLog, setSelectedTaskLog] = useState<string | null>(null);
+  const [selectedTaskName, setSelectedTaskName] = useState<string>('');
 
   // 加载特殊媒体配置
   useEffect(() => {
     loadSpecialMediaConfig();
+    loadSchedulerStatus();
+    // 每30秒刷新一次定时任务状态
+    const interval = setInterval(loadSchedulerStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadSpecialMediaConfig = async () => {
@@ -43,6 +62,64 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
       }
     } catch (error) {
       console.error('Failed to load special media config:', error);
+    }
+  };
+
+  const loadSchedulerStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/scheduler/status', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const result = await response.json();
+        setSchedulerTasks(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to load scheduler status:', error);
+    }
+  };
+
+  const loadTaskLog = async (taskId: string, taskName: string) => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/scheduler/log/${taskId}?lines=200`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const result = await response.json();
+        setSelectedTaskName(taskName);
+        setSelectedTaskLog(result.log || '暂无日志');
+      } else {
+        setSelectedTaskLog('无法读取日志');
+      }
+    } catch (error) {
+      setSelectedTaskLog('读取日志失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const triggerTask = async (taskId: string) => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/scheduler/trigger/${taskId}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const result = await response.json();
+      if (response.ok) {
+        showMessage('success', result.message || '任务已触发');
+        setTimeout(() => loadSchedulerStatus(), 2000);
+      } else {
+        showMessage('error', result.detail || '触发任务失败');
+      }
+    } catch (error: any) {
+      showMessage('error', error.message || '触发任务失败');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,6 +176,89 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 定时任务状态卡片
+  const renderSchedulerCard = (taskId: string, task: SchedulerTask) => {
+    const statusConfig = {
+      success: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: 'fa-check-circle', label: '成功' },
+      failed: { bg: 'bg-rose-100', text: 'text-rose-700', icon: 'fa-exclamation-circle', label: '失败' },
+      unknown: { bg: 'bg-slate-100', text: 'text-slate-500', icon: 'fa-question-circle', label: '未知' }
+    };
+
+    const status = statusConfig[task.last_status];
+
+    return (
+      <div
+        key={taskId}
+        className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 hover:shadow-md transition-all"
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className={`${task.color} w-11 h-11 rounded-xl flex items-center justify-center text-white`}>
+              <i className={`fas ${task.icon}`}></i>
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-800">{task.name}</h4>
+              <p className="text-xs text-slate-400 flex items-center gap-1">
+                <i className="fas fa-clock"></i>
+                {task.schedule}
+              </p>
+            </div>
+          </div>
+          <span className={`${status.bg} ${status.text} text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 font-medium`}>
+            <i className={`fas ${status.icon}`}></i>
+            {status.label}
+          </span>
+        </div>
+
+        {/* 详细信息 */}
+        <div className="bg-slate-50 rounded-xl p-3 mb-4 space-y-2">
+          {task.last_run && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">最后运行</span>
+              <span className="text-slate-700 font-mono text-xs">{task.last_run}</span>
+            </div>
+          )}
+          {task.duration !== null && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">耗时</span>
+              <span className="text-slate-700 font-mono">{task.duration.toFixed(2)}s</span>
+            </div>
+          )}
+          {task.record_count !== null && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">记录数</span>
+              <span className="text-slate-700 font-mono">{task.record_count.toLocaleString()}</span>
+            </div>
+          )}
+          {task.last_status === 'failed' && task.error_message && (
+            <div className="mt-2 p-2 bg-rose-50 rounded-lg text-xs text-rose-700">
+              {task.error_message}
+            </div>
+          )}
+        </div>
+
+        {/* 操作按钮 */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => loadTaskLog(taskId, task.name)}
+            className="flex-1 px-3 py-2 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <i className="fas fa-file-alt text-xs"></i>
+            查看日志
+          </button>
+          <button
+            onClick={() => triggerTask(taskId)}
+            disabled={loading}
+            className="flex-1 px-3 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-play'} text-xs`}></i>
+            手动触发
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // 数据拉取卡片
@@ -257,7 +417,7 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
         {/* Header */}
         <div className="mb-8">
           <h2 className="text-3xl font-black italic uppercase tracking-tighter text-slate-800">Config Tools</h2>
-          <p className="text-slate-500 text-sm mt-2">数据拉取和系统配置工具</p>
+          <p className="text-slate-500 text-sm mt-2">数据拉取、定时任务和系统配置工具</p>
         </div>
 
         {/* Message */}
@@ -267,6 +427,26 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
             <span>{message.text}</span>
           </div>
         )}
+
+        {/* 定时任务状态 Section */}
+        <section className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2">
+              <i className="fas fa-tasks text-indigo-500"></i>
+              定时任务状态
+            </h3>
+            <button
+              onClick={loadSchedulerStatus}
+              className="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1"
+            >
+              <i className={`fas fa-sync-alt ${loading ? 'fa-spin' : ''}`}></i>
+              刷新
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(schedulerTasks).map(([taskId, task]) => renderSchedulerCard(taskId, task))}
+          </div>
+        </section>
 
         {/* Data Pull Section */}
         <section className="mb-10">
@@ -335,6 +515,24 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
             </div>
             <div className="p-6">
               {modalContent}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Log Modal */}
+      {selectedTaskLog && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedTaskLog(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-lg text-slate-800">{selectedTaskName} - 日志</h3>
+              <button onClick={() => setSelectedTaskLog(null)} className="text-slate-400 hover:text-slate-600">
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-slate-900">
+              <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">{selectedTaskLog}</pre>
             </div>
           </div>
         </div>,

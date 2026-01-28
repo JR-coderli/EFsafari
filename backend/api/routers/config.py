@@ -9,13 +9,21 @@ from typing import List, Optional
 import subprocess
 import logging
 import os
+import json
 from datetime import datetime, timedelta, date
+from pathlib import Path
 
 from api.auth import get_current_user
-from api.cache import get_cache, set_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/config", tags=["config"])
+
+# 配置文件路径 - 放在项目根目录的 config 文件夹
+# 开发环境: E:\code\bicode\backend\config\special_media.json
+# 生产环境: /app/config/special_media.json (容器) 或项目根目录/config/special_media.json
+PROJECT_ROOT = Path(__file__).parent.parent.parent  # 从 api/routers 向上三级到 backend 根目录
+CONFIG_DIR = PROJECT_ROOT / "config"
+CONFIG_FILE = CONFIG_DIR / "special_media.json"
 
 
 class SpecialMediaRequest(BaseModel):
@@ -33,26 +41,34 @@ class SpecialMediaResponse(BaseModel):
 # ==================== 辅助函数 ====================
 
 def get_default_config() -> dict:
-    """获取默认配置"""
+    """获取默认配置
+
+    dates_special_media: 这些媒体在 Dates Report 中 spend = revenue (来自 CF ETL exclude_spend_media)
+    hourly_special_media: 这些媒体在 Hourly Report 中 spend = revenue
+    """
     return {
-        "dates_special_media": [],
+        "dates_special_media": ["Mintegral", "Hastraffic", "JMmobi", "Brain"],
         "hourly_special_media": ["mintegral", "hastraffic", "jmmobi", "brainx"]
     }
 
 
 def load_special_media_config() -> dict:
-    """从 Redis 加载特殊媒体配置"""
-    cached = get_cache("config:special_media")
-    if cached:
-        return cached
+    """从文件加载特殊媒体配置，如果文件不存在则返回默认值"""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load config from file: {e}")
     return get_default_config()
 
 
 def save_special_media_config(config: dict):
-    """保存特殊媒体配置到 Redis"""
-    set_cache("config:special_media", config, ttl=30*24*3600)  # 30天
-    # 同时保存 hourly_special_media 单独一份，供 ETL 使用
-    set_cache("config:hourly_special_media", config.get("hourly_special_media", []), ttl=30*24*3600)
+    """保存特殊媒体配置到文件"""
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    logger.info(f"Saved special media config to file: {CONFIG_FILE}")
 
 
 # ==================== API 端点 ====================
