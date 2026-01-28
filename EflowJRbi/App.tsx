@@ -806,22 +806,29 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     return result;
   }, [data, expandedDimRows, quickFilterText, hideZeroImpressions, sortColumn, sortOrder]);
 
-  // Calculate summary data for all filtered rows
+  // Calculate summary data for all filtered rows (current view's top-level only)
   const summaryData = useMemo(() => {
     const summary = {
       impressions: 0, clicks: 0, conversions: 0,
       spend: 0, revenue: 0, profit: 0, m_imp: 0, m_clicks: 0, m_conv: 0,
     };
+    // 找出当前视图中的最小 level（即当前视图的顶级）
+    const minLevel = filteredAndFlattenedData.length > 0
+      ? Math.min(...filteredAndFlattenedData.map(row => row.level))
+      : 0;
     filteredAndFlattenedData.forEach(row => {
-      summary.impressions += row.impressions || 0;
-      summary.clicks += row.clicks || 0;
-      summary.conversions += row.conversions || 0;
-      summary.spend += row.spend || 0;
-      summary.revenue += row.revenue || 0;
-      summary.profit += row.profit || 0;
-      summary.m_imp += row.m_imp || 0;
-      summary.m_clicks += row.m_clicks || 0;
-      summary.m_conv += row.m_conv || 0;
+      // 只统计当前视图的顶级数据
+      if (row.level === minLevel) {
+        summary.impressions += row.impressions || 0;
+        summary.clicks += row.clicks || 0;
+        summary.conversions += row.conversions || 0;
+        summary.spend += row.spend || 0;
+        summary.revenue += row.revenue || 0;
+        summary.profit += row.profit || 0;
+        summary.m_imp += row.m_imp || 0;
+        summary.m_clicks += row.m_clicks || 0;
+        summary.m_conv += row.m_conv || 0;
+      }
     });
     // Calculate derived metrics
     return {
