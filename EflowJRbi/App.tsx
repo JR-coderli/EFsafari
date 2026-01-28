@@ -488,6 +488,20 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [offerDetailsMap, setOfferDetailsMap] = useState<Record<string, { url: string; notes: string }>>({});
   const [offerIdsToFetch, setOfferIdsToFetch] = useState<Set<string>>(new Set());
   const [copiedOfferUrl, setCopiedOfferUrl] = useState<string | null>(null);
+  // Offer Notes Tooltip 状态
+  const [notesTooltip, setNotesTooltip] = useState<{ content: string; x: number; y: number } | null>(null);
+  const notesTooltipTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Offer Notes 弹窗状态
+  const [notesModal, setNotesModal] = useState<{ offerName: string; content: string } | null>(null);
+
+  // 清理 tooltip 定时器
+  useEffect(() => {
+    return () => {
+      if (notesTooltipTimerRef.current) {
+        clearTimeout(notesTooltipTimerRef.current);
+      }
+    };
+  }, []);
 
   // Computed display string for the date picker - varies by page
   const dateDisplayString = useMemo(() => {
@@ -1472,6 +1486,105 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         </div>
       )}
 
+      {/* Offer Notes Tooltip - using Portal to render to body */}
+      {notesTooltip && createPortal(
+        <div
+          className="fixed z-[99999]"
+          style={{
+            left: `${notesTooltip.x}px`,
+            top: `${notesTooltip.y}px`,
+            transform: 'translateY(-50%)'
+          }}
+          onMouseEnter={() => {
+            // 鼠标进入 tooltip，取消隐藏定时器
+            if (notesTooltipTimerRef.current) {
+              clearTimeout(notesTooltipTimerRef.current);
+            }
+          }}
+          onMouseLeave={() => {
+            // 鼠标离开 tooltip，延迟 1.5 秒后隐藏
+            notesTooltipTimerRef.current = setTimeout(() => {
+              setNotesTooltip(null);
+            }, 1500);
+          }}
+        >
+          <div className="bg-slate-900 text-white text-xs rounded-lg px-4 py-3 max-w-md whitespace-normal shadow-2xl border border-slate-600">
+            <div
+              className="font-semibold text-amber-400 mb-2 text-sm cursor-pointer hover:text-amber-300"
+              onClick={(e) => {
+                e.stopPropagation();
+                // 找到对应的 offer 名称并打开弹窗
+                const offerName = Object.keys(offerDetailsMap).find(key => offerDetailsMap[key]?.notes === notesTooltip.content);
+                if (offerName) {
+                  setNotesModal({ offerName, content: notesTooltip.content });
+                }
+              }}
+            >
+              Notes: (点击查看完整内容)
+            </div>
+            <div className="text-slate-100 break-words whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">{notesTooltip.content}</div>
+            {/* 小箭头 */}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-slate-900 rotate-45 border-l border-b border-slate-600"></div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Offer Notes 弹窗 */}
+      {notesModal && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setNotesModal(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col animate-in fade-in zoom-in duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <i className="fas fa-sticky-note text-amber-500"></i>
+                <h3 className="text-lg font-bold text-slate-800">Offer Notes</h3>
+              </div>
+              <button
+                onClick={() => setNotesModal(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors"
+              >
+                <i className="fas fa-times text-slate-400 hover:text-slate-600"></i>
+              </button>
+            </div>
+            {/* Offer Name */}
+            <div className="px-6 py-3 bg-slate-50 border-b border-slate-100">
+              <span className="text-sm text-slate-500">Offer: </span>
+              <span className="text-sm font-semibold text-slate-800 ml-2">{notesModal.offerName}</span>
+            </div>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <pre className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed font-sans">{notesModal.content || '(无内容)'}</pre>
+            </div>
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(notesModal.content);
+                }}
+                className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
+              >
+                <i className="fas fa-copy"></i>
+                复制内容
+              </button>
+              <button
+                onClick={() => setNotesModal(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg transition-colors"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Connection Status Indicator */}
       {connectionStatus === 'retrying' && (
         <div className="fixed top-4 right-4 z-50 bg-amber-50 text-amber-800 px-4 py-2.5 rounded-lg shadow-lg border border-amber-200 flex items-center gap-3 animate-pulse">
@@ -1915,18 +2028,33 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                                             )}
                                             {/* Notes 预览 Tooltip */}
                                             {offerDetail?.notes && (
-                                              <div className="group/notes shrink-0 relative z-[9999]">
-                                                <div className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-amber-100 transition-colors cursor-help">
-                                                  <i className="fas fa-sticky-note text-[10px] text-amber-500 hover:text-amber-600"></i>
-                                                </div>
-                                                {/* Tooltip */}
-                                                <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover/notes:block">
-                                                  <div className="bg-slate-800 text-white text-xs rounded-lg px-4 py-3 max-w-md whitespace-normal shadow-xl border border-slate-600">
-                                                    <div className="font-semibold text-amber-400 mb-2 text-sm">Notes:</div>
-                                                    <div className="text-slate-200 break-words whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">{offerDetail.notes}</div>
-                                                    {/* 小箭头 */}
-                                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-slate-800 rotate-45"></div>
-                                                  </div>
+                                              <div
+                                                className="shrink-0"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setNotesModal({ offerName: row.name, content: offerDetail.notes });
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                  // 取消之前的隐藏定时器
+                                                  if (notesTooltipTimerRef.current) {
+                                                    clearTimeout(notesTooltipTimerRef.current);
+                                                  }
+                                                  const rect = e.currentTarget.getBoundingClientRect();
+                                                  setNotesTooltip({
+                                                    content: offerDetail.notes,
+                                                    x: rect.right + 8,
+                                                    y: rect.top + rect.height / 2
+                                                  });
+                                                }}
+                                                onMouseLeave={() => {
+                                                  // 延迟 1.5 秒后隐藏
+                                                  notesTooltipTimerRef.current = setTimeout(() => {
+                                                    setNotesTooltip(null);
+                                                  }, 1500);
+                                                }}
+                                              >
+                                                <div className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-amber-200 transition-colors cursor-pointer">
+                                                  <i className="fas fa-sticky-note text-[10px] text-amber-500 hover:text-amber-700"></i>
                                                 </div>
                                               </div>
                                             )}
