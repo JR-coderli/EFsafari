@@ -18,7 +18,7 @@ import requests
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 
 # ==================== 配置日志 ====================
 LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
@@ -32,13 +32,15 @@ logger.setLevel(logging.INFO)
 # 清除已有的 handlers
 logger.handlers.clear()
 
-# 文件 handler（自动轮转，最大 50MB，保留 5 个备份）
-file_handler = RotatingFileHandler(
+# 文件 handler（按天轮转，保留 7 天）
+file_handler = TimedRotatingFileHandler(
     LOG_FILE,
-    maxBytes=50*1024*1024,  # 50MB
-    backupCount=5,
+    when="midnight",  # 每天午夜轮转
+    interval=1,
+    backupCount=7,  # 保留 7 天
     encoding='utf-8'
 )
+file_handler.suffix = "%Y-%m-%d.log"  # 轮转文件后缀
 file_handler.setLevel(logging.INFO)
 file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(file_formatter)

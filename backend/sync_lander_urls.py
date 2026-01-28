@@ -15,7 +15,7 @@ import yaml
 import logging
 import os
 from datetime import datetime
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 
 # 设置日志目录
 LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
@@ -29,13 +29,15 @@ logger.setLevel(logging.INFO)
 # 清除已有的 handlers
 logger.handlers.clear()
 
-# 文件 handler（自动轮转，最大 10MB，保留 5 个备份）
-file_handler = RotatingFileHandler(
+# 文件 handler（按天轮转，保留 7 天）
+file_handler = TimedRotatingFileHandler(
     LOG_FILE,
-    maxBytes=10*1024*1024,  # 10MB
-    backupCount=5,
+    when="midnight",
+    interval=1,
+    backupCount=7,
     encoding='utf-8'
 )
+file_handler.suffix = "%Y-%m-%d.log"
 file_handler.setLevel(logging.INFO)
 file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(file_formatter)

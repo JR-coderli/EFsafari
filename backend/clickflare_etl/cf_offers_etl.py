@@ -26,8 +26,7 @@ logger_config = {
     "level": CONFIG["logging"]["level"],
     "log_dir": CONFIG["logging"]["log_dir"],
     "log_file": CONFIG["logging"].get("offers_log_file", "cf_offers_etl.log"),
-    "max_bytes": CONFIG["logging"].get("max_bytes", 10485760),
-    "backup_count": CONFIG["logging"].get("backup_count", 5)
+    "backup_days": CONFIG["logging"].get("backup_days", 7)  # 保留 7 天
 }
 logger = setup_logger(logger_config)
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserPermission } from '../types';
+import { tokenManager } from '../src/api/auth';
 
 interface ConfigCard {
   id: string;
@@ -41,6 +42,67 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
   const [selectedTaskLog, setSelectedTaskLog] = useState<string | null>(null);
   const [selectedTaskName, setSelectedTaskName] = useState<string>('');
 
+  // ETL 运行日志状态
+  const [etlLogTitle, setEtlLogTitle] = useState('');
+  const [etlLogContent, setEtlLogContent] = useState<string[]>([]);
+  const [etlLogTaskId, setEtlLogTaskId] = useState<string | null>(null);
+  const [showEtlLog, setShowEtlLog] = useState(false);
+  const [isEtlRunning, setIsEtlRunning] = useState(false);
+
+  // 特殊媒体编辑状态
+  const [editingMediaType, setEditingMediaType] = useState<'dates' | 'hourly' | null>(null);
+  const [tempKeywords, setTempKeywords] = useState('');
+
+  // 轮询 ETL 任务日志
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    const pollEtlLog = async () => {
+      if (!etlLogTaskId || !isEtlRunning) return;
+
+      try {
+        const token = tokenManager.getToken();
+        const response = await fetch(`/api/scheduler/log/${etlLogTaskId}?lines=100`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const log = result.log || '暂无日志';
+
+          // 检查任务是否完成
+          const isCompleted = log.includes('Task completed') ||
+                              log.includes('ETL completed') ||
+                              (log.includes('ERROR') && log.includes('Traceback'));
+
+          setEtlLogContent(log.split('\n'));
+
+          if (isCompleted) {
+            setIsEtlRunning(false);
+            if (intervalId) {
+              clearInterval(intervalId);
+              intervalId = null;
+            }
+            setTimeout(() => loadSchedulerStatus(), 2000);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to poll ETL log:', error);
+      }
+    };
+
+    if (etlLogTaskId && isEtlRunning) {
+      pollEtlLog();
+      intervalId = setInterval(pollEtlLog, 2000);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [etlLogTaskId, isEtlRunning]);
+
   // 加载特殊媒体配置
   useEffect(() => {
     loadSpecialMediaConfig();
@@ -52,7 +114,7 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
 
   const loadSpecialMediaConfig = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = tokenManager.getToken();
       const response = await fetch('/api/config/special-media', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -67,7 +129,7 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
 
   const loadSchedulerStatus = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = tokenManager.getToken();
       const response = await fetch('/api/scheduler/status', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -83,7 +145,7 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
   const loadTaskLog = async (taskId: string, taskName: string) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = tokenManager.getToken();
       const response = await fetch(`/api/scheduler/log/${taskId}?lines=200`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -101,18 +163,30 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
     }
   };
 
-  const triggerTask = async (taskId: string) => {
+  const triggerTask = async (taskId: string, taskName?: string) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = tokenManager.getToken();
       const response = await fetch(`/api/scheduler/trigger/${taskId}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const result = await response.json();
       if (response.ok) {
-        showMessage('success', result.message || '任务已触发');
-        setTimeout(() => loadSchedulerStatus(), 2000);
+        // 获取任务名称
+        const taskNames: Record<string, string> = {
+          'offers': 'Offers ETL',
+          'lander': 'Lander URLs Sync',
+          'hourly': 'Hourly ETL'
+        };
+        const name = taskName || taskNames[taskId] || taskId;
+
+        // 设置 ETL 日志状态
+        setEtlLogTitle(`${name} 运行日志`);
+        setEtlLogContent(['正在启动任务...']);
+        setEtlLogTaskId(taskId);
+        setIsEtlRunning(true);
+        setShowEtlLog(true);
       } else {
         showMessage('error', result.detail || '触发任务失败');
       }
@@ -131,17 +205,43 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
   // 数据拉取功能
   const triggerDataPull = async (type: 'yesterday' | 'hourly') => {
     setLoading(true);
+
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/config/pull-data/${type}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const result = await response.json();
-      if (response.ok) {
-        showMessage('success', result.message || 'Data pull initiated successfully');
+      const token = tokenManager.getToken();
+
+      if (type === 'hourly') {
+        // Hourly 数据拉取 - 使用 scheduler trigger API
+        const response = await fetch('/api/scheduler/trigger/hourly', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const result = await response.json();
+
+        if (response.ok) {
+          // 设置 ETL 日志状态
+          setEtlLogTitle('Hourly ETL 运行日志');
+          setEtlLogContent(['正在启动任务...']);
+          setEtlLogTaskId('hourly');
+          setIsEtlRunning(true);
+          setShowEtlLog(true);
+        } else {
+          showMessage('error', result.detail || '触发 Hourly ETL 失败');
+        }
       } else {
-        showMessage('error', result.detail || 'Failed to pull data');
+        // Yesterday 数据拉取 - 使用原有的 config API
+        const response = await fetch(`/api/config/pull-data/${type}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const result = await response.json();
+
+        if (response.ok) {
+          showMessage('success', result.message || 'Yesterday 数据拉取已启动');
+          // 刷新定时任务状态以获取最新日志
+          setTimeout(() => loadSchedulerStatus(), 3000);
+        } else {
+          showMessage('error', result.detail || 'Failed to pull data');
+        }
       }
     } catch (error: any) {
       showMessage('error', error.message || 'Failed to pull data');
@@ -154,7 +254,7 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
   const saveSpecialMedia = async (type: 'dates' | 'hourly', keywords: string[]) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = tokenManager.getToken();
       const response = await fetch('/api/config/special-media', {
         method: 'POST',
         headers: {
@@ -176,6 +276,69 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 打开特殊媒体编辑模态框
+  const openSpecialMediaModal = (type: 'dates' | 'hourly') => {
+    setEditingMediaType(type);
+    const keywords = type === 'dates'
+      ? specialMedia.dates_special_media.join(', ')
+      : specialMedia.hourly_special_media.join(', ');
+    setTempKeywords(keywords);
+
+    const title = type === 'dates'
+      ? 'Dates Report 特殊媒体配置'
+      : 'Hourly 特殊媒体配置';
+
+    const description = type === 'dates'
+      ? '配置 Dates Report 中 spend = revenue 的特殊媒体关键词（逗号分隔）'
+      : '配置 Hourly Report 中 spend = revenue 的特殊媒体关键词（逗号分隔）';
+
+    const hint = type === 'hourly' ? (
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+        <i className="fas fa-lightbulb mr-2"></i>
+        默认包含: mintegral, hastraffic, jmmobi, brainx
+      </div>
+    ) : null;
+
+    const placeholder = type === 'dates'
+      ? '例如: mintegral, hastraffic'
+      : '例如: mintegral, hastraffic, jmmobi, brainx';
+
+    setModalTitle(title);
+    setModalContent(
+      <div className="space-y-4">
+        <p className="text-slate-600 text-sm">{description}</p>
+        {hint}
+        <input
+          type="text"
+          value={tempKeywords}
+          onChange={(e) => setTempKeywords(e.target.value)}
+          placeholder={placeholder}
+          className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={() => setShowModal(false)}
+            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+          >
+            取消
+          </button>
+          <button
+            onClick={() => {
+              const keywords = tempKeywords.split(',').map(k => k.trim()).filter(k => k);
+              saveSpecialMedia(type, keywords);
+            }}
+            disabled={loading}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {loading ? <i className="fas fa-spinner fa-spin mr-2"></i> : null}
+            保存配置
+          </button>
+        </div>
+      </div>
+    );
+    setShowModal(true);
   };
 
   // 定时任务状态卡片
@@ -275,12 +438,15 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
             <p className="text-slate-600">确定要拉取昨天的数据吗？这将同步 Clickflare API 的数据到本地数据库。</p>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
               <i className="fas fa-info-circle mr-2"></i>
-              此操作可能需要几分钟时间，请勿关闭页面。
+              此操作可能需要几分钟时间，点击开始后将显示实时日志窗口。
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
               <button
-                onClick={() => triggerDataPull('yesterday')}
+                onClick={() => {
+                  setShowModal(false);
+                  triggerDataPull('yesterday');
+                }}
                 disabled={loading}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
               >
@@ -306,12 +472,15 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
             <p className="text-slate-600">确定要拉取今天的 Hourly 数据吗？</p>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
               <i className="fas fa-info-circle mr-2"></i>
-              Hourly 数据包含今天 0 点到当前时间的所有小时数据。
+              Hourly 数据包含今天 0 点到当前时间的所有小时数据。点击开始后将显示实时日志窗口。
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
               <button
-                onClick={() => triggerDataPull('hourly')}
+                onClick={() => {
+                  setShowModal(false);
+                  triggerDataPull('hourly');
+                }}
                 disabled={loading}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
               >
@@ -334,37 +503,7 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
       title: 'Dates Report Special Media',
       icon: 'fa-calendar-alt',
       description: `当前配置: ${specialMedia.dates_special_media.length > 0 ? specialMedia.dates_special_media.join(', ') : '无'}`,
-      action: () => {
-        const [tempKeywords, setTempKeywords] = useState(specialMedia.dates_special_media.join(', '));
-        setModalTitle('Dates Report 特殊媒体配置');
-        setModalContent(
-          <div className="space-y-4">
-            <p className="text-slate-600 text-sm">配置 Dates Report 中 spend = revenue 的特殊媒体关键词（逗号分隔）</p>
-            <input
-              type="text"
-              defaultValue={specialMedia.dates_special_media.join(', ')}
-              onChange={(e) => setTempKeywords(e.target.value)}
-              placeholder="例如: mintegral, hastraffic"
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
-              <button
-                onClick={() => {
-                  const keywords = tempKeywords.split(',').map(k => k.trim()).filter(k => k);
-                  saveSpecialMedia('dates', keywords);
-                }}
-                disabled={loading}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {loading ? <i className="fas fa-spinner fa-spin mr-2"></i> : null}
-                保存配置
-              </button>
-            </div>
-          </div>
-        );
-        setShowModal(true);
-      },
+      action: () => openSpecialMediaModal('dates'),
       color: 'bg-purple-500'
     },
     {
@@ -372,41 +511,7 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
       title: 'Hourly Special Media',
       icon: 'fa-clock',
       description: `当前配置: ${specialMedia.hourly_special_media.length > 0 ? specialMedia.hourly_special_media.join(', ') : '无'}`,
-      action: () => {
-        const [tempKeywords, setTempKeywords] = useState(specialMedia.hourly_special_media.join(', '));
-        setModalTitle('Hourly 特殊媒体配置');
-        setModalContent(
-          <div className="space-y-4">
-            <p className="text-slate-600 text-sm">配置 Hourly Report 中 spend = revenue 的特殊媒体关键词（逗号分隔）</p>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-              <i className="fas fa-lightbulb mr-2"></i>
-              默认包含: mintegral, hastraffic, jmmobi, brainx
-            </div>
-            <input
-              type="text"
-              defaultValue={specialMedia.hourly_special_media.join(', ')}
-              onChange={(e) => setTempKeywords(e.target.value)}
-              placeholder="例如: mintegral, hastraffic, jmmobi, brainx"
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
-              <button
-                onClick={() => {
-                  const keywords = tempKeywords.split(',').map(k => k.trim()).filter(k => k);
-                  saveSpecialMedia('hourly', keywords);
-                }}
-                disabled={loading}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {loading ? <i className="fas fa-spinner fa-spin mr-2"></i> : null}
-                保存配置
-              </button>
-            </div>
-          </div>
-        );
-        setShowModal(true);
-      },
+      action: () => openSpecialMediaModal('hourly'),
       color: 'bg-orange-500'
     }
   ];
@@ -504,39 +609,105 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
       </div>
 
       {/* Modal */}
-      {showModal && createPortal(
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => !loading && setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-lg text-slate-800">{modalTitle}</h3>
-              <button onClick={() => !loading && setShowModal(false)} className="text-slate-400 hover:text-slate-600">
-                <i className="fas fa-times"></i>
-              </button>
-            </div>
-            <div className="p-6">
-              {modalContent}
-            </div>
-          </div>
-        </div>,
-        document.body
+      {showModal && React.createElement(
+        'div',
+        {
+          className: 'fixed inset-0 bg-black/50 flex items-center justify-center z-50',
+          onClick: () => !loading && setShowModal(false)
+        },
+        React.createElement('div', {
+          className: 'bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden',
+          onClick: (e: React.MouseEvent) => e.stopPropagation()
+        }, [
+          React.createElement('div', {
+            key: 'header',
+            className: 'px-6 py-4 border-b border-slate-100 flex items-center justify-between'
+          }, [
+            React.createElement('h3', {
+              key: 'title',
+              className: 'font-bold text-lg text-slate-800'
+            }, modalTitle),
+            React.createElement('button', {
+              key: 'close',
+              onClick: () => !loading && setShowModal(false),
+              className: 'text-slate-400 hover:text-slate-600'
+            }, React.createElement('i', { className: 'fas fa-times' }))
+          ]),
+          React.createElement('div', {
+            key: 'content',
+            className: 'p-6'
+          }, modalContent)
+        ])
       )}
 
-      {/* Log Modal */}
-      {selectedTaskLog && createPortal(
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedTaskLog(null)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+      {/* Log Modal - 定时任务日志 */}
+      {selectedTaskLog && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setSelectedTaskLog(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-lg text-slate-800">{selectedTaskName} - 日志</h3>
-              <button onClick={() => setSelectedTaskLog(null)} className="text-slate-400 hover:text-slate-600">
+              <h3 className="font-bold text-lg text-slate-800">
+                {selectedTaskName} - 日志
+              </h3>
+              <button
+                onClick={() => setSelectedTaskLog(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
                 <i className="fas fa-times"></i>
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4 bg-slate-900">
-              <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">{selectedTaskLog}</pre>
+              <pre
+                className="text-xs text-green-400 font-mono whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{ __html: selectedTaskLog
+                  .replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;') }}
+              />
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
+      )}
+
+      {/* ETL Log Modal - 运行中的 ETL 任务日志 */}
+      {showEtlLog && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => !isEtlRunning && setShowEtlLog(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-lg text-slate-800">{etlLogTitle}</h3>
+                {isEtlRunning && (
+                  <span className="flex items-center gap-1 text-xs text-amber-600">
+                    <i className="fas fa-spinner fa-spin"></i>
+                    运行中...
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowEtlLog(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-slate-900">
+              <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
+                {etlLogContent.length > 0 ? etlLogContent.join('\n') : '等待日志...'}
+              </pre>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

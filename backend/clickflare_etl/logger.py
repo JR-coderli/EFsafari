@@ -1,9 +1,11 @@
 """
 Logging module for Clickflare ETL
+
+使用按天轮转的日志，保留 7 天
 """
 import logging
 import os
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
 
 
@@ -20,8 +22,7 @@ def setup_logger(config):
     log_level = getattr(logging, config.get("level", "INFO"))
     log_dir = config.get("log_dir", "logs")
     log_file = config.get("log_file", "cf_etl.log")
-    max_bytes = config.get("max_bytes", 10485760)
-    backup_count = config.get("backup_count", 5)
+    backup_days = config.get("backup_days", 7)  # 保留天数，默认 7 天
 
     # Create logs directory if not exists
     os.makedirs(log_dir, exist_ok=True)
@@ -39,15 +40,17 @@ def setup_logger(config):
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    # File handler with rotation
-    file_handler = RotatingFileHandler(
+    # File handler with daily rotation, keeping 7 days
+    file_handler = TimedRotatingFileHandler(
         filename=os.path.join(log_dir, log_file),
-        maxBytes=max_bytes,
-        backupCount=backup_count,
+        when="midnight",  # 每天午夜轮转
+        interval=1,  # 每 1 天轮转一次
+        backupCount=backup_days,  # 保留 7 天的日志
         encoding="utf-8"
     )
     file_handler.setLevel(log_level)
     file_handler.setFormatter(formatter)
+    file_handler.suffix = "%Y-%m-%d.log"  # 轮转文件后缀
     logger.addHandler(file_handler)
 
     # Console handler
