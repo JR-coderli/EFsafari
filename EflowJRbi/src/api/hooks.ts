@@ -355,151 +355,18 @@ export async function loadRootData(
 
   // If no cached hierarchy, load it directly
   console.log('[loadRootData] Loading hierarchy from API, activeDims:', activeDims);
-  try {
-    const hierarchyData = await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
-    if (hierarchyData) {
-      const result = getDataFromHierarchy(hierarchyData.hierarchy, activeDims, activeFilters, 0);
-      dataCache.set(cacheKeyVal, result);
-      return result;
-    }
-  } catch (error) {
-    console.warn('Hierarchy loading failed, falling back to /data API:', error);
-  }
-
-  // Load first level data immediately (fastest first screen)
-  try {
-    const response = await dashboardApi.getData({
-      startDate: start,
-      endDate: end,
-      groupBy: [primaryDim],
-      filters: activeFilters.map(f => ({ dimension: f.dimension, value: f.value })),
-      limit: 1000,
-    });
-
-    // Debug: log first API row for offer dimension
-    if (response.data.length > 0 && primaryDim === 'offer') {
-      const firstRow = response.data[0];
-      console.log('[loadRootData] API raw row (offer):', {
-        name: firstRow.name,
-        has_offerID: 'offerID' in firstRow,
-        offerID: (firstRow as any).offerID,
-        has_offerId: 'offerId' in firstRow,
-        offerId: (firstRow as any).offerId,
-        allKeys: Object.keys(firstRow)
-      });
-    }
-
-    const result = response.data.map(row => {
-      const revenue = Number(row.revenue) || 0;
-      const spend = Number(row.spend) || 0;
-      const impressions = Number(row.impressions) || 0;
-      const clicks = Number(row.clicks) || 0;
-      const conversions = Number(row.conversions) || 0;
-      const m_imp = Number(row.m_imp) || 0;
-      const m_clicks = Number(row.m_clicks) || 0;
-      const m_conv = Number(row.m_conv) || 0;
-
-      // Debug: log API response structure for lander dimension
-      if (primaryDim === 'lander') {
-        console.log('[loadRootData] API row:', row.name, 'has landerUrl:', 'landerUrl' in row, 'value:', (row as any).landerUrl);
-      }
-
-      // Build filterPath - use backend's if available, otherwise build from activeFilters
-      const rowFilterPath = (row as any).filterPath || [...activeFilters, { dimension: primaryDim, value: row.name }];
-      // Generate unique ID from filterPath (consistent with hierarchy data)
-      const uniqueId = rowFilterPath.map(f => f.value).join('|');
-
-      const resultRow: any = {
-        ...row,
-        id: uniqueId,  // Use unique ID from filterPath
-        dimensionType: row.dimensionType as Dimension,
-        impressions,
-        clicks,
-        conversions,
-        spend,
-        revenue,
-        profit: revenue - spend,
-        m_imp,
-        m_clicks,
-        m_conv,
-        ctr: Number(row.ctr) || 0,
-        cvr: Number(row.cvr) || 0,
-        roi: spend > 0 ? (revenue - spend) / spend : 0,
-        cpa: Number(row.cpa) || 0,
-        rpa: Number(row.rpa) || 0,
-        epa: Number(row.rpa) || 0,  // Earnings Per Action (same as rpa)
-        epc: Number(row.epc) || 0,
-        epv: Number(row.epv) || 0,
-        m_epc: Number(row.m_epc) || 0,
-        m_epv: Number(row.m_epv) || 0,
-        m_cpc: Number(row.m_cpc) || 0,
-        m_cpv: Number(row.m_cpv) || 0,
-        m_cpa: spend / (m_conv || 1),
-        m_epa: revenue / (m_conv || 1),
-        hasChild: currentLevel < activeDims.length - 1,
-        filterPath: rowFilterPath,
-      };
-
-      // Preserve landerUrl if present
-      if ((row as any).landerUrl) {
-        resultRow.landerUrl = (row as any).landerUrl;
-      }
-
-      // Preserve offerId if present
-      if ((row as any).offerID) {
-        resultRow.offerId = (row as any).offerID;
-      }
-
-      return resultRow;
-    });
-
-    // Debug: verify result has landerUrl for lander dimension
-    if (primaryDim === 'lander') {
-      const firstRow = result[0];
-      console.log('[loadRootData] Result first row:', firstRow?.name, 'has landerUrl:', !!(firstRow as any)?.landerUrl, 'value:', (firstRow as any)?.landerUrl);
-    }
-
+  const hierarchyData = await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
+  if (hierarchyData) {
+    const result = getDataFromHierarchy(hierarchyData.hierarchy, activeDims, activeFilters, 0);
     dataCache.set(cacheKeyVal, result);
-
-    // Trigger background hierarchy preloading (don't wait for it)
-    preloadHierarchyInBackground(activeDims, selectedRange, customStart, customEnd);
-
     return result;
-  } catch (error) {
-    console.error('Error loading data:', error);
-    throw error;
   }
+
+  throw new Error('Failed to load hierarchy data');
 }
 
 /**
- * Preload hierarchy in background without blocking UI
- */
-function preloadHierarchyInBackground(
-  activeDims: Dimension[],
-  selectedRange: string,
-  customStart?: Date,
-  customEnd?: Date
-) {
-  // Use requestIdleCallback or setTimeout to not block the main thread
-  const preloadFn = async () => {
-    try {
-      await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
-    } catch (error) {
-      // Silent fail - this is just optimization
-      console.debug('Background hierarchy preload failed:', error);
-    }
-  };
-
-  // Use setTimeout(0) to run after current render
-  if (typeof requestIdleCallback !== 'undefined') {
-    requestIdleCallback(() => preloadFn());
-  } else {
-    setTimeout(preloadFn, 0);
-  }
-}
-
-/**
- * Load child data for a specific row (with hierarchy fallback)
+ * Load child data for a specific row
  */
 export async function loadChildData(
   activeDims: Dimension[],
@@ -509,102 +376,13 @@ export async function loadChildData(
   customStart?: Date,
   customEnd?: Date
 ): Promise<AdRow[]> {
-  // Try hierarchy first
+  // Load hierarchy and extract data for the requested level
   const hierarchy = await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
   if (hierarchy) {
     return getDataFromHierarchy(hierarchy.hierarchy, activeDims, activeFilters, 0);
   }
 
-  // Fallback to regular API
-  const { start, end } = getDateRange(selectedRange, customStart, customEnd);
-  const currentLevel = activeFilters.length;
-  if (currentLevel >= activeDims.length) {
-    return [];
-  }
-
-  const nextDim = activeDims[currentLevel];
-  const cacheKeyVal = cacheKey('data', start, end, [nextDim], activeFilters);
-
-  // Check cache
-  const cached = dataCache.get(cacheKeyVal);
-  if (cached) {
-    return cached;
-  }
-
-  try {
-    const response = await dashboardApi.getData({
-      startDate: start,
-      endDate: end,
-      groupBy: [nextDim],
-      filters: activeFilters.map(f => ({ dimension: f.dimension, value: f.value })),
-      limit: 1000,
-    });
-
-    const result = response.data.map(row => {
-      const revenue = Number(row.revenue) || 0;
-      const spend = Number(row.spend) || 0;
-      const impressions = Number(row.impressions) || 0;
-      const clicks = Number(row.clicks) || 0;
-      const conversions = Number(row.conversions) || 0;
-      const m_imp = Number(row.m_imp) || 0;
-      const m_clicks = Number(row.m_clicks) || 0;
-      const m_conv = Number(row.m_conv) || 0;
-
-      // Build filterPath - use backend's if available, otherwise build from activeFilters
-      const rowFilterPath = (row as any).filterPath || [...activeFilters, { dimension: nextDim, value: row.name }];
-      // Generate unique ID from filterPath (consistent with hierarchy data)
-      const uniqueId = rowFilterPath.map(f => f.value).join('|');
-
-      const resultRow: any = {
-        ...row,
-        id: uniqueId,  // Use unique ID from filterPath
-        dimensionType: row.dimensionType as Dimension,
-        impressions,
-        clicks,
-        conversions,
-        spend,
-        revenue,
-        profit: revenue - spend,
-        m_imp,
-        m_clicks,
-        m_conv,
-        ctr: Number(row.ctr) || 0,
-        cvr: Number(row.cvr) || 0,
-        roi: spend > 0 ? (revenue - spend) / spend : 0,
-        cpa: Number(row.cpa) || 0,
-        rpa: Number(row.rpa) || 0,
-        epa: Number(row.rpa) || 0,  // Earnings Per Action (same as rpa)
-        epc: Number(row.epc) || 0,
-        epv: Number(row.epv) || 0,
-        m_epc: Number(row.m_epc) || 0,
-        m_epv: Number(row.m_epv) || 0,
-        m_cpc: Number(row.m_cpc) || 0,
-        m_cpv: Number(row.m_cpv) || 0,
-        m_cpa: spend / (m_conv || 1),
-        m_epa: revenue / (m_conv || 1),
-        hasChild: currentLevel + 1 < activeDims.length,
-        filterPath: rowFilterPath,
-      };
-
-      // Preserve landerUrl if present
-      if ((row as any).landerUrl) {
-        resultRow.landerUrl = (row as any).landerUrl;
-      }
-
-      // Preserve offerId if present
-      if ((row as any).offerID) {
-        resultRow.offerId = (row as any).offerID;
-      }
-
-      return resultRow;
-    });
-
-    dataCache.set(cacheKeyVal, result);
-    return result;
-  } catch (error) {
-    console.error('Error loading child data:', error);
-    throw error;
-  }
+  throw new Error('Failed to load hierarchy data');
 }
 
 /**
