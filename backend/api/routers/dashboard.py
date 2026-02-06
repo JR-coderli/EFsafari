@@ -309,7 +309,10 @@ async def get_aggregated_data(
         formatted_data = []
         filter_values = [f.get("value") for f in filter_list]
 
-        for row in result.named_results():
+        for idx, row in enumerate(result.named_results()):
+            # Debug: log raw row for offer dimension
+            if idx < 3 and primary_dim == "offer":
+                logger.info(f"[DATA API] Raw row {idx}: columns={list(row.keys())}, offerID={row.get('offerID')}, name={row.get(f'group_{primary_dim}')}")
             formatted_row = format_row_for_frontend(
                 row,
                 dimension_type=primary_dim,
@@ -318,6 +321,9 @@ async def get_aggregated_data(
                 all_dimensions=dimensions,
                 filter_list=filter_list
             )
+            # Debug: log formatted row
+            if idx < 3 and primary_dim == "offer":
+                logger.info(f"[DATA API] Formatted row {idx}: has offerID={'offerID' in formatted_row}, offerID={formatted_row.get('offerID')}, keys={list(formatted_row.keys())[:15]}")
             # Determine if this row can have children
             formatted_row["hasChild"] = len(dimensions) > 1
             formatted_data.append(formatted_row)
@@ -762,6 +768,13 @@ async def get_data_hierarchy(
         # Log hierarchy build results
         top_level_count = len(hierarchy)
         logger.info(f"[HIERARCHY BUILD] dim_list={dim_list}, total_rows={row_count}, top_level_nodes={top_level_count}, keys={list(hierarchy.keys())[:10]}")
+
+        # Debug: Check if offerID is in the final hierarchy
+        sample_keys = list(hierarchy.keys())[:3]
+        for key in sample_keys:
+            node = hierarchy[key]
+            offer_id_in_node = node.get("offerID", "MISSING")
+            logger.info(f"[HIERARCHY FINAL] key={key}, offerID={offer_id_in_node}, node_fields={list(node.keys())}")
 
         return {
             "dimensions": dim_list,

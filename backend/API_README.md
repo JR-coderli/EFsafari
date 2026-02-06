@@ -62,6 +62,88 @@ class AdRow(BaseModel):
 
 ## 修改记录
 
+### 2026-02-06
+- 添加 Offer URL 复制按钮不显示问题案例
+
+---
+
+## 问题案例：Offer URL 复制按钮不显示
+
+### 问题现象
+- Performance 页面 Offer 维度下不显示复制 URL 按钮
+- `row.offerId` 始终为 `undefined`
+- 后端 hierarchy API 日志显示确实返回了 `offerID`
+
+### 根本原因
+前端 `loadRootData` 函数在包含 `lander` 维度时会跳过 hierarchy 缓存，改用 `/data` API：
+```typescript
+// hooks.ts 中的问题代码
+const shouldBypassHierarchyCache = activeDims.includes('lander');
+if (cachedHierarchy && !shouldBypassHierarchyCache) {
+  // 使用 hierarchy 数据（包含 offerID）
+  return getDataFromHierarchy(...);
+}
+// 否则调用 /data API（此时没有 offerID）
+```
+
+**关键问题**：
+1. `/data` API 和 `/hierarchy` API 返回的数据结构不同
+2. `/data` API 通过 `format_row_for_frontend` 格式化数据，但 `offerID` 字段没有被正确添加
+3. 前端根据维度组合动态选择使用哪个 API，导致某些维度组合下 `offerID` 丢失
+
+### 调试难点
+1. **双 API 系统**：前端根据场景使用不同 API，难以追踪数据来源
+2. **缓存机制**：前端有多层缓存（hierarchy 缓存、data 缓存），旧数据掩盖了问题
+3. **HMR 不稳定**：Vite 热模块替换有时不生效，需要完全刷新
+4. **后端 reload 不可靠**：`--reload` 模式有时不会正确重新加载代码
+
+### 解决方案
+**方案：统一使用 hierarchy API**
+
+修改 `hooks.ts` 中的 `loadRootData` 函数，让所有情况下都优先使用 hierarchy API：
+```typescript
+// 移除 shouldBypassHierarchyCache 逻辑
+const cachedHierarchy = dataCache.get(hierarchyCacheKey);
+if (cachedHierarchy) {
+  return getDataFromHierarchy(cachedHierarchy.hierarchy, activeDims, activeFilters, 0);
+}
+
+// 没有缓存时，直接加载 hierarchy
+const hierarchyData = await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
+if (hierarchyData) {
+  const result = getDataFromHierarchy(hierarchyData.hierarchy, activeDims, activeFilters, 0);
+  return result;
+}
+```
+
+### 调试技巧
+1. **确认数据来源**：在后端添加日志，确认哪个 API 被调用
+   ```python
+   logger.info(f"[DATA API] User: ..., group_by={dimensions}")
+   logger.info(f"[HIERARCHY API] dimensions={dim_list}")
+   ```
+
+2. **验证 API 返回**：使用 curl 直接测试 API
+   ```bash
+   curl "http://localhost:8000/api/dashboard/hierarchy?..." | python -m json.tool
+   ```
+
+3. **清除所有缓存**：
+   - 浏览器硬刷新 (Ctrl+Shift+R)
+   - 清除 Vite 缓存：`rm -rf node_modules/.vite`
+   - 重启前后端服务
+
+4. **添加前端调试日志**：在关键位置添加 `console.log`，确认数据流向
+
+### 相关文件
+- `backend/api/routers/dashboard.py` - `/hierarchy` 和 `/data` 端点
+- `backend/api/database.py` - `format_row_for_frontend` 函数
+- `EflowJRbi/src/api/hooks.ts` - `loadRootData` 和 `hierarchyNodeToAdRow` 函数
+
+---
+
+## 修改记录
+
 ### 2026-01-22
 - 添加 Lander 维度跳转功能失效问题案例
 - 强调数据模型更新的完整性要求

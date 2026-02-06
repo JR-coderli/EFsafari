@@ -270,8 +270,13 @@ function hierarchyNodeToAdRow(
   }
 
   // Add offerId if present (for offer dimension)
+  // Debug: log offerID processing
+  if (node._dimension === 'offer') {
+    console.log('[hierarchyNodeToAdRow] offer node:', name, 'has offerID:', 'offerID' in node, 'offerID:', node.offerID, 'node keys:', Object.keys(node));
+  }
   if (node.offerID) {
     (result as any).offerId = node.offerID;
+    console.log('[hierarchyNodeToAdRow] SET offerId:', name, 'offerId:', node.offerID);
   }
 
   return result;
@@ -339,16 +344,26 @@ export async function loadRootData(
 
   // Check if hierarchy is already cached
   const hierarchyCacheKey = cacheKey('hierarchy', start, end, activeDims);
-  // BYPASS CACHE for lander dimension during debugging
-  const shouldBypassHierarchyCache = activeDims.includes('lander') || activeDims[currentLevel] === 'lander';
-  console.log('[loadRootData] activeDims:', activeDims, 'currentLevel:', currentLevel, 'shouldBypassHierarchyCache:', shouldBypassHierarchyCache);
-  const cachedHierarchy = shouldBypassHierarchyCache ? null : dataCache.get(hierarchyCacheKey);
-  console.log('[loadRootData] cachedHierarchy:', cachedHierarchy ? 'FOUND (will be skipped)' : 'null');
-  if (cachedHierarchy && !shouldBypassHierarchyCache) {
+  // Always try to use hierarchy for better performance (offerID support)
+  const cachedHierarchy = dataCache.get(hierarchyCacheKey);
+  if (cachedHierarchy) {
     const result = getDataFromHierarchy(cachedHierarchy.hierarchy, activeDims, activeFilters, 0);
     // Also cache this level for faster access
     dataCache.set(cacheKeyVal, result);
     return result;
+  }
+
+  // If no cached hierarchy, load it directly
+  console.log('[loadRootData] Loading hierarchy from API, activeDims:', activeDims);
+  try {
+    const hierarchyData = await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
+    if (hierarchyData) {
+      const result = getDataFromHierarchy(hierarchyData.hierarchy, activeDims, activeFilters, 0);
+      dataCache.set(cacheKeyVal, result);
+      return result;
+    }
+  } catch (error) {
+    console.warn('Hierarchy loading failed, falling back to /data API:', error);
   }
 
   // Load first level data immediately (fastest first screen)
@@ -360,6 +375,19 @@ export async function loadRootData(
       filters: activeFilters.map(f => ({ dimension: f.dimension, value: f.value })),
       limit: 1000,
     });
+
+    // Debug: log first API row for offer dimension
+    if (response.data.length > 0 && primaryDim === 'offer') {
+      const firstRow = response.data[0];
+      console.log('[loadRootData] API raw row (offer):', {
+        name: firstRow.name,
+        has_offerID: 'offerID' in firstRow,
+        offerID: (firstRow as any).offerID,
+        has_offerId: 'offerId' in firstRow,
+        offerId: (firstRow as any).offerId,
+        allKeys: Object.keys(firstRow)
+      });
+    }
 
     const result = response.data.map(row => {
       const revenue = Number(row.revenue) || 0;

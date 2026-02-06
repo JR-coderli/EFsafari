@@ -342,6 +342,17 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
     if lander_url is not None:  # Changed from truthy check to None check
         result["landerUrl"] = lander_url
 
+    # Add offerID if present (for offer dimension)
+    # Debug: log offerID processing
+    import logging
+    logger = logging.getLogger(__name__)
+    if dimension_type == 'offer':
+        logger.info(f"[format_row_for_frontend] offer row: name={dim_value}, row_keys={list(row.keys())}, offerID={row.get('offerID')}, offerID is None: {row.get('offerID') is None}")
+    offer_id = row.get("offerID")
+    if offer_id is not None:  # Include offerID for matching with offer details
+        result["offerID"] = offer_id
+        logger.info(f"[format_row_for_frontend] SET offerID: name={dim_value}, offerID={offer_id}")
+
     return result
 
 
