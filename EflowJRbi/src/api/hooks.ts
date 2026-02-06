@@ -270,13 +270,8 @@ function hierarchyNodeToAdRow(
   }
 
   // Add offerId if present (for offer dimension)
-  // Debug: log offerID processing
-  if (node._dimension === 'offer') {
-    console.log('[hierarchyNodeToAdRow] offer node:', name, 'has offerID:', 'offerID' in node, 'offerID:', node.offerID, 'node keys:', Object.keys(node));
-  }
   if (node.offerID) {
     (result as any).offerId = node.offerID;
-    console.log('[hierarchyNodeToAdRow] SET offerId:', name, 'offerId:', node.offerID);
   }
 
   return result;
@@ -354,7 +349,6 @@ export async function loadRootData(
   }
 
   // If no cached hierarchy, load it directly
-  console.log('[loadRootData] Loading hierarchy from API, activeDims:', activeDims);
   const hierarchyData = await loadHierarchy(activeDims, selectedRange, customStart, customEnd);
   if (hierarchyData) {
     const result = getDataFromHierarchy(hierarchyData.hierarchy, activeDims, activeFilters, 0);
