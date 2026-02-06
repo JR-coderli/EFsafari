@@ -153,6 +153,7 @@ interface HierarchyNode {
   _dimension: Dimension;
   _children?: Record<string, HierarchyNode>;
   landerUrl?: string;  // Lander URL for lander dimension
+  offerID?: string;    // Offer ID for offer dimension
 }
 
 interface HierarchyResponse {
@@ -266,6 +267,11 @@ function hierarchyNodeToAdRow(
   // Add landerUrl if present (for lander dimension)
   if (node.landerUrl) {
     (result as any).landerUrl = node.landerUrl;
+  }
+
+  // Add offerId if present (for offer dimension)
+  if (node.offerID) {
+    (result as any).offerId = node.offerID;
   }
 
   return result;
@@ -411,6 +417,11 @@ export async function loadRootData(
         resultRow.landerUrl = (row as any).landerUrl;
       }
 
+      // Preserve offerId if present
+      if ((row as any).offerID) {
+        resultRow.offerId = (row as any).offerID;
+      }
+
       return resultRow;
     });
 
@@ -550,6 +561,11 @@ export async function loadChildData(
       // Preserve landerUrl if present
       if ((row as any).landerUrl) {
         resultRow.landerUrl = (row as any).landerUrl;
+      }
+
+      // Preserve offerId if present
+      if ((row as any).offerID) {
+        resultRow.offerId = (row as any).offerID;
       }
 
       return resultRow;

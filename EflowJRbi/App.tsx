@@ -485,7 +485,11 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const hasLoadedDataAfterInit = useRef(false);
 
   // Offer 详情映射 (offer_id -> {url, notes, ...})
-  const [offerDetailsMap, setOfferDetailsMap] = useState<Record<string, { url: string; notes: string }>>({});
+  const [offerDetailsMap, setOfferDetailsMap] = useState<Record<string, {
+    url: string;
+    notes: string;
+    name: string;
+  }>>({});
   const [offerIdsToFetch, setOfferIdsToFetch] = useState<Set<string>>(new Set());
   const [copiedOfferUrl, setCopiedOfferUrl] = useState<string | null>(null);
   // Offer Notes Tooltip 状态
@@ -572,43 +576,19 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       // 只在 performance 页面加载
       if (currentPage !== 'performance') return;
 
-      // 收集所有 offer 名称
-      const offerNames = new Set<string>();
-      const collectOfferNames = (rows: AdRow[]) => {
-        rows.forEach(row => {
-          if (row.dimensionType === 'offer') {
-            offerNames.add(row.name);
-          }
-          if (row.children && row.children.length > 0) {
-            collectOfferNames(row.children);
-          }
-        });
-      };
-      collectOfferNames(data);
-
-      if (offerNames.size === 0) return;
-
       try {
-        // 获取所有 offers 详情
-        const result = await offersApi.getDetails();
+        // 获取所有 offers 详情（使用 offer_id 作为 key）
+        const result = await offersApi.getDetailsMap();
 
-        // 建立 name -> {url, notes} 的映射
-        const detailsMap: Record<string, { url: string; notes: string }> = {};
-        result.data.forEach(offer => {
-          detailsMap[offer.name] = {
-            url: offer.url,
-            notes: offer.notes
-          };
-        });
-
-        setOfferDetailsMap(detailsMap);
+        // result.data 已经是 {offer_id: {url, notes, ...}} 格式
+        setOfferDetailsMap(result.data);
       } catch (err) {
         console.error('Failed to load offer details:', err);
       }
     };
 
     loadOfferDetails();
-  }, [data, currentPage]);
+  }, [currentPage]);
 
 
   // Get row text for copy - only return the dimension name
@@ -1521,8 +1501,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
               onClick={(e) => {
                 e.stopPropagation();
                 // 找到对应的 offer 名称并打开弹窗
-                const offerName = Object.keys(offerDetailsMap).find(key => offerDetailsMap[key]?.notes === notesTooltip.content);
-                if (offerName) {
+                const offerId = Object.keys(offerDetailsMap).find(key => offerDetailsMap[key]?.notes === notesTooltip.content);
+                if (offerId) {
+                  const offerName = offerDetailsMap[offerId]?.name || offerId;
                   setNotesModal({ offerName, content: notesTooltip.content });
                 }
               }}
@@ -2009,64 +1990,69 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                                   {/* Offer 复制 URL 和 Notes 预览 */}
                                   {(() => {
                                     if (row.dimensionType === 'offer') {
-                                      const offerDetail = offerDetailsMap[row.name];
-                                      const isCopied = copiedOfferUrl === row.name;
-                                      if (offerDetail?.url || offerDetail?.notes) {
-                                        return (
-                                          <>
-                                            {/* 复制 URL 按钮 */}
-                                            {offerDetail?.url && (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  navigator.clipboard.writeText(offerDetail.url);
-                                                  setCopiedOfferUrl(row.name);
-                                                  setTimeout(() => setCopiedOfferUrl(null), 1500);
-                                                }}
-                                                className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-all duration-200 z-10 ${
-                                                  isCopied
-                                                    ? 'bg-green-500 scale-110'
-                                                    : 'hover:bg-green-100'
-                                                }`}
-                                                title={isCopied ? 'Copied!' : 'Copy Offer URL'}
-                                              >
-                                                <i className={`fas ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px] ${isCopied ? 'text-white' : 'text-green-500 hover:text-green-600'}`}></i>
-                                              </button>
-                                            )}
-                                            {/* Notes 预览 Tooltip */}
-                                            {offerDetail?.notes && (
-                                              <div
-                                                className="shrink-0"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setNotesModal({ offerName: row.name, content: offerDetail.notes });
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                  // 取消之前的隐藏定时器
-                                                  if (notesTooltipTimerRef.current) {
-                                                    clearTimeout(notesTooltipTimerRef.current);
-                                                  }
-                                                  const rect = e.currentTarget.getBoundingClientRect();
-                                                  setNotesTooltip({
-                                                    content: offerDetail.notes,
-                                                    x: rect.right + 8,
-                                                    y: rect.top + rect.height / 2
-                                                  });
-                                                }}
-                                                onMouseLeave={() => {
-                                                  // 延迟 1.5 秒后隐藏
-                                                  notesTooltipTimerRef.current = setTimeout(() => {
-                                                    setNotesTooltip(null);
-                                                  }, 1500);
-                                                }}
-                                              >
-                                                <div className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-amber-200 transition-colors cursor-pointer">
-                                                  <i className="fas fa-sticky-note text-[10px] text-amber-500 hover:text-amber-700"></i>
+                                      // Debug: log offer data
+                                      console.log('[Offer Debug] row.name:', row.name, 'row.offerId:', row.offerId, 'offerDetailsMap keys:', Object.keys(offerDetailsMap).slice(0, 5));
+                                      if (row.offerId) {
+                                        const offerDetail = offerDetailsMap[row.offerId];
+                                        console.log('[Offer Debug] offerDetail:', offerDetail);
+                                        const isCopied = copiedOfferUrl === row.offerId;
+                                        if (offerDetail?.url || offerDetail?.notes) {
+                                          return (
+                                            <>
+                                              {/* 复制 URL 按钮 */}
+                                              {offerDetail?.url && (
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigator.clipboard.writeText(offerDetail.url);
+                                                    setCopiedOfferUrl(row.offerId!);
+                                                    setTimeout(() => setCopiedOfferUrl(null), 1500);
+                                                  }}
+                                                  className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-all duration-200 z-10 ${
+                                                    isCopied
+                                                      ? 'bg-green-500 scale-110'
+                                                      : 'hover:bg-green-100'
+                                                  }`}
+                                                  title={isCopied ? 'Copied!' : 'Copy Offer URL'}
+                                                >
+                                                  <i className={`fas ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px] ${isCopied ? 'text-white' : 'text-green-500 hover:text-green-600'}`}></i>
+                                                </button>
+                                              )}
+                                              {/* Notes 预览 Tooltip */}
+                                              {offerDetail?.notes && (
+                                                <div
+                                                  className="shrink-0"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setNotesModal({ offerName: row.name, content: offerDetail.notes });
+                                                  }}
+                                                  onMouseEnter={(e) => {
+                                                    // 取消之前的隐藏定时器
+                                                    if (notesTooltipTimerRef.current) {
+                                                      clearTimeout(notesTooltipTimerRef.current);
+                                                    }
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setNotesTooltip({
+                                                      content: offerDetail.notes,
+                                                      x: rect.right + 8,
+                                                      y: rect.top + rect.height / 2
+                                                    });
+                                                  }}
+                                                  onMouseLeave={() => {
+                                                    // 延迟 1.5 秒后隐藏
+                                                    notesTooltipTimerRef.current = setTimeout(() => {
+                                                      setNotesTooltip(null);
+                                                    }, 1500);
+                                                  }}
+                                                >
+                                                  <div className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-amber-200 transition-colors cursor-pointer">
+                                                    <i className="fas fa-sticky-note text-[10px] text-amber-500 hover:text-amber-700"></i>
+                                                  </div>
                                                 </div>
-                                              </div>
-                                            )}
-                                          </>
-                                        );
+                                              )}
+                                            </>
+                                          );
+                                        }
                                       }
                                     }
                                     return null;

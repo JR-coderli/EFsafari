@@ -234,6 +234,8 @@ async def get_aggregated_data(
 
         # Check if we need to JOIN lander URL mapping (when primary dimension is lander)
         is_lander_dimension = primary_dim == "lander"
+        # Check if we need to include offerID (when primary dimension is offer)
+        is_offer_dimension = primary_dim == "offer"
 
         if is_lander_dimension:
             # For lander dimension, JOIN with the URL mapping table
@@ -257,8 +259,29 @@ async def get_aggregated_data(
                 LIMIT {limit}
                 SETTINGS max_memory_usage=2000000000, max_threads=4
             """
+        elif is_offer_dimension:
+            # For offer dimension, include offerID for matching with offer details
+            query = f"""
+                SELECT
+                    {primary_column} as group_{primary_dim},
+                    MAX(offerID) as offerID,
+                    sum(impressions) as impressions,
+                    sum(clicks) as clicks,
+                    sum(conversions) as conversions,
+                    sum(spend) as spend,
+                    sum(revenue) as total_revenue,
+                    sum(m_imp) as m_imp,
+                    sum(m_clicks) as m_clicks,
+                    sum(m_conv) as m_conv
+                FROM {db.database}.{db.table}
+                WHERE {where_clause}
+                GROUP BY {group_clause}
+                ORDER BY total_revenue DESC
+                LIMIT {limit}
+                SETTINGS max_memory_usage=2000000000, max_threads=4
+            """
         else:
-            # Build SELECT with aggregations (non-lander dimension)
+            # Build SELECT with aggregations (non-lander and non-offer dimension)
             query = f"""
                 SELECT
                     {primary_column} as group_{primary_dim},
@@ -548,8 +571,9 @@ async def get_data_hierarchy(
         db = get_db()
         client = db.connect()
 
-        # Check if lander dimension is included - need to JOIN for URL
+        # Check if special dimensions are included
         has_lander = "lander" in dim_list
+        has_offer = "offer" in dim_list
 
         if has_lander:
             # Build query with JOIN to get landerUrl for all dimensions
@@ -560,7 +584,7 @@ async def get_data_hierarchy(
             lander_idx = dim_list.index("lander")
             lander_column = DIMENSION_COLUMN_MAP.get("lander", "lander")
 
-            # Build SELECT: all dimension columns + landerUrl (aliased for grouping)
+            # Build SELECT: all dimension columns + landerUrl + offerID (if offer exists)
             # We need to include landerUrl with MAX to avoid GROUP BY issues
             select_parts = []
             for i, col in enumerate(columns):
@@ -570,10 +594,15 @@ async def get_data_hierarchy(
                 else:
                     select_parts.append(f"t.{col}")
 
+            # Add landerUrl and optionally offerID
+            extra_selects = ["MAX(m.landerUrl) as landerUrl"]
+            if has_offer:
+                extra_selects.append("MAX(t.offerID) as offerID")
+
             base_query = f"""
                 SELECT
                     {', '.join(select_parts)},
-                    MAX(m.landerUrl) as landerUrl,
+                    {', '.join(extra_selects)},
                     sum(t.impressions) as impressions,
                     sum(t.clicks) as clicks,
                     sum(t.conversions) as conversions,
@@ -594,8 +623,35 @@ async def get_data_hierarchy(
             # GROUP BY all dimension columns (not landerUrl, we use MAX)
             group_by_clause = ", ".join([f"t.{col}" for col in columns])
             base_query += f" GROUP BY {group_by_clause} ORDER BY revenue DESC"
+        elif has_offer:
+            # Build query with offerID for offer dimension matching
+            columns = [DIMENSION_COLUMN_MAP.get(d, d) for d in dim_list]
+            group_by_clause = ", ".join(columns)
+
+            # For offer dimension, we need to include offerID using MAX
+            base_query = f"""
+                SELECT
+                    {', '.join(columns)},
+                    MAX(offerID) as offerID,
+                    sum(impressions) as impressions,
+                    sum(clicks) as clicks,
+                    sum(conversions) as conversions,
+                    sum(spend) as spend,
+                    sum(revenue) as revenue,
+                    sum(m_imp) as m_imp,
+                    sum(m_clicks) as m_clicks,
+                    sum(m_conv) as m_conv
+                FROM {db.database}.{db.table}
+                WHERE reportDate >= '{start_date}' AND reportDate <= '{end_date}'
+            """
+
+            # Add permission filter
+            if permission_filter:
+                base_query += f" AND {permission_filter}"
+
+            base_query += f" GROUP BY {group_by_clause} ORDER BY revenue DESC"
         else:
-            # Fetch all data grouped by all dimensions at once (no lander)
+            # Fetch all data grouped by all dimensions at once (no lander, no offer)
             columns = [DIMENSION_COLUMN_MAP.get(d, d) for d in dim_list]
             group_by_clause = ", ".join(columns)
 
@@ -628,6 +684,9 @@ async def get_data_hierarchy(
 
         for row in result.named_results():
             row_count += 1
+            # Debug: log first few rows to see what columns we have
+            if row_count <= 3:
+                logger.info(f"[HIERARCHY ROW {row_count}] columns: {list(row.keys())}, offerID={row.get('offerID')}, landerUrl={row.get('landerUrl')}")
             # Build nested path
             current_level = hierarchy
             for i, dim in enumerate(dim_list):
@@ -667,6 +726,11 @@ async def get_data_hierarchy(
                         node_data["landerUrl"] = row.get("landerUrl")
                         # Debug log for hierarchy landerUrl
                         logger.info(f"[HIERARCHY LANDER] name={level_key}, landerUrl={row.get('landerUrl')}")
+                    # Add offerID for offer dimension nodes
+                    if dim == "offer" and row.get("offerID") is not None:
+                        node_data["offerID"] = row.get("offerID")
+                        # Debug log for hierarchy offerID
+                        logger.info(f"[HIERARCHY OFFER] name={level_key}, offerID={row.get('offerID')}")
                     current_level[level_key] = node_data
                 else:
                     # Node exists - accumulate metrics for aggregation

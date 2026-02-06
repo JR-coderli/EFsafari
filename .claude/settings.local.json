@@ -103,7 +103,15 @@
       "Bash(SELECT * FROM ad_platform.dim_lander_url_mapping LIMIT 10)",
       "Bash(scp:*)",
       "Bash(cd:*)",
-      "Bash(set:*)"
+      "Bash(set:*)",
+      "Bash(git reset:*)",
+      "Bash(echo:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJfaWQiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc2OTY5MDg2N30.BQiOHpaPebj-JZkfTzLh9hvLfpYODdX1Sfq88BNaOQM\")",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInVzZXJfaWQiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc2OTY5Mjg4MX0.RJ9WaxYVStDNMuZm0NayZ-nKr45WCf9zmHrD502RVOA\")",
+      "Skill(restart_services)",
+      "Bash(Get-Process -Name python,python3,node,uvicorn -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object:*)",
+      "Bash(Format-Table)"
     ]
   }
 }
