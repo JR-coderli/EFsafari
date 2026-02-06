@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { AdRow, Dimension, MetricConfig, SavedView, UserPermission, DailyBreakdown } from './types';
 import { generateMockReport } from './mockData';
-import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoadDailyData } from './src/api/hooks';
+import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoadDailyData, clearDataCache } from './src/api/hooks';
 import { authApi, usersApi, tokenManager } from './src/api/auth';
 import { dailyReportApi, dashboardApi, offersApi, onConnectionStatusChange, type ConnectionStatus } from './src/api/client';
 import { viewsApi } from './src/api/views';
@@ -439,6 +439,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [selectedRange, setSelectedRange] = useState('Yesterday');
   const [customDateStart, setCustomDateStart] = useState<Date | undefined>(undefined);
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(undefined);
+  const [pendingRangeRefresh, setPendingRangeRefresh] = useState(false);
   // Hourly Insight page: default to Today
   const [hourlyRange, setHourlyRange] = useState('Today');
   const [hourlyDateStart, setHourlyDateStart] = useState<Date | undefined>(undefined);
@@ -1050,6 +1051,16 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       setTimeout(() => setIsRefreshing(false), minDelay);
     }
   }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentPage]);
+
+  // 日期范围变更时触发刷新，避免显示旧数据
+  useEffect(() => {
+    if (currentPage !== 'performance') return;
+    if (!hasLoadedDataAfterInit.current) return;
+    if (!pendingRangeRefresh) return;
+    setPendingRangeRefresh(false);
+    clearDataCache();
+    handleRefreshData();
+  }, [pendingRangeRefresh, currentPage, handleRefreshData]);
 
   // Trigger loadRootData when dependencies change（初始化完成后）
   useEffect(() => {
@@ -1719,6 +1730,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     setSelectedRange(range);
                     setCustomDateStart(start);
                     setCustomDateEnd(end);
+                    setPendingRangeRefresh(true);
                   }
                 }}
                 currentDisplay={dateDisplayString}
