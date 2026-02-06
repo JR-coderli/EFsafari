@@ -111,7 +111,8 @@
       "Skill(restart_services)",
       "Bash(Get-Process -Name python,python3,node,uvicorn -ErrorAction SilentlyContinue)",
       "Bash(Select-Object:*)",
-      "Bash(Format-Table)"
+      "Bash(Format-Table)",
+      "Bash(npx kill-port:*)"
     ]
   }
 }

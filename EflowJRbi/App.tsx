@@ -8,6 +8,7 @@ import { loadRootData as apiLoadRootData, loadChildData, loadDailyData as apiLoa
 import { authApi, usersApi, tokenManager } from './src/api/auth';
 import { dailyReportApi, dashboardApi, offersApi, onConnectionStatusChange, type ConnectionStatus } from './src/api/client';
 import { viewsApi } from './src/api/views';
+import { getPageFromHash, navigateTo, setHashForPage, type PageType } from './src/utils/router';
 import DailyReport from './components/DailyReport';
 import HourlyReport from './components/HourlyReport';
 import Config from './components/Config';
@@ -422,7 +423,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [editingDimIndex, setEditingDimIndex] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
-  type PageType = 'performance' | 'permissions' | 'daily_report' | 'hourly' | 'config';
   const [currentPage, setCurrentPage] = useState<PageType>('performance');
   // Performance 子菜单状态
   const [performanceSubPage, setPerformanceSubPage] = useState<'dates' | 'hourly'>('dates');
@@ -506,6 +506,41 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       }
     };
   }, []);
+  // ========== Hash 路由 ==========
+  // 从 hash 读取初始页面状态
+  useEffect(() => {
+    const page = getPageFromHash();
+    setCurrentPage(page);
+    // 更新子菜单状态
+    if (page === 'performance') {
+      setPerformanceSubPage('dates');
+    } else if (page === 'hourly') {
+      setPerformanceSubPage('hourly');
+    }
+  }, []);
+
+  // 监听 hash 变化（浏览器后退/前进按钮，或直接修改 URL）
+  useEffect(() => {
+    const handleHashChange = () => {
+      const page = getPageFromHash();
+      setCurrentPage(page);
+      if (page === 'performance') {
+        setPerformanceSubPage('dates');
+      } else if (page === 'hourly') {
+        setPerformanceSubPage('hourly');
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // 当页面改变时更新 hash
+  useEffect(() => {
+    setHashForPage(currentPage);
+  }, [currentPage]);
+  // ========== Hash 路由结束 ==========
+
 
   // Computed display string for the date picker - varies by page
   const dateDisplayString = useMemo(() => {
@@ -1611,7 +1646,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
             {performanceMenuOpen && isSidebarOpen && (
               <div className="ml-6 border-l border-slate-700/50">
                 <button
-                  onClick={() => { setCurrentPage('performance'); setPerformanceSubPage('dates'); }}
+                  onClick={() => navigateTo('performance')}
                   className={`w-full flex items-center gap-4 px-6 py-3 transition-colors ${currentPage === 'performance' && performanceSubPage === 'dates' ? 'text-indigo-400 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800/30'}`}
                 >
                   <span className="w-2"></span>
@@ -1620,7 +1655,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                 </button>
                 {currentUser.showRevenue !== false && (
                   <button
-                    onClick={() => { setCurrentPage('hourly'); setPerformanceSubPage('hourly'); }}
+                    onClick={() => navigateTo('hourly')}
                     className={`w-full flex items-center gap-4 px-6 py-3 transition-colors ${currentPage === 'hourly' ? 'text-indigo-400 bg-slate-800/50' : 'text-slate-500 hover:bg-slate-800/30'}`}
                   >
                     <span className="w-2"></span>
@@ -1633,19 +1668,19 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           </div>
 
           {currentUser.role === 'admin' && (
-            <button onClick={() => setCurrentPage('daily_report')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'daily_report' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
+            <button onClick={() => navigateTo('daily_report')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'daily_report' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
               <i className="fas fa-calendar-day w-5 text-center"></i>
               {isSidebarOpen && <span className="text-sm font-bold">Daily Report</span>}
             </button>
           )}
           {currentUser.role === 'admin' && (
-            <button onClick={() => setCurrentPage('permissions')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'permissions' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
+            <button onClick={() => navigateTo('permissions')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'permissions' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
               <i className="fas fa-user-shield w-5 text-center"></i>
               {isSidebarOpen && <span className="text-sm font-bold">Permissions</span>}
             </button>
           )}
           {currentUser.role === 'admin' && (
-            <button onClick={() => setCurrentPage('config')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'config' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
+            <button onClick={() => navigateTo('config')} className={`w-full flex items-center gap-4 px-6 py-4 transition-colors ${currentPage === 'config' ? 'text-white bg-indigo-500/10' : 'hover:bg-slate-800'}`}>
               <i className="fas fa-cog w-5 text-center"></i>
               {isSidebarOpen && <span className="text-sm font-bold">Config</span>}
             </button>
