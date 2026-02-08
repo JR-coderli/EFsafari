@@ -54,8 +54,12 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [editingDimIndex, setEditingDimIndex] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
-  const [currentPage, setCurrentPage] = useState<PageType>('performance');
-  const [performanceSubPage, setPerformanceSubPage] = useState<'dates' | 'hourly'>('dates');
+  // 从 URL hash 初始化页面状态，避免刷新后跳转
+  const initialPage = getPageFromHash();
+  const [currentPage, setCurrentPage] = useState<PageType>(initialPage);
+  const [performanceSubPage, setPerformanceSubPage] = useState<'dates' | 'hourly'>(() =>
+    initialPage === 'hourly' ? 'hourly' : 'dates'
+  );
   const [performanceMenuOpen, setPerformanceMenuOpen] = useState(true);
   const [activeFilters, setActiveFilters] = useState<Filter[]>([]);
   const [expandedDailyRows, setExpandedDailyRows] = useState<Set<string>>(new Set());
