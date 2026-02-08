@@ -41,3 +41,13 @@ build/
 *.egg-info/
 .eggs/
 dist/
+
+# Claude Code
+.claude.json
+.claude/settings.local.json
+
+# MCP servers (external git repos)
+chrome-devtools-mcp/
+
+# Error files
+nul
