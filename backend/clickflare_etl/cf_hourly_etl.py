@@ -3,7 +3,7 @@
 Clickflare Hourly Report ETL
 
 按小时拉取 Clickflare 数据，支持 UTC+0 和 UTC+8 两个时区
-每次拉取今天的数据，使用时间戳范围进行精确删除和插入
+每次拉取过去24小时的数据，使用时间戳范围进行精确删除和插入
 
 删除策略（按时间戳范围）：
 - 使用 reportDate + reportHour 组合成时间戳

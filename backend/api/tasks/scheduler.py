@@ -142,7 +142,7 @@ async def run_hourly_etl(timezone: str = "UTC") -> bool:
 
 async def hourly_etl_task():
     """
-    Scheduled task: Fetch today's hourly data for both UTC0 and UTC8.
+    Scheduled task: Fetch past 24 hours of hourly data for both UTC0 and UTC8.
 
     Note: The ETL script now generates both UTC and Asia/Shanghai data in a single run
     by converting from the UTC+8 API data. So we only need to run it once.
