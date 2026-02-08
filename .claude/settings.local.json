@@ -1,6 +1,10 @@
 {
   "permissions": {
     "allow": [
+      "Edit",
+      "Bash",
+      "Bash(cmd:*)",
+      "Bash(powershell:*)",
       "Bash(pip install:*)",
       "Bash(pip show:*)",
       "Bash(python:*)",
@@ -112,7 +116,20 @@
       "Bash(Get-Process -Name python,python3,node,uvicorn -ErrorAction SilentlyContinue)",
       "Bash(Select-Object:*)",
       "Bash(Format-Table)",
-      "Bash(npx kill-port:*)"
-    ]
+      "Bash(npx kill-port:*)",
+      "Bash(Get-Process node -ErrorAction SilentlyContinue)",
+      "Bash(Stop-Process:*)",
+      "Bash(Get-Process python -ErrorAction SilentlyContinue)",
+      "Bash(\"进程清理完成\")",
+      "Bash(\"../venv/Scripts/python.exe\":*)",
+      "Bash(./venv/Scripts/python.exe -m uvicorn:*)",
+      "Bash(./venv/Scripts/pip.exe:*)",
+      "Bash(claude mcp add:*)",
+      "Bash(codex:*)",
+      "Bash(claude mcp list:*)",
+      "Bash(claude mcp remove:*)",
+      "mcp__codex__codex"
+    ],
+    "defaultMode": "acceptEdits"
   }
 }

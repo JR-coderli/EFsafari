@@ -156,6 +156,15 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const normalizeDrillPath = (nextDims: string[], path: DrillPathItem[]) => {
+    const normalized: DrillPathItem[] = [];
+    for (let i = 0; i < path.length && i < nextDims.length; i++) {
+      if (path[i].dimension !== nextDims[i]) break;
+      normalized.push(path[i]);
+    }
+    return normalized;
+  };
+
   // 根据时区计算当前日期
   const getDateInTimezone = (tz: string) => {
     const now = new Date();
@@ -568,7 +577,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     const newDims = [...activeDims];
     newDims[index] = newDimValue;
     setActiveDims(newDims);
-    // 保持 drillPath，不清空父级筛选
+    setDrillPath(normalizeDrillPath(newDims, drillPath));
     closeDimDropdown();
   };
 
@@ -769,6 +778,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
                       e.stopPropagation();
                       const newDims = activeDims.filter(d => d !== dim);
                       setActiveDims(newDims);
+                      setDrillPath(normalizeDrillPath(newDims, drillPath));
                       closeDimDropdown();
                     }}
                     className="text-slate-300 hover:text-rose-500 px-0.5"

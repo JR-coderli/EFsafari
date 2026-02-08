@@ -31,10 +31,10 @@ interface SchedulerTask {
 const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
-  const [modalContent, setModalContent] = useState<React.ReactNode>(null);
+  const [modalType, setModalType] = useState<'special-media' | 'pull-yesterday' | 'pull-hourly' | null>(null);
   const [specialMedia, setSpecialMedia] = useState<SpecialMediaConfig>({
     dates_special_media: [],
-    hourly_special_media: ['mintegral', 'hastraffic', 'jmmobi', 'brainx']
+    hourly_special_media: []
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -115,12 +115,20 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
   const loadSpecialMediaConfig = async () => {
     try {
       const token = tokenManager.getToken();
+      if (!token) {
+        console.warn('No token available for loading special media config');
+        return;
+      }
       const response = await fetch('/api/config/special-media', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const data = await response.json();
         setSpecialMedia(data);
+      } else if (response.status === 401) {
+        // Token expired, clear and redirect to login
+        tokenManager.clear();
+        window.location.href = '/login';
       }
     } catch (error) {
       console.error('Failed to load special media config:', error);
@@ -290,23 +298,31 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
       ? 'Dates Report 特殊媒体配置'
       : 'Hourly 特殊媒体配置';
 
-    const description = type === 'dates'
+    setModalTitle(title);
+    setModalType('special-media');
+    setShowModal(true);
+  };
+
+  // 获取当前 modal 类型的描述和提示
+  const getSpecialMediaModalContent = () => {
+    if (modalType !== 'special-media' || !editingMediaType) return null;
+
+    const description = editingMediaType === 'dates'
       ? '配置 Dates Report 中 spend = revenue 的特殊媒体关键词（逗号分隔）'
       : '配置 Hourly Report 中 spend = revenue 的特殊媒体关键词（逗号分隔）';
 
-    const hint = type === 'hourly' ? (
+    const hint = editingMediaType === 'hourly' ? (
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
         <i className="fas fa-lightbulb mr-2"></i>
         默认包含: mintegral, hastraffic, jmmobi, brainx
       </div>
     ) : null;
 
-    const placeholder = type === 'dates'
+    const placeholder = editingMediaType === 'dates'
       ? '例如: mintegral, hastraffic'
       : '例如: mintegral, hastraffic, jmmobi, brainx';
 
-    setModalTitle(title);
-    setModalContent(
+    return (
       <div className="space-y-4">
         <p className="text-slate-600 text-sm">{description}</p>
         {hint}
@@ -327,7 +343,9 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
           <button
             onClick={() => {
               const keywords = tempKeywords.split(',').map(k => k.trim()).filter(k => k);
-              saveSpecialMedia(type, keywords);
+              if (editingMediaType) {
+                saveSpecialMedia(editingMediaType, keywords);
+              }
             }}
             disabled={loading}
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
@@ -338,7 +356,6 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
         </div>
       </div>
     );
-    setShowModal(true);
   };
 
   // 定时任务状态卡片
@@ -433,29 +450,7 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
       description: '拉取昨天的完整数据到数据库',
       action: () => {
         setModalTitle('拉取昨天数据');
-        setModalContent(
-          <div className="space-y-4">
-            <p className="text-slate-600">确定要拉取昨天的数据吗？这将同步 Clickflare API 的数据到本地数据库。</p>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-              <i className="fas fa-info-circle mr-2"></i>
-              此操作可能需要几分钟时间，点击开始后将显示实时日志窗口。
-            </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  triggerDataPull('yesterday');
-                }}
-                disabled={loading}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-download"></i>}
-                开始拉取
-              </button>
-            </div>
-          </div>
-        );
+        setModalType('pull-yesterday');
         setShowModal(true);
       },
       color: 'bg-blue-500'
@@ -467,16 +462,51 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
       description: '立即拉取今天的 Hourly 数据',
       action: () => {
         setModalTitle('拉取 Hourly 数据');
-        setModalContent(
-          <div className="space-y-4">
-            <p className="text-slate-600">确定要拉取今天的 Hourly 数据吗？</p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-              <i className="fas fa-info-circle mr-2"></i>
-              Hourly 数据包含今天 0 点到当前时间的所有小时数据。点击开始后将显示实时日志窗口。
-            </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
-              <button
+        setModalType('pull-hourly');
+        setShowModal(true);
+      },
+      color: 'bg-cyan-500'
+    }
+  ];
+
+  // 获取数据拉取 modal 内容
+  const getDataPullModalContent = () => {
+    if (modalType === 'pull-yesterday') {
+      return (
+        <div className="space-y-4">
+          <p className="text-slate-600">确定要拉取昨天的数据吗？这将同步 Clickflare API 的数据到本地数据库。</p>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+            <i className="fas fa-info-circle mr-2"></i>
+            此操作可能需要几分钟时间，点击开始后将显示实时日志窗口。
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+            <button
+              onClick={() => {
+                setShowModal(false);
+                triggerDataPull('yesterday');
+              }}
+              disabled={loading}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-download"></i>}
+              开始拉取
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (modalType === 'pull-hourly') {
+      return (
+        <div className="space-y-4">
+          <p className="text-slate-600">确定要拉取今天的 Hourly 数据吗？</p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+            <i className="fas fa-info-circle mr-2"></i>
+            Hourly 数据包含今天 0 点到当前时间的所有小时数据。点击开始后将显示实时日志窗口。
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+            <button
                 onClick={() => {
                   setShowModal(false);
                   triggerDataPull('hourly');
@@ -490,11 +520,9 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
             </div>
           </div>
         );
-        setShowModal(true);
-      },
-      color: 'bg-cyan-500'
-    }
-  ];
+      }
+    return null;
+  };
 
   // 特殊媒体配置卡片
   const specialMediaCards: ConfigCard[] = [
@@ -609,35 +637,30 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
       </div>
 
       {/* Modal */}
-      {showModal && React.createElement(
-        'div',
-        {
-          className: 'fixed inset-0 bg-black/50 flex items-center justify-center z-50',
-          onClick: () => !loading && setShowModal(false)
-        },
-        React.createElement('div', {
-          className: 'bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden',
-          onClick: (e: React.MouseEvent) => e.stopPropagation()
-        }, [
-          React.createElement('div', {
-            key: 'header',
-            className: 'px-6 py-4 border-b border-slate-100 flex items-center justify-between'
-          }, [
-            React.createElement('h3', {
-              key: 'title',
-              className: 'font-bold text-lg text-slate-800'
-            }, modalTitle),
-            React.createElement('button', {
-              key: 'close',
-              onClick: () => !loading && setShowModal(false),
-              className: 'text-slate-400 hover:text-slate-600'
-            }, React.createElement('i', { className: 'fas fa-times' }))
-          ]),
-          React.createElement('div', {
-            key: 'content',
-            className: 'p-6'
-          }, modalContent)
-        ])
+      {showModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => !loading && setShowModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-lg text-slate-800">{modalTitle}</h3>
+              <button
+                onClick={() => !loading && setShowModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="p-6">
+              {modalType === 'special-media' && getSpecialMediaModalContent()}
+              {(modalType === 'pull-yesterday' || modalType === 'pull-hourly') && getDataPullModalContent()}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Log Modal - 定时任务日志 */}
