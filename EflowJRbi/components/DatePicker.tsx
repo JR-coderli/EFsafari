@@ -1,19 +1,39 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getRangeInfo } from '../utils/dateHelpers';
+import { getRangeInfo, getRangeInfoStrings, toDateStringLocal, getDateInTimezone, TIMEZONE_OFFSETS } from '../utils/dateHelpers';
 
 export interface DatePickerProps {
   onRangeChange: (range: string, start?: Date, end?: Date) => void;
+  onRangeChangeStrings?: (range: string, startDate: string, endDate: string) => void;
   currentDisplay: string;
   currentRange: string;
+  // 时区参数，用于计算 Today/Yesterday 等相对日期
+  timezone?: string;
+  // 使用字符串模式（用于 Hourly Report）
+  useStringsMode?: boolean;
 }
 
-const DatePicker: React.FC<DatePickerProps> = ({ onRangeChange, currentDisplay, currentRange }) => {
+const DatePicker: React.FC<DatePickerProps> = ({
+  onRangeChange,
+  onRangeChangeStrings,
+  currentDisplay,
+  currentRange,
+  timezone,
+  useStringsMode = false
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarStart, setCalendarStart] = useState<Date | null>(null);
   const [calendarEnd, setCalendarEnd] = useState<Date | null>(null);
   const [selectingEnd, setSelectingEnd] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  // 字符串模式下，currentMonth 初始化为时区所在月
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    if (useStringsMode && timezone) {
+      const todayInTimezone = getDateInTimezone(timezone);
+      const [year, month] = todayInTimezone.split('-').map(Number);
+      return new Date(year, month - 1, 1);
+    }
+    return new Date();
+  });
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,8 +48,15 @@ const DatePicker: React.FC<DatePickerProps> = ({ onRangeChange, currentDisplay, 
   }, []);
 
   const handleQuickSelect = (r: string) => {
-    const info = getRangeInfo(r);
-    onRangeChange(r, info.start, info.end);
+    if (useStringsMode && onRangeChangeStrings) {
+      // 字符串模式：直接返回日期字符串，避免 Date 对象的时区问题
+      const info = getRangeInfoStrings(r, timezone);
+      onRangeChangeStrings(r, info.startDate, info.endDate);
+    } else {
+      // 原有模式：返回 Date 对象
+      const info = getRangeInfo(r, undefined, undefined, timezone);
+      onRangeChange(r, info.start, info.end);
+    }
     setIsOpen(false);
   };
 
@@ -52,7 +79,17 @@ const DatePicker: React.FC<DatePickerProps> = ({ onRangeChange, currentDisplay, 
       setCalendarStart(start);
       setCalendarEnd(end);
       setSelectingEnd(false);
-      onRangeChange('Custom', start, end);
+
+      // 字符串模式：使用 toDateStringLocal 避免 toISOString 跨日问题
+      if (useStringsMode && onRangeChangeStrings) {
+        const startDate = toDateStringLocal(start);
+        const endDate = toDateStringLocal(end);
+        onRangeChangeStrings('Custom', startDate, endDate);
+      } else {
+        // 原有模式：返回 Date 对象
+        onRangeChange('Custom', start, end);
+      }
+
       setShowCalendar(false);
       setIsOpen(false);
     }

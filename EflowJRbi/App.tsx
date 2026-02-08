@@ -7,6 +7,7 @@ import { authApi, usersApi, tokenManager } from './src/api/auth';
 import { dailyReportApi, dashboardApi, offersApi, onConnectionStatusChange, type ConnectionStatus } from './src/api/client';
 import { viewsApi } from './src/api/views';
 import { getPageFromHash, navigateTo, setHashForPage, type PageType } from './src/utils/router';
+import { TIMEZONE_OFFSETS, formatDateString, formatDateStringRange, getDateInTimezone, addDays } from './utils/dateHelpers';
 
 // Import extracted components and hooks
 import { ALL_DIMENSIONS, DEFAULT_METRICS } from './constants';
@@ -74,9 +75,17 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const [hourlyRange, setHourlyRange] = useState('Today');
   const [hourlyDateStart, setHourlyDateStart] = useState<Date | undefined>(undefined);
   const [hourlyDateEnd, setHourlyDateEnd] = useState<Date | undefined>(undefined);
+  // HourlyReport 使用字符串日期（单一数据源）
+  const [hourlyDateStr, setHourlyDateStr] = useState<string>(() => {
+    // 初始化为 UTC 时区的今天
+    const now = new Date();
+    return now.toISOString().split('T')[0];
+  });
   const [dailyReportRange, setDailyReportRange] = useState('This Month');
   const [dailyReportStart, setDailyReportStart] = useState<Date | undefined>(undefined);
   const [dailyReportEnd, setDailyReportEnd] = useState<Date | undefined>(undefined);
+  // HourlyReport 的时区状态，用于同步 DatePicker
+  const [hourlyTimezone, setHourlyTimezone] = useState<string>('UTC');
   const [quickFilterText, setQuickFilterText] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showColumnEditor, setShowColumnEditor] = useState(false);
@@ -211,10 +220,24 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       return getRangeInfo(dailyReportRange, dailyReportStart, dailyReportEnd).dateString;
     }
     if (currentPage === 'hourly') {
-      return getRangeInfo(hourlyRange, hourlyDateStart, hourlyDateEnd).dateString;
+      // hourly 页面：直接基于 hourlyDateStr + hourlyTimezone 计算显示
+      if (hourlyRange === 'Today') {
+        const todayInTimezone = getDateInTimezone(hourlyTimezone);
+        return formatDateString(todayInTimezone);
+      } else if (hourlyRange === 'Yesterday') {
+        const todayInTimezone = getDateInTimezone(hourlyTimezone);
+        const yesterdayInTimezone = addDays(todayInTimezone, -1);
+        return formatDateString(yesterdayInTimezone);
+      } else if (hourlyRange === 'Custom') {
+        // Custom 模式：使用 hourlyDateStr 作为显示（单日）
+        // 如果未来需要支持范围，可以扩展
+        return formatDateString(hourlyDateStr);
+      }
+      // 其他范围类型（Last 7 Days 等）暂未在 hourly 使用，fallback 到显示当前 dateStr
+      return formatDateString(hourlyDateStr);
     }
     return getRangeInfo(selectedRange, customDateStart, customDateEnd).dateString;
-  }, [currentPage, selectedRange, customDateStart, customDateEnd, dailyReportRange, dailyReportStart, dailyReportEnd, hourlyRange, hourlyDateStart, hourlyDateEnd]);
+  }, [currentPage, selectedRange, customDateStart, customDateEnd, dailyReportRange, dailyReportStart, dailyReportEnd, hourlyRange, hourlyDateStr, hourlyTimezone]);
 
   useEffect(() => {
     setPaginationPage(1);
@@ -1112,6 +1135,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     setDailyReportStart(start);
                     setDailyReportEnd(end);
                   } else if (currentPage === 'hourly') {
+                    // hourly 页面不使用这个回调，使用 onRangeChangeStrings
                     setHourlyRange(range);
                     setHourlyDateStart(start);
                     setHourlyDateEnd(end);
@@ -1122,8 +1146,15 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                     setPendingRangeRefresh(true);
                   }
                 }}
+                onRangeChangeStrings={(range, startDate, endDate) => {
+                  // Hourly 页面使用字符串模式
+                  setHourlyRange(range);
+                  setHourlyDateStr(startDate); // 单一数据源：字符串日期
+                }}
                 currentDisplay={dateDisplayString}
                 currentRange={currentPage === 'daily_report' ? dailyReportRange : currentPage === 'hourly' ? hourlyRange : selectedRange}
+                timezone={currentPage === 'hourly' ? hourlyTimezone : undefined}
+                useStringsMode={currentPage === 'hourly'}
               />
             )}
             {currentPage === 'performance' && (
@@ -1662,14 +1693,22 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
           </>
         ) : currentPage === 'hourly' ? (
           <HourlyReport
-            selectedRange={hourlyRange}
-            customDateStart={hourlyDateStart}
-            customDateEnd={hourlyDateEnd}
-            onRangeChange={(range, start, end) => {
-              setHourlyRange(range);
-              setHourlyDateStart(start);
-              setHourlyDateEnd(end);
+            dateStr={hourlyDateStr}
+            onDateChange={(newDateStr) => {
+              setHourlyDateStr(newDateStr);
             }}
+            onTimezoneChange={(timezone) => {
+              setHourlyTimezone(timezone);
+              // 时区切换日期更新策略：
+              // - range=Today 时，切时区后日期跳到新时区 today
+              // - range=Custom 时，切时区不改用户选定日期字符串
+              if (hourlyRange === 'Today') {
+                const newDateStr = getDateInTimezone(timezone);
+                setHourlyDateStr(newDateStr);
+              }
+              // Custom 模式：不更新 hourlyDateStr，保留用户选定日期
+            }}
+            initialTimezone={hourlyTimezone}
             currentUser={currentUser}
           />
         ) : currentPage === 'daily_report' ? (

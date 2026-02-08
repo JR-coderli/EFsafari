@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { UserPermission } from '../types';
 import MetricValue from './MetricValue';
 import { useColumnResize } from '../hooks/useColumnResize';
+import { getDateInTimezone, formatDateString } from '../utils/dateHelpers';
 
 interface HourlyDataRow {
   id: string;
@@ -83,22 +84,25 @@ const TIMEZONES = [
 
 interface Props {
   currentUser: UserPermission;
-  // 使用父组件传入的日期
-  selectedRange?: string;
-  customDateStart?: Date;
-  customDateEnd?: Date;
-  onRangeChange?: (range: string, start?: Date, end?: Date) => void;
+  // 日期字符串（单一数据源，格式 YYYY-MM-DD）
+  dateStr: string;
+  onDateChange?: (dateStr: string) => void;
+  // 时区变化回调，通知父组件当前选定的时区
+  onTimezoneChange?: (timezone: string) => void;
+  // 初始时区（从父组件传入，用于同步）
+  initialTimezone?: string;
 }
 
 type SortField = 'name' | 'impressions' | 'clicks' | 'conversions' | 'spend' | 'revenue' | 'profit' | 'ctr' | 'cvr' | 'roi' | 'cpa' | 'rpa' | 'epc' | 'epv';
 
-export default function HourlyReport({ currentUser, customDateStart, customDateEnd, onRangeChange }: Props) {
+export default function HourlyReport({ currentUser, dateStr, onDateChange, onTimezoneChange, initialTimezone }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<HourlyDataRow[]>([]);
   const [activeDims, setActiveDims] = useState<string[]>(['platform', 'hour']);
   const [drillPath, setDrillPath] = useState<DrillPathItem[]>([]);
-  const [timezone, setTimezone] = useState('UTC');
+  // 使用父组件传入的初始时区，如果没有则默认为 UTC
+  const [timezone, setTimezone] = useState(initialTimezone || 'UTC');
   const [metrics, setMetrics] = useState<MetricConfig[]>(DEFAULT_METRICS);
   const [quickFilterText, setQuickFilterText] = useState('');
   const [hideZeroImpressions, setHideZeroImpressions] = useState(true);  // 隐藏 impressions < 20 且 revenue = 0 的数据
@@ -109,8 +113,6 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   // 防止在时区切换时重复触发 loadData
   const [isTimezoneChanging, setIsTimezoneChanging] = useState(false);
   const loadDataRef = useRef<(() => Promise<void>) | null>(null);
-  // 跟踪时区切换时的目标日期，防止被父组件的 customDateStart 覆盖
-  const timezoneChangeTargetRef = useRef<string | null>(null);
   // 请求序列号，防止旧请求覆盖新请求
   const requestIdRef = useRef(0);
 
@@ -120,30 +122,12 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     ...Object.fromEntries(DEFAULT_METRICS.map(m => [m.key, 120]))
   });
 
-  // 内部日期状态：使用当前时区的今天，不依赖父组件的 customDateStart
-  const [currentDate, setCurrentDate] = useState(() => {
-    const tz = 'UTC'; // 初始时区
-    const now = new Date();
-    const tzOffsetMap: Record<string, number> = { 'UTC': 0, 'Asia/Shanghai': 8, 'EST': -5, 'PST': -8 };
-    const offsetHours = tzOffsetMap[tz] || 0;
-    const utcTimestamp = now.getTime() - (now.getTimezoneOffset() * 60000);
-    const tzTimestamp = utcTimestamp + (offsetHours * 3600000);
-    return new Date(tzTimestamp).toISOString().split('T')[0];
-  });
-
-  // 监听父组件传入的日期变化（用户手动选择日期时）
+  // initialTimezone 同步：当父组件传入的 initialTimezone 变化时，同步本地 timezone 状态
   useEffect(() => {
-    if (customDateStart) {
-      const newDate = customDateStart.toISOString().split('T')[0];
-
-      // 如果正在处理时区切换，且父组件的日期与目标日期不一致，忽略父组件的日期变化
-      if (isTimezoneChanging && timezoneChangeTargetRef.current && timezoneChangeTargetRef.current !== newDate) {
-        return;
-      }
-
-      setCurrentDate(newDate);
+    if (initialTimezone && initialTimezone !== timezone) {
+      setTimezone(initialTimezone);
     }
-  }, [customDateStart, isTimezoneChanging]);
+  }, [initialTimezone]);
 
   // 拖动相关状态
   const [draggedMetricIndex, setDraggedMetricIndex] = useState<number | null>(null);
@@ -163,99 +147,30 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     return normalized;
   };
 
-  // 根据时区计算当前日期
-  const getDateInTimezone = (tz: string) => {
-    const now = new Date();
-    const tzOffsetMap: Record<string, number> = {
-      'UTC': 0,
-      'Asia/Shanghai': 8,
-      'EST': -5,
-      'PST': -8
-    };
-    const offsetHours = tzOffsetMap[tz] || 0;
-
-    // 获取 UTC 时间戳（减去本地时区偏移）
-    const utcTimestamp = now.getTime() - (now.getTimezoneOffset() * 60000);
-    // 加上目标时区偏移
-    const tzTimestamp = utcTimestamp + (offsetHours * 3600000);
-    const tzDate = new Date(tzTimestamp);
-
-    return tzDate.toISOString().split('T')[0];
-  };
   const token = localStorage.getItem('addata_access_token') || '';
 
   // 时区切换时，保留筛选路径（platform 等维度），但清除 hour 筛选（不同时区的 hour 值不同）
-  const handleTimezoneChange = async (newTimezone: string) => {
+  const handleTimezoneChange = (newTimezone: string) => {
     // 防止重复触发
     if (isTimezoneChanging) return;
 
-    // 计算新时区的今天日期
-    const todayInNewTimezone = getDateInTimezone(newTimezone);
+    // 通知父组件时区变化（父组件会根据 range 决定是否更新日期）
+    onTimezoneChange?.(newTimezone);
+
+    // 设置标志，防止重复触发
+    setIsTimezoneChanging(true);
 
     // 过滤掉 hour 维度的筛选（因为不同时区的 hour 值不同）
     const filteredPath = drillPath.filter(item => item.dimension !== 'hour');
 
-    // 计算当前应该显示的维度：根据筛选后的路径计算
-    const newDimensionIndex = filteredPath.length;
-    const newDimension = activeDims[newDimensionIndex] || activeDims[0] || 'hour';
-
-    // 设置标志，防止 useEffect 触发 loadData，并记录目标日期
-    setIsTimezoneChanging(true);
-    timezoneChangeTargetRef.current = todayInNewTimezone;
-
-    // 一次性更新所有状态
+    // 更新本地状态
     setTimezone(newTimezone);
-    setCurrentDate(todayInNewTimezone);
     setDrillPath(filteredPath);
 
-    // 注意：时区切换时不调用 onRangeChange，避免触发父组件的 customDateStart 变化
-    // 只有用户手动选择日期时才需要通知父组件
-
-    // 等待状态更新后刷新数据
-    setLoading(true);
-    setError(null);
-
-    try {
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      const filters = filteredPath.map(item => ({
-        dimension: item.dimension,
-        value: item.value
-      }));
-
-      const params = new URLSearchParams({
-        start_date: todayInNewTimezone,
-        end_date: todayInNewTimezone,
-        group_by: newDimension,
-        timezone: newTimezone,
-        limit: '1000',
-      });
-
-      if (filters.length > 0) {
-        params.append('filters', JSON.stringify(filters));
-      }
-
-      const response = await fetch(`/api/hourly/data?${params}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result: HourlyDataResponse = await response.json();
-      setData(result.data);
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
-    } finally {
-      setLoading(false);
-      // 延迟清除标志，给足够时间让所有状态更新完成
-      setTimeout(() => {
-        setIsTimezoneChanging(false);
-        timezoneChangeTargetRef.current = null;
-      }, 500);
-    }
+    // 等待状态更新后清除标志（让统一 effect 触发数据加载）
+    setTimeout(() => {
+      setIsTimezoneChanging(false);
+    }, 100);
   };
 
   // 辅助函数：为指定时区和日期加载数据（目前未被使用，保留备用）
@@ -266,8 +181,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     }));
 
     const params = new URLSearchParams({
-      start_date: currentDate,
-      end_date: currentDate,
+      start_date: dateStr,
+      end_date: dateStr,
       group_by: dimension,
       timezone: tz,
       limit: '1000',
@@ -287,7 +202,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
 
     const result: HourlyDataResponse = await response.json();
     setData(result.data);
-  }, [currentDate, token]);
+  }, [dateStr, token]);
 
   // 当前层级维度：根据下钻路径计算
   const currentDimensionIndex = drillPath.length;
@@ -320,8 +235,8 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
       }));
 
       const params = new URLSearchParams({
-        start_date: currentDate,
-        end_date: currentDate,
+        start_date: dateStr,
+        end_date: dateStr,
         group_by: currentDimension || 'hour',
         timezone: timezone,
         limit: '1000',
@@ -357,7 +272,10 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
         setLoading(false);
       }
     }
-  }, [currentDate, drillPath, currentDimension, timezone, token]);
+  }, [dateStr, drillPath, currentDimension, timezone, token]);
+
+  // 将最新的 loadData 函数存储到 ref 中，以便 useEffect 始终访问到最新版本
+  loadDataRef.current = loadData;
 
   // Load ETL status
   const loadEtlStatus = async () => {
@@ -491,13 +409,15 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     return `Update ${status.last_update || 'Unknown'}`;
   };
 
+  // 当组件首次挂载或关键依赖变化时加载数据
   useEffect(() => {
     // 如果正在切换时区，不触发 loadData（由 handleTimezoneChange 处理）
     if (isTimezoneChanging) {
       return;
     }
-    loadData();
-  }, [drillPath, activeDims, timezone, currentDate, isTimezoneChanging]);
+    // 使用 ref 确保调用的是最新的 loadData 函数
+    loadDataRef.current?.();
+  }, [drillPath, activeDims, timezone, dateStr, isTimezoneChanging]);
 
   // 初始化时加载保存的指标顺序
   useEffect(() => {
@@ -678,6 +598,11 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
                 <option key={tz.value} value={tz.value}>{tz.label}</option>
               ))}
             </select>
+          </div>
+          {/* 当前日期显示（根据选定时区） */}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 text-indigo-600">
+            <i className="fas fa-calendar text-[9px]"></i>
+            <span>{formatDateString(dateStr)}</span>
           </div>
           {/* 上次更新时间 */}
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600">
