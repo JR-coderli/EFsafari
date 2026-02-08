@@ -84,6 +84,10 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const viewsDropdownRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
 
+  // Tooltip states for info icons
+  const [pivotInfoTooltip, setPivotInfoTooltip] = useState<{ x: number; y: number } | null>(null);
+  const [searchInfoTooltip, setSearchInfoTooltip] = useState<{ x: number; y: number } | null>(null);
+
   const { contextMenu, contextMenuRef, handleContextMenu, handleCopyText, closeContextMenu } = useContextMenu();
   const { columnWidths, setColumnWidths, resizingColumn, handleResizeStart } = useColumnResize({
     hierarchy: 300,
@@ -470,6 +474,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
     setActiveDims(newDims);
     setActiveFilters(validFilters);
+    setQuickFilterText(''); // 维度变化时清空搜索
     setEditingDimIndex(null);
     setDropdownPosition(null);
   };
@@ -606,6 +611,7 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   const toggleDimension = (dim: Dimension) => {
     setActiveDims(prev => prev.includes(dim) ? prev.filter(d => d !== dim) : [...prev, dim]);
     setActiveFilters([]);
+    setQuickFilterText(''); // 维度变化时清空搜索
   };
 
   const draggedDimIndex = useRef<number | null>(null);
@@ -1197,10 +1203,23 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         {/* Page Content */}
         {currentPage === 'performance' ? (
           <>
-            <div className="px-8 py-5 bg-white border-b border-slate-200 flex flex-col gap-4 z-30 shadow-sm shrink-0">
-              <div className="flex items-center gap-4 overflow-x-auto pb-1">
+            <div className="px-8 py-3 bg-white border-b border-slate-200 flex flex-col gap-3 z-30 shadow-sm shrink-0">
+              {/* Pivot Layout row */}
+              <div className="flex items-center gap-4">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Pivot Layout:</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Pivot Layout:</span>
+                    <button
+                      className="text-slate-400 hover:text-indigo-500 transition-colors"
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setPivotInfoTooltip({ x: rect.right + 8, y: rect.top });
+                      }}
+                      onMouseLeave={() => setPivotInfoTooltip(null)}
+                    >
+                      <i className="fas fa-info-circle text-[10px]"></i>
+                    </button>
+                  </div>
                   <span className="text-[8px] text-slate-400 leading-tight">Default filter imp&lt;20 &amp; rev=0</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1255,31 +1274,119 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                   ))}
                 </div>
               </div>
-              <div className="flex justify-between items-center">
-                <div className="flex gap-2 items-center">
-                  {activeFilters.length > 0 ? activeFilters.map((f, i) => (
-                    <div key={i} className="flex items-center bg-indigo-50 border border-indigo-100 rounded-md px-2 py-1 gap-2">
-                      <span className="text-[10px] font-bold text-indigo-700">{f.value}</span>
-                      <button onClick={() => setActiveFilters(prev => prev.slice(0, i))} className="text-indigo-300 hover:text-rose-500"><i className="fas fa-times text-[9px]"></i></button>
-                    </div>
-                  )) : <span className="text-[10px] text-slate-400 italic">Drill down by clicking rows</span>}
-                  <label className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100">
-                    <input type="checkbox" checked={colorMode} onChange={(e) => setColorMode(e.target.checked)} className="w-3 h-3 rounded border-slate-300 text-indigo-600" />
-                    <span className="text-[10px] font-bold text-slate-600">Color Mode</span>
-                  </label>
+
+              {/* Path row */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 mr-1">Path:</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => { setActiveFilters([]); setQuickFilterText(''); }}
+                    className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${
+                      activeFilters.length === 0
+                        ? 'bg-indigo-500 text-white shadow-sm'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                    }`}
+                  >
+                    All
+                  </button>
+                  {activeFilters.map((f, i) => (
+                    <React.Fragment key={i}>
+                      <span className="text-indigo-300 text-xs font-bold">›</span>
+                      <button
+                        onClick={() => { setActiveFilters(prev => prev.slice(0, i + 1)); setQuickFilterText(''); }}
+                        className={`px-3 py-1.5 rounded text-xs font-bold transition-all max-w-32 truncate ${
+                          i === activeFilters.length - 1
+                            ? 'bg-indigo-500 text-white shadow-sm'
+                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                        }`}
+                      >
+                        {f.value}
+                      </button>
+                    </React.Fragment>
+                  ))}
                 </div>
-                <div className="flex gap-2 items-center">
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-slate-400">Viewing:</span>
+                  <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-[11px] font-bold">
+                    {activeFilters.length < activeDims.length
+                      ? ALL_DIMENSIONS.find(d => d.value === activeDims[activeFilters.length])?.label || activeDims[activeFilters.length]
+                      : 'No more levels'
+                    }
+                  </span>
+                </div>
+              </div>
+
+              {/* Controls row */}
+              <div className="flex items-center justify-between">
+                {/* Quick Search */}
+                <div className="relative w-56">
+                  <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                  <input
+                    type="text"
+                    placeholder="Quick Search..."
+                    className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                    value={quickFilterText}
+                    onChange={(e) => setQuickFilterText(e.target.value)}
+                  />
+                  {quickFilterText && (
+                    <button
+                      onClick={() => setQuickFilterText('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <i className="fas fa-times text-[10px]"></i>
+                    </button>
+                  )}
+                  <button
+                    className="absolute -right-6 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-500 transition-colors"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setSearchInfoTooltip({ x: rect.right + 8, y: rect.top });
+                    }}
+                    onMouseLeave={() => setSearchInfoTooltip(null)}
+                  >
+                    <i className="fas fa-info-circle text-[10px]"></i>
+                  </button>
+                </div>
+
+                {/* Right side controls */}
+                <div className="flex items-center gap-3">
+                  {/* Refresh */}
                   <button type="button" onClick={handleRefreshData} disabled={isRefreshing} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${isRefreshing ? 'bg-slate-100 text-slate-400' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
                     <i className={`fas fa-sync-alt ${isRefreshing ? 'animate-spin' : ''}`}></i>
                     <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                   </button>
-                  <div className="relative w-64">
-                    <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                    <input type="text" placeholder="Quick Search..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs" value={quickFilterText} onChange={(e) => setQuickFilterText(e.target.value)} />
-                  </div>
+
+                  {/* Color Mode */}
+                  <label className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100">
+                    <input type="checkbox" checked={colorMode} onChange={(e) => setColorMode(e.target.checked)} className="w-3 h-3 rounded border-slate-300 text-indigo-600" />
+                    <span className="text-[10px] font-bold text-slate-600">Color Mode</span>
+                  </label>
                 </div>
               </div>
             </div>
+
+            {/* Info Tooltips */}
+            {pivotInfoTooltip && createPortal(
+              <div
+                className="fixed z-[99999] bg-slate-900 text-white text-xs rounded-lg px-3 py-2 max-w-xs shadow-xl"
+                style={{ left: `${pivotInfoTooltip.x}px`, top: `${pivotInfoTooltip.y}px` }}
+              >
+                可拖动维度进行排序，或点击维度名称替换为其他维度
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-slate-900 rotate-45"></div>
+              </div>,
+              document.body
+            )}
+
+            {searchInfoTooltip && createPortal(
+              <div
+                className="fixed z-[99999] bg-slate-900 text-white text-xs rounded-lg px-3 py-2 max-w-xs shadow-xl"
+                style={{ left: `${searchInfoTooltip.x}px`, top: `${searchInfoTooltip.y}px` }}
+              >
+                输入关键词空格分隔进行多条件筛选
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-slate-900 rotate-45"></div>
+              </div>,
+              document.body
+            )}
 
             <div className="flex-1 overflow-auto bg-white flex flex-col">
               <div className="flex-1 overflow-auto relative">
