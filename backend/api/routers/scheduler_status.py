@@ -39,6 +39,13 @@ LOG_FILES = {
         "path": "clickflare_etl/logs/cf_hourly_etl.log",
         "icon": "fa-clock",
         "color": "bg-cyan-500"
+    },
+    "yesterday": {
+        "name": "Yesterday ETL",
+        "schedule": "On demand",
+        "path": "clickflare_etl/logs/cf_etl.log",
+        "icon": "fa-calendar-day",
+        "color": "bg-blue-500"
     }
 }
 
@@ -294,7 +301,8 @@ async def trigger_task(task_id: str):
     task_scripts = {
         "offers": ("clickflare_etl/cf_offers_etl.py", "clickflare_etl"),
         "lander": ("sync_lander_urls.py", ""),
-        "hourly": ("clickflare_etl/cf_hourly_etl.py", "clickflare_etl")
+        "hourly": ("clickflare_etl/cf_hourly_etl.py", "clickflare_etl"),
+        "yesterday": ("clickflare_etl/cf_etl.py", "clickflare_etl")
     }
 
     if task_id not in task_scripts:

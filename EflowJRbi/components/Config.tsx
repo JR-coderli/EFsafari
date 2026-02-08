@@ -217,41 +217,31 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
     try {
       const token = tokenManager.getToken();
 
-      if (type === 'hourly') {
-        // Hourly 数据拉取 - 使用 scheduler trigger API
-        const response = await fetch('/api/scheduler/trigger/hourly', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const result = await response.json();
+      // 统一使用 scheduler trigger API
+      const url = `/api/scheduler/trigger/${type}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const result = await response.json();
 
-        if (response.ok) {
-          // 设置 ETL 日志状态
-          setEtlLogTitle('Hourly ETL 运行日志');
-          setEtlLogContent(['正在启动任务...']);
-          setEtlLogTaskId('hourly');
-          setIsEtlRunning(true);
-          setShowEtlLog(true);
-        } else {
-          showMessage('error', result.detail || '触发 Hourly ETL 失败');
-        }
+      if (response.ok) {
+        // 设置 ETL 日志状态
+        const title = type === 'hourly' ? 'Hourly ETL 运行日志' : 'Yesterday ETL 运行日志';
+        setEtlLogTitle(title);
+        setEtlLogContent(['正在启动任务...']);
+        setEtlLogTaskId(type);
+        setIsEtlRunning(true);
+        setShowEtlLog(true);
+        // 关闭确认模态框
+        setShowModal(false);
       } else {
-        // Yesterday 数据拉取 - 使用原有的 config API
-        const response = await fetch(`/api/config/pull-data/${type}`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const result = await response.json();
-
-        if (response.ok) {
-          showMessage('success', result.message || 'Yesterday 数据拉取已启动');
-          // 刷新定时任务状态以获取最新日志
-          setTimeout(() => loadSchedulerStatus(), 3000);
-        } else {
-          showMessage('error', result.detail || 'Failed to pull data');
-        }
+        console.error(`[Config] Trigger ${type} failed:`, result);
+        const errorPrefix = type === 'hourly' ? '触发 Hourly ETL' : '触发 Yesterday ETL';
+        showMessage('error', result.detail || `${errorPrefix}失败`);
       }
     } catch (error: any) {
+      console.error('[Config] triggerDataPull error:', error);
       showMessage('error', error.message || 'Failed to pull data');
     } finally {
       setLoading(false);
@@ -482,9 +472,8 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
           <div className="flex justify-end gap-3">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
             <button
-              onClick={() => {
-                setShowModal(false);
-                triggerDataPull('yesterday');
+              onClick={async () => {
+                await triggerDataPull('yesterday');
               }}
               disabled={loading}
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
@@ -507,9 +496,8 @@ const Config: React.FC<{ currentUser: UserPermission }> = ({ currentUser }) => {
           <div className="flex justify-end gap-3">
             <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
             <button
-                onClick={() => {
-                  setShowModal(false);
-                  triggerDataPull('hourly');
+                onClick={async () => {
+                  await triggerDataPull('hourly');
                 }}
                 disabled={loading}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
