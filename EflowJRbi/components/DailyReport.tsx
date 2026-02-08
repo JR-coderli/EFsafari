@@ -10,6 +10,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AdRow, MetricConfig, UserPermission } from '../types';
 import MetricValue from './MetricValue';
 import { getRangeInfo, formatDateForApi } from '../utils/dateHelpers';
+import { useColumnResize } from '../hooks/useColumnResize';
 
 // Metric configuration
 const DAILY_METRICS: MetricConfig[] = [
@@ -196,6 +197,12 @@ const DailyReport: React.FC<DailyReportProps> = ({
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<{ last_update: string | null }>({ last_update: null });
   const spendInputRef = React.useRef<HTMLInputElement>(null);
+
+  // 列宽拖动功能
+  const { columnWidths, setColumnWidths, resizingColumn, handleResizeStart } = useColumnResize({
+    dimension: 300,
+    ...Object.fromEntries(DAILY_METRICS.map(m => [m.key, 120]))
+  });
 
   const rangeInfo = useMemo(() => getRangeInfo(selectedRange, customDateStart, customDateEnd), [selectedRange, customDateStart, customDateEnd]);
 
@@ -825,12 +832,12 @@ const DailyReport: React.FC<DailyReportProps> = ({
             </div>
           </div>
         ) : (
-          <table ref={spendInputRef} className="w-full border-collapse">
+          <table ref={spendInputRef} className="w-full border-collapse" style={{ tableLayout: 'fixed', minWidth: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 200 }}>
             <thead className="sticky top-0 bg-white z-20 shadow-sm">
               {/* Summary Row */}
               {summary && (
                 <tr className="bg-gradient-to-r from-slate-50 to-slate-100">
-                  <th className="left-0 bg-gradient-to-r from-slate-50 to-slate-100 z-30 px-3 py-2 text-left border-b border-slate-200 min-w-[300px]">
+                  <th className="left-0 bg-gradient-to-r from-slate-50 to-slate-100 z-30 px-3 py-2 text-left border-b border-slate-200 relative" style={{ width: columnWidths.dimension }}>
                     <div className="flex items-center gap-2">
                       <i className="fas fa-calculator text-indigo-500 text-xs"></i>
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Summary</span>
@@ -841,7 +848,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
                     if (!config) return null;
                     const value = summary[metric.key] || 0;
                     return (
-                      <th key={metric.key} className="px-3 py-2 text-right border-b border-slate-200 whitespace-nowrap">
+                      <th key={metric.key} className="px-3 py-2 text-right border-b border-slate-200 relative" style={{ width: columnWidths[metric.key] || 120 }}>
                         <MetricValue value={value} type={config.type} metricKey={config.key as any} />
                       </th>
                     );
@@ -850,12 +857,24 @@ const DailyReport: React.FC<DailyReportProps> = ({
               )}
               {/* Header Row */}
               <tr>
-                <th className="left-0 bg-white z-30 px-3 py-2 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 min-w-[300px]">
-                  Dimension
+                <th className="left-0 bg-white z-30 px-3 py-2 text-left text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 relative" style={{ width: columnWidths.dimension }}>
+                  <div className="flex items-center justify-between">
+                    <span className="truncate">Dimension</span>
+                    <div
+                      className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500 ${resizingColumn === 'dimension' ? 'bg-indigo-500' : ''}`}
+                      onMouseDown={(e) => handleResizeStart('dimension', e)}
+                    ></div>
+                  </div>
                 </th>
                 {visibleMetrics.map(metric => (
-                  <th key={metric.key} className="px-3 py-2 text-right text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 whitespace-nowrap">
-                    {metric.label}
+                  <th key={metric.key} className="px-3 py-2 text-right text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 relative group" style={{ width: columnWidths[metric.key] || 120 }}>
+                    <div className="flex items-center justify-end gap-1">
+                      <span>{metric.label}</span>
+                    </div>
+                    <div
+                      className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500 opacity-0 group-hover:opacity-100 ${resizingColumn === metric.key ? 'bg-indigo-500 opacity-100' : ''}`}
+                      onMouseDown={(e) => handleResizeStart(metric.key, e)}
+                    ></div>
                   </th>
                 ))}
               </tr>
@@ -874,21 +893,21 @@ const DailyReport: React.FC<DailyReportProps> = ({
                     key={row.id}
                     className={`group hover:bg-slate-50 transition-colors ${row.level === 1 ? 'bg-slate-50/50' : ''}`}
                   >
-                    <td className={`left-0 bg-white z-10 px-3 py-2 border-b border-slate-200 font-medium text-slate-700 text-xs transition-colors ${row.level === 0 ? 'font-bold' : ''} ${row.level === 1 ? 'text-indigo-600 group-hover:!text-purple-600' : 'group-hover:text-purple-600'} min-w-[300px]`}>
+                    <td className={`left-0 bg-white z-10 px-3 py-2 border-b border-slate-200 font-medium text-slate-700 text-xs transition-colors ${row.level === 0 ? 'font-bold' : ''} ${row.level === 1 ? 'text-indigo-600 group-hover:!text-purple-600' : 'group-hover:text-purple-600'}`} style={{ width: columnWidths.dimension }}>
                       <div className={`flex items-center gap-2 ${row.level === 1 ? 'justify-between w-full' : ''}`}>
-                        <div className="flex items-center gap-2 flex-1">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
                           {row.hasChild && (
                             <button
                               onClick={() => toggleRowExpansion(row.id)}
-                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 transition-colors"
+                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-200 transition-colors shrink-0"
                             >
                               <i className={`fas fa-chevron-right text-[10px] text-slate-400 transition-transform ${row.isExpanded ? 'rotate-90' : ''}`}></i>
                             </button>
                           )}
-                          {!row.hasChild && <span className="w-5"></span>}
-                          <span className={row.level === 1 ? 'flex-1' : ''}>{row.name}</span>
+                          {!row.hasChild && <span className="w-5 shrink-0"></span>}
+                          <span className={`truncate ${row.level === 1 ? 'flex-1' : ''}`}>{row.name}</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           {row.dimensionType === 'media' && (
                             <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Media</span>
                           )}
@@ -910,7 +929,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
                       if (metric.key === 'spend' && canEditSpend) {
                         const isManualEdited = row.spend_manual !== undefined && row.spend_manual !== 0;
                         return (
-                          <td key={metric.key} className="px-3 py-2 text-right border-b border-slate-200 group-hover:text-purple-600 [&_*]:group-hover:!text-purple-600 transition-colors">
+                          <td key={metric.key} className="px-3 py-2 text-right border-b border-slate-200 group-hover:text-purple-600 [&_*]:group-hover:!text-purple-600 transition-colors" style={{ width: columnWidths[metric.key] || 120 }}>
                             {isEditingSpend ? (
                               <input
                                 ref={spendInputRef}
@@ -936,7 +955,7 @@ const DailyReport: React.FC<DailyReportProps> = ({
                       }
 
                       return (
-                        <td key={metric.key} className="px-3 py-2 text-right border-b border-slate-200 group-hover:text-purple-600 [&_*]:group-hover:!text-purple-600 transition-colors">
+                        <td key={metric.key} className="px-3 py-2 text-right border-b border-slate-200 group-hover:text-purple-600 [&_*]:group-hover:!text-purple-600 transition-colors" style={{ width: columnWidths[metric.key] || 120 }}>
                           <MetricValue value={value} type={config.type} isSub={row.level === 1} colorMode={colorMode} metricKey={config.key as any} />
                         </td>
                       );

@@ -1334,7 +1334,95 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                                   <div className="flex flex-col min-w-0">
                                     <div className="flex items-center gap-1.5 min-w-0">
                                       <span className={`${nameClass} truncate group-hover:text-indigo-600`}>{row.name}</span>
-                                      {/* Offer URL Copy and Notes buttons would go here */}
+                                      {/* Lander 外链图标 */}
+                                      {(() => {
+                                        if (row.dimensionType === 'lander') {
+                                          if ((row as any).landerUrl) {
+                                            const url = (row as any).landerUrl;
+                                            const urlWithParam = url.includes('?') ? `${url}&w=1` : `${url}?w=1`;
+                                            return (
+                                              <a
+                                                href={urlWithParam}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full hover:bg-indigo-100 transition-colors z-10"
+                                                title="Open Lander"
+                                              >
+                                                <i className="fas fa-external-link-alt text-[10px] text-indigo-400 hover:text-indigo-600"></i>
+                                              </a>
+                                            );
+                                          }
+                                        }
+                                        return null;
+                                      })()}
+                                      {/* Offer 复制 URL 和 Notes 预览 */}
+                                      {(() => {
+                                        if (row.dimensionType === 'offer') {
+                                          if (row.offerId) {
+                                            const offerDetail = offerDetailsMap[row.offerId];
+                                            const isCopied = copiedOfferUrl === row.offerId;
+                                            if (offerDetail?.url || offerDetail?.notes) {
+                                              return (
+                                                <>
+                                                  {/* 复制 URL 按钮 */}
+                                                  {offerDetail?.url && (
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        navigator.clipboard.writeText(offerDetail.url);
+                                                        setCopiedOfferUrl(row.offerId!);
+                                                        setTimeout(() => setCopiedOfferUrl(null), 1500);
+                                                      }}
+                                                      className={`shrink-0 w-5 h-5 flex items-center justify-center rounded-full transition-all duration-200 z-10 ${
+                                                        isCopied
+                                                          ? 'bg-green-500 scale-110'
+                                                          : 'hover:bg-green-100'
+                                                      }`}
+                                                      title={isCopied ? 'Copied!' : 'Copy Offer URL'}
+                                                    >
+                                                      <i className={`fas ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px] ${isCopied ? 'text-white' : 'text-green-500 hover:text-green-600'}`}></i>
+                                                    </button>
+                                                  )}
+                                                  {/* Notes 预览 Tooltip */}
+                                                  {offerDetail?.notes && (
+                                                    <div
+                                                      className="shrink-0"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setNotesModal({ offerName: row.name, content: offerDetail.notes });
+                                                      }}
+                                                      onMouseEnter={(e) => {
+                                                        // 取消之前的隐藏定时器
+                                                        if (notesTooltipTimerRef.current) {
+                                                          clearTimeout(notesTooltipTimerRef.current);
+                                                        }
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        setNotesTooltip({
+                                                          content: offerDetail.notes,
+                                                          x: rect.right + 8,
+                                                          y: rect.top + rect.height / 2
+                                                        });
+                                                      }}
+                                                      onMouseLeave={() => {
+                                                        // 延迟 1.5 秒后隐藏
+                                                        notesTooltipTimerRef.current = setTimeout(() => {
+                                                          setNotesTooltip(null);
+                                                        }, 1500);
+                                                      }}
+                                                    >
+                                                      <div className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-amber-200 transition-colors cursor-pointer">
+                                                        <i className="fas fa-sticky-note text-[10px] text-amber-500 hover:text-amber-700"></i>
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </>
+                                              );
+                                            }
+                                          }
+                                        }
+                                        return null;
+                                      })()}
                                     </div>
                                     <span className={labelClass}>{ALL_DIMENSIONS.find(d => d.value === row.dimensionType)?.label}</span>
                                   </div>

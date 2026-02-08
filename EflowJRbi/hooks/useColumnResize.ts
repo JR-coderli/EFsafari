@@ -1,26 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 
 export const useColumnResize = (initialWidths: Record<string, number>) => {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(initialWidths);
   const [resizingColumn, setResizingColumn] = useState<string | null>(null);
+  const startXRef = useRef<number>(0);
+  const startWidthRef = useRef<number>(0);
 
   const handleResizeStart = (columnKey: string, e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setResizingColumn(columnKey);
+
+    const target = e.currentTarget as HTMLElement;
+    const th = target.closest('th, td') as HTMLElement;
+    if (th) {
+      startXRef.current = e.clientX;
+      startWidthRef.current = th.getBoundingClientRect().width;
+      setResizingColumn(columnKey);
+    }
   };
 
   useEffect(() => {
     const handleResizeMove = (e: MouseEvent) => {
       if (resizingColumn && typeof window !== 'undefined') {
-        const table = document.querySelector('table') as HTMLTableElement;
-        if (table) {
-          const rect = table.getBoundingClientRect();
-          const newWidth = e.clientX - rect.left;
-          if (newWidth >= 80 && newWidth <= 500) {
-            setColumnWidths(prev => ({ ...prev, [resizingColumn]: newWidth }));
-          }
+        const deltaX = e.clientX - startXRef.current;
+        const newWidth = startWidthRef.current + deltaX;
+
+        // 更宽的范围：50px - 800px
+        if (newWidth >= 50 && newWidth <= 800) {
+          setColumnWidths(prev => ({ ...prev, [resizingColumn]: newWidth }));
         }
       }
     };

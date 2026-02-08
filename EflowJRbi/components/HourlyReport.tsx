@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import { UserPermission } from '../types';
 import MetricValue from './MetricValue';
+import { useColumnResize } from '../hooks/useColumnResize';
 
 interface HourlyDataRow {
   id: string;
@@ -112,6 +113,12 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
   const timezoneChangeTargetRef = useRef<string | null>(null);
   // 请求序列号，防止旧请求覆盖新请求
   const requestIdRef = useRef(0);
+
+  // 列宽拖动功能
+  const { columnWidths, setColumnWidths, resizingColumn, handleResizeStart } = useColumnResize({
+    dimension: 300,
+    ...Object.fromEntries(DEFAULT_METRICS.map(m => [m.key, 120]))
+  });
 
   // 内部日期状态：使用当前时区的今天，不依赖父组件的 customDateStart
   const [currentDate, setCurrentDate] = useState(() => {
@@ -904,12 +911,12 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
         )}
 
         {!loading && !error && (
-          <table className="w-full text-left border-collapse bg-white rounded-2xl shadow-sm overflow-hidden">
+          <table className="w-full text-left border-collapse bg-white rounded-2xl shadow-sm overflow-hidden" style={{ tableLayout: 'fixed', minWidth: Object.values(columnWidths).reduce((a, b) => a + b, 0) + 200 }}>
             {/* 汇总行 - 在最上方 */}
             {filteredData.length > 0 && (
               <thead className="bg-slate-100 border-b border-slate-200">
                 <tr className="font-bold">
-                  <td className="px-4 py-3 text-left">
+                  <td className="px-4 py-3 text-left relative" style={{ width: columnWidths.dimension }}>
                     <span className="text-[11px] font-black uppercase text-slate-700 tracking-widest">
                       Total {drillPath.length > 0 && `(${getCurrentDimensionLabel()})`}
                     </span>
@@ -917,7 +924,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
                   {visibleMetrics.map(m => {
                     const value = summary[m.key as keyof typeof summary] || 0;
                     return (
-                      <td key={m.key} className="px-4 py-3 text-right">
+                      <td key={m.key} className="px-4 py-3 text-right relative" style={{ width: columnWidths[m.key] || 120 }}>
                         <MetricValue value={value} type={m.type} />
                       </td>
                     );
@@ -929,14 +936,21 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
             <thead>
               <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200">
                 <th
-                  className="px-4 py-3 text-left cursor-pointer hover:bg-slate-100 hover:text-indigo-600 transition-colors select-none"
+                  className="px-4 py-3 text-left cursor-pointer hover:bg-slate-100 hover:text-indigo-600 transition-colors select-none relative group"
                   onClick={() => handleSort('name')}
+                  style={{ width: columnWidths.dimension }}
                 >
-                  <div className="flex items-center gap-1">
-                    Name
-                    {sortBy === 'name' && (
-                      <i className={`fas fa-sort-${sortOrder === 'asc' ? 'up' : 'down'} text-indigo-500`}></i>
-                    )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      Name
+                      {sortBy === 'name' && (
+                        <i className={`fas fa-sort-${sortOrder === 'asc' ? 'up' : 'down'} text-indigo-500`}></i>
+                      )}
+                    </div>
+                    <div
+                      className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500 opacity-0 group-hover:opacity-100 ${resizingColumn === 'dimension' ? 'bg-indigo-500 opacity-100' : ''}`}
+                      onMouseDown={(e) => handleResizeStart('dimension', e)}
+                    ></div>
                   </div>
                 </th>
                 {visibleMetrics.map((m, index) => {
@@ -950,13 +964,14 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
                       onDragOver={(e) => { e.preventDefault(); handleDragOver(index); }}
                       onDragEnd={handleDragEnd}
                       onDrop={() => handleDrop(index)}
-                      className={`px-4 py-3 text-right cursor-pointer transition-colors select-none ${
+                      className={`px-4 py-3 text-right cursor-pointer transition-colors select-none relative group ${
                         isDragging ? 'opacity-50' : ''
                       } ${isDragOver ? 'bg-indigo-100' : 'hover:bg-slate-100 hover:text-indigo-600'}`}
                       onClick={(e) => {
                         // 只在非拖动时触发排序
                         if (!isDragging) handleSort(m.key as SortField);
                       }}
+                      style={{ width: columnWidths[m.key] || 120 }}
                     >
                       <div className="flex items-center gap-1 justify-end">
                         <i className="fas fa-grip-vertical text-slate-300 cursor-move hover:text-slate-500"></i>
@@ -965,6 +980,10 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
                           <i className={`fas fa-sort-${sortOrder === 'asc' ? 'up' : 'down'} text-indigo-500`}></i>
                         )}
                       </div>
+                      <div
+                        className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500 opacity-0 group-hover:opacity-100 ${resizingColumn === m.key ? 'bg-indigo-500 opacity-100' : ''}`}
+                        onMouseDown={(e) => handleResizeStart(m.key, e)}
+                      ></div>
                     </th>
                   );
                 })}
@@ -981,10 +1000,10 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
                   }`}
                   onClick={() => hasNextLevel && handleRowClick(row)}
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" style={{ width: columnWidths.dimension }}>
                     <div className="flex items-center gap-2">
                       {hasNextLevel && (
-                        <span className="text-indigo-300 group-hover:text-indigo-500">
+                        <span className="text-indigo-300 group-hover:text-indigo-500 shrink-0">
                           <i className="fas fa-chevron-right text-[10px]"></i>
                         </span>
                       )}
@@ -997,7 +1016,7 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
                     </div>
                   </td>
                   {visibleMetrics.map(m => (
-                    <td key={m.key} className="px-4 py-3 text-right group-hover:bg-violet-50">
+                    <td key={m.key} className="px-4 py-3 text-right group-hover:bg-violet-50" style={{ width: columnWidths[m.key] || 120 }}>
                       <MetricValue value={row[m.key as keyof HourlyDataRow] as number} type={m.type} />
                     </td>
                   ))}
