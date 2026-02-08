@@ -3,7 +3,13 @@
 Clickflare Hourly Report ETL
 
 按小时拉取 Clickflare 数据，支持 UTC+0 和 UTC+8 两个时区
-每次拉取今天的数据，DELETE + INSERT 模式
+每次拉取今天的数据，使用时间戳范围进行精确删除和插入
+
+删除策略（按时间戳范围）：
+- 使用 reportDate + reportHour 组合成时间戳
+- DELETE WHERE (toDateTime(reportDate) + toIntervalHour(reportHour)) >= start_dt
+           AND (toDateTime(reportDate) + toIntervalHour(reportHour)) < end_dt
+- 只删除指定时间范围内的数据，不影响其他小时
 
 Usage:
     python cf_hourly_etl.py        # 拉取 UTC+0 数据
@@ -317,18 +323,49 @@ class HourlyETL:
         return transformed
 
     def _delete_existing_data(self, start_dt: datetime, end_dt: datetime):
-        """删除指定日期范围内的所有数据（清理旧时区数据）"""
-        start_date = start_dt.strftime("%Y-%m-%d")
-        end_date = end_dt.strftime("%Y-%m-%d")
-        # 删除所有时区的数据（清理旧的多时区数据）
+        """按时间戳范围删除指定时间范围内的数据
+
+        使用 reportDate + reportHour 组合成时间戳进行精确删除：
+        DELETE WHERE (toDateTime(reportDate, 'UTC') + toIntervalHour(reportHour)) >= start_dt
+               AND (toDateTime(reportDate, 'UTC') + toIntervalHour(reportHour)) < end_dt
+
+        优点：
+        - 不需要改表结构
+        - 逻辑简单，一条 SQL 搞定
+        - 精确删除指定时间范围，不影响其他小时
+        - 使用 UTC 时区，避免服务器时区影响
+        """
+        start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+        end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+
         delete_sql = f"""
             ALTER TABLE {self.ch_config['database']}.hourly_report
-            DELETE WHERE reportDate >= '{start_date}'
-                AND reportDate <= '{end_date}'
+            DELETE WHERE timezone = 'UTC'
+                AND (toDateTime(reportDate, 'UTC') + toIntervalHour(reportHour)) >= toDateTime('{start_str}', 'UTC')
+                AND (toDateTime(reportDate, 'UTC') + toIntervalHour(reportHour)) < toDateTime('{end_str}', 'UTC')
             """
-        logger.info(f"[DELETE] Deleting ALL data for {start_date} to {end_date}...")
+
+        logger.info(f"[DELETE] Deleting data where timestamp >= {start_str} AND < {end_str}...")
         self.ch_client.command(delete_sql)
         logger.info("Delete completed")
+
+    def _delete_existing_data_by_hour(self, start_dt: datetime, end_dt: datetime):
+        """按小时删除（已弃用，保留兼容性）"""
+        return self._delete_existing_data(start_dt, end_dt)
+
+    def _delete_data_by_actual_hours(self, data: List[Dict]):
+        """按实际数据小时删除（已弃用，保留兼容性）"""
+        if not data:
+            return
+        # 找出数据中的最小和最大时间
+        min_date = min(r["reportDate"] for r in data)
+        max_date = max(r["reportDate"] for r in data)
+        min_hour = min(r["reportHour"] for r in data if r["reportDate"] == min_date)
+        max_hour = max(r["reportHour"] for r in data if r["reportDate"] == max_date)
+
+        start_dt = datetime.combine(min_date, datetime.min.time()) + timedelta(hours=min_hour)
+        end_dt = datetime.combine(max_date, datetime.min.time()) + timedelta(hours=max_hour + 1)
+        self._delete_existing_data(start_dt, end_dt)
 
     def _insert_data(self, data: List[Dict]):
         if not data:
@@ -387,17 +424,19 @@ class HourlyETL:
         logger.info(f"Start Time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info("=" * 60)
         logger.info("[INFO] Storing UTC data only, timezone conversion done at query time")
-        logger.info("[INFO] Using safe ETL mode: fetch -> delete -> insert (prevents data loss on API failure)")
+        logger.info("[INFO] Using timestamp range DELETE: (reportDate + reportHour) >= start AND < end")
+        logger.info("[INFO] Safe ETL mode: fetch -> delete (by timestamp range) -> insert")
 
         # 使用 UTC 时间获取数据
         utc_now = datetime.now(timezone.utc)
 
         if self.test_hours > 0:
-            start_dt_utc = utc_now - timedelta(hours=self.test_hours)
+            # 测试模式：向下取整到小时，避免首小时未删除导致重复
+            start_dt_utc = (utc_now - timedelta(hours=self.test_hours)).replace(minute=0, second=0, microsecond=0)
             end_dt_utc = utc_now
         else:
-            # 获取今天 UTC 的 0 点到现在
-            start_dt_utc = utc_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            # 正常模式：拉取过去24小时的数据（向下取整到小时边界）
+            start_dt_utc = (utc_now - timedelta(hours=24)).replace(minute=0, second=0, microsecond=0)
             end_dt_utc = utc_now
 
         # API 使用 UTC 时区，直接使用 UTC 时间（不需要转换）
@@ -425,7 +464,7 @@ class HourlyETL:
         transformed_data = self._transform_data(raw_data)
         logger.info(f"[Step 2/4] Processed {len(transformed_data):,} records")
 
-        logger.info("[Step 3/4] Deleting existing UTC data...")
+        logger.info(f"[Step 3/4] Deleting existing data in range [{start_dt_utc.strftime('%Y-%m-%d %H:%M:%S')}, {end_dt_utc.strftime('%Y-%m-%d %H:%M:%S')})...")
         self._delete_existing_data(start_dt_utc, end_dt_utc)
 
         logger.info("[Step 4/4] Inserting data to ClickHouse...")
@@ -485,6 +524,11 @@ def main():
     parser.add_argument("--config", default=None, help="Config file path (default: auto-detect)")
     parser.add_argument("--hours", type=int, default=0, help="Test mode: only pull recent N hours (0 = full day)")
     args = parser.parse_args()
+
+    # 校验 test_hours 必须为非负数
+    if args.hours < 0:
+        logger.error(f"[ERROR] --hours must be non-negative, got {args.hours}")
+        sys.exit(1)
 
     timezone = "Asia/Shanghai" if args.utc8 else "UTC"
 

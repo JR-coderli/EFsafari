@@ -486,6 +486,29 @@ async def get_etl_status():
     return {"utc": None, "utc8": None, "est": None, "pst": None}
 
 
+@router.post("/reload")
+async def reload_hourly_data(current_user: dict = Depends(get_current_user)):
+    """清除 Hourly 缓存并强制重新加载数据
+
+    不触发 ETL，只是清除缓存让下次查询从数据库重新读取数据。
+    用于刷新页面显示最新的数据库数据。
+    """
+    from api.cache import delete_cache
+
+    try:
+        # 清除所有 hourly 相关的缓存
+        deleted = delete_cache("hourly:*")
+        logger.info(f"Hourly cache cleared: {deleted} keys deleted")
+        return {
+            "status": "success",
+            "message": f"Cache cleared ({deleted} keys)",
+            "deleted": deleted
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear hourly cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+
+
 @router.post("/refresh")
 async def refresh_hourly_data(current_user: dict = Depends(get_current_user)):
     """手动触发 Hourly ETL 刷新

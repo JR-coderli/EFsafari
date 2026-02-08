@@ -779,3 +779,31 @@ async def get_etl_status():
         "all_success": False
     }
 
+
+@router.post("/reload")
+async def reload_dashboard_data(current_user: dict = Depends(get_current_user)):
+    """清除 Dashboard 缓存并强制重新加载数据
+
+    不触发 ETL，只是清除缓存让下次查询从数据库重新读取数据。
+    用于刷新页面显示最新的数据库数据。
+    """
+    from api.cache import delete_cache
+
+
+    try:
+        # 清除所有 dashboard 相关的缓存 (data:, hierarchy:, aggregate:)
+        deleted_data = delete_cache("data:*")
+        deleted_hierarchy = delete_cache("hierarchy:*")
+        deleted_aggregate = delete_cache("aggregate:*")
+
+        total_deleted = deleted_data + deleted_hierarchy + deleted_aggregate
+        logger.info(f"Dashboard cache cleared: data={deleted_data}, hierarchy={deleted_hierarchy}, aggregate={deleted_aggregate}, total={total_deleted}")
+        return {
+            "status": "success",
+            "message": f"Cache cleared ({total_deleted} keys)",
+            "deleted": total_deleted
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear dashboard cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+

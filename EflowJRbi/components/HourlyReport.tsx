@@ -59,9 +59,9 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { key: 'roi', label: 'ROI', visible: true, type: 'percent', group: 'Calculated' },
   { key: 'ctr', label: 'CTR', visible: true, type: 'percent', group: 'Calculated' },
   { key: 'cvr', label: 'CVR', visible: true, type: 'percent', group: 'Calculated' },
+  { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
   { key: 'impressions', label: 'Impressions', visible: true, type: 'number', group: 'Basic' },
   { key: 'clicks', label: 'Clicks', visible: true, type: 'number', group: 'Basic' },
-  { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
 ];
 
 const ALL_DIMENSIONS = [
@@ -446,11 +446,13 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
     setDragOverIndex(null);
   };
 
-  // Handle manual refresh
+  // Handle manual refresh - 清除缓存并重新加载数据（不触发 ETL）
   const handleRefresh = async () => {
     setRefreshing(true);
+
     try {
-      const response = await fetch('/api/hourly/refresh', {
+      // 清除后端缓存
+      const response = await fetch('/api/hourly/reload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -458,17 +460,20 @@ export default function HourlyReport({ currentUser, customDateStart, customDateE
       });
 
       if (response.ok) {
-        // 刷新数据
+        // 缓存清除成功，重新加载数据
         await loadData();
-        // 等待一下后刷新状态
-        setTimeout(() => loadEtlStatus(), 2000);
+        // 刷新 ETL 状态
+        await loadEtlStatus();
       } else {
         const errorData = await response.json();
-        alert(errorData.detail || 'Refresh failed');
+        console.error('Reload failed:', errorData);
+        // 即使清除缓存失败，也尝试重新加载数据
+        await loadData();
       }
     } catch (err) {
-      console.error('Error refreshing:', err);
-      alert('Refresh failed');
+      console.error('Error reloading:', err);
+      // 出错时也尝试重新加载数据
+      await loadData();
     } finally {
       setRefreshing(false);
     }

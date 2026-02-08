@@ -327,7 +327,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
   }, [activeDims, activeFilters, selectedRange, customDateStart, customDateEnd, currentUser, useMock, currentPage, isInitialized]);
 
   const handleRefreshData = useCallback(async () => {
-    if (currentPage !== 'performance' || activeDims.length === 0) return;
+    if (currentPage !== 'performance' || activeDims.length === 0) {
+      return;
+    }
 
     setIsRefreshing(true);
     setError(null);
@@ -335,10 +337,31 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
     const startTime = Date.now();
 
     try {
+      // 清除前端内存缓存
+      clearDataCache();
+
+      // 清除后端 Redis 缓存
+      const token = localStorage.getItem('addata_access_token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const reloadResponse = await fetch('/api/dashboard/reload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!reloadResponse.ok) {
+        const errorData = await reloadResponse.json().catch(() => ({ detail: 'Unknown error' }));
+        console.warn('Failed to clear backend cache:', errorData);
+        // 继续加载数据，因为清缓存失败不应阻止刷新
+      }
+
       const currentLevel = activeFilters.length;
       if (currentLevel >= activeDims.length) {
         setData([]);
-        setIsRefreshing(false);
         return;
       }
 
