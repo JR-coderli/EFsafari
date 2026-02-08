@@ -222,6 +222,7 @@ class ClickflareETL:
         self.metrics = self.config["etl"]["metrics"]
         self.group_by_pass2 = self.config["etl"].get("group_by_pass2", [])
         self.metrics_pass2 = self.config["etl"].get("metrics_pass2", [])
+        # 注意：exclude_spend_media 已弃用，改用动态配置
         self.exclude_spend_media = self.config["etl"].get("exclude_spend_media", [])
 
         # MTG integration config
@@ -360,13 +361,14 @@ class ClickflareETL:
             cost = self._safe_float(raw_row.get("cost"))
 
             # Special Media 逻辑：
-            # - exclude_spend_media (Mintegral/Hastraffic/JMmobi/Brain) 初始 spend = revenue
+            # - dates_special_media (动态配置) 初始 spend = revenue
             # - mtg_media_keywords (只有 Mintegral) 会被 MTG API 真实 spend 覆盖
-            # - 其他 media (Hastraffic/JMmobi/Brain) 保持 spend = revenue
+            # - 其他媒体保持 spend = cost
             media_name = traffic_source_name if traffic_source_name else self.media_source
+            special_media_keywords = self._get_dates_special_media()
             should_exclude_spend = any(
                 excluded.lower() in media_name.lower()
-                for excluded in self.exclude_spend_media
+                for excluded in special_media_keywords
             )
 
             transformed = {
@@ -739,6 +741,30 @@ class ClickflareETL:
         total_spend = sum(row.get('spend', 0) for row in partial_data)
         self.logger.warning(f"PARTIAL DATA INSERTED: revenue=${total_revenue:.2f}, spend=${total_spend:.2f}")
         self.logger.warning(f"Next scheduled task will continue fetching remaining data")
+
+    def _get_dates_special_media(self) -> List[str]:
+        """获取 dates 特殊媒体列表，这些媒体的 spend = revenue
+
+        可在 Config 页面的 "Dates Report 特殊媒体配置" 中配置。
+        直接从 JSON 配置文件读取。
+        """
+        import json
+        try:
+            # Get backend directory
+            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            config_file = os.path.join(backend_dir, "config", "special_media.json")
+
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    return config.get("dates_special_media", [])
+            else:
+                self.logger.warning(f"Special media config file not found: {config_file}")
+        except Exception as e:
+            self.logger.error(f"Failed to read special media config: {e}")
+
+        # 回退到配置文件默认值
+        return self.exclude_spend_media
 
     def _is_special_media(self, media_name: str) -> bool:
         """

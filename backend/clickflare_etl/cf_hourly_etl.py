@@ -219,27 +219,32 @@ class HourlyETL:
     def _get_hourly_special_media(self) -> List[str]:
         """获取 hourly 特殊媒体列表，这些媒体的 spend = revenue
 
-        可在配置文件的 etl.hourly_special_media 中配置，或使用默认值。
-        默认值从 Redis 或环境变量读取，支持动态更新。
+        可在 Config 页面的 "Hourly 特殊媒体配置" 中配置。
+        直接从 JSON 配置文件读取。
         """
+        import json
         # 默认特殊媒体关键词
         default_keywords = ["mintegral", "hastraffic", "jmmobi", "brainx"]
 
-        # 尝试从配置文件读取
-        configured_media = self.etl_config.get("hourly_special_media", [])
-
-        # 尝试从 Redis 读取动态配置
         try:
-            from api.cache import get_cache
-            cached_media = get_cache("config:hourly_special_media")
-            if cached_media:
-                configured_media = cached_media
-        except Exception:
-            pass
+            # Get backend directory
+            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            config_file = os.path.join(backend_dir, "config", "special_media.json")
 
-        # 合并配置和默认值
-        all_media = list(set(configured_media + default_keywords))
-        return all_media
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    configured_media = config.get("hourly_special_media", [])
+                    # 合并配置和默认值
+                    all_media = list(set(configured_media + default_keywords))
+                    return all_media
+            else:
+                logger.warning(f"Special media config file not found: {config_file}")
+        except Exception as e:
+            logger.error(f"Failed to read special media config: {e}")
+
+        # 回退到默认值
+        return default_keywords
 
     def _is_special_media(self, media_name: str) -> bool:
         """检查是否为特殊媒体（关键词匹配）"""
