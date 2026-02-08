@@ -8,6 +8,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AdRow, MetricConfig, UserPermission } from '../types';
+import MetricValue from './MetricValue';
+import { getRangeInfo, formatDateForApi } from '../utils/dateHelpers';
 
 // Metric configuration
 const DAILY_METRICS: MetricConfig[] = [
@@ -28,102 +30,6 @@ const DAILY_METRICS: MetricConfig[] = [
   { key: 'm_clicks', label: 'm_clicks', visible: true, type: 'number', group: 'Basic' },
   { key: 'm_conv', label: 'm_conv', visible: true, type: 'number', group: 'Basic' },
 ];
-
-// Metric value display component
-const MetricValue: React.FC<{
-  value: number;
-  type: 'money' | 'percent' | 'number' | 'profit';
-  isSub?: boolean;
-  colorMode?: boolean;
-  metricKey?: string;
-  isManualEdited?: boolean;
-}> = ({ value, type, isSub, colorMode, metricKey, isManualEdited }) => {
-  const displayValue = isFinite(value) ? value : 0;
-
-  // 手动编辑的值使用琥珀色
-  if (isManualEdited) {
-    const sizeClass = isSub ? 'text-[13px]' : 'text-[14px]';
-    if (type === 'money' || type === 'profit') return <span className={`font-mono tracking-tight leading-none font-bold text-amber-600 ${sizeClass}`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
-    if (type === 'percent') return <span className={`font-mono tracking-tight leading-none font-bold text-amber-600 ${sizeClass}`}>{(displayValue * 100).toFixed(2)}%</span>;
-    return <span className={`font-mono tracking-tight leading-none font-bold text-amber-600 ${sizeClass}`}>{Math.floor(displayValue).toLocaleString()}</span>;
-  }
-
-  if (type === 'profit') {
-    const colorClass = displayValue > 0 ? 'text-emerald-600' : displayValue < 0 ? 'text-rose-600' : 'text-slate-800';
-    const sizeClass = isSub ? 'text-[13px]' : 'text-[14px]';
-    return <span className={`font-mono tracking-tight leading-none font-bold ${colorClass} ${sizeClass}`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
-  }
-
-  if (metricKey === 'roi') {
-    const colorClass = displayValue > 0 ? 'text-emerald-600' : displayValue < 0 ? 'text-rose-600' : 'text-slate-800';
-    const sizeClass = isSub ? 'text-[13px]' : 'text-[14px]';
-    return <span className={`font-mono tracking-tight leading-none font-bold ${colorClass} ${sizeClass}`}>{(displayValue * 100).toFixed(2)}%</span>;
-  }
-
-  let colorClasses = '';
-  if (colorMode && !isSub) {
-    if (metricKey === 'revenue') colorClasses = 'text-amber-500';
-    else if (metricKey === 'spend') colorClasses = 'text-rose-500';
-    else if (metricKey === 'cpa') colorClasses = 'text-blue-500';
-    else if (metricKey === 'epa') colorClasses = 'text-amber-500';
-    else if (metricKey === 'epc') colorClasses = 'text-amber-500';
-    else if (metricKey === 'epv') colorClasses = 'text-amber-500';
-  }
-
-  const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[13px] text-slate-500 font-medium' : `text-[14px] ${colorClasses} font-bold`}`;
-
-  if (type === 'money' || type === 'profit') return <span className={baseClasses}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
-  if (type === 'percent') return <span className={baseClasses}>{(displayValue * 100).toFixed(2)}%</span>;
-  return <span className={baseClasses}>{Math.floor(displayValue).toLocaleString()}</span>;
-};
-
-// Date utilities
-const formatDate = (date: Date) => {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-};
-
-const formatRange = (start: Date, end: Date) => {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  if (start.toDateString() === end.toDateString()) {
-    return `${months[start.getMonth()]} ${start.getDate()}, ${start.getFullYear()}`;
-  }
-  if (start.getFullYear() === end.getFullYear()) {
-    if (start.getMonth() === end.getMonth()) {
-      return `${months[start.getMonth()]} ${start.getDate()} - ${end.getDate()}, ${start.getFullYear()}`;
-    }
-    return `${months[start.getMonth()]} ${start.getDate()} - ${months[end.getMonth()]} ${end.getDate()}, ${start.getFullYear()}`;
-  }
-  return `${months[start.getMonth()]} ${start.getDate()}, ${start.getFullYear()} - ${months[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
-};
-
-const getRangeInfo = (range: string, customStart?: Date, customEnd?: Date) => {
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-  // This month: from 1st to today
-  const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
-  switch (range) {
-    case 'Today':
-      return { label: 'Today', dateString: formatDate(today), start: today, end: today };
-    case 'Yesterday':
-      return { label: 'Yesterday', dateString: formatDate(yesterday), start: yesterday, end: yesterday };
-    case 'Last 7 Days':
-      return { label: 'Last 7 Days', dateString: formatRange(sevenDaysAgo, today), start: sevenDaysAgo, end: today };
-    case 'This Month':
-      return { label: 'This Month', dateString: formatRange(thisMonthStart, today), start: thisMonthStart, end: today };
-    case 'Custom':
-      if (customStart && customEnd) {
-        return { label: 'Custom', dateString: formatRange(customStart, customEnd), start: customStart, end: customEnd };
-      }
-      return { label: 'Custom', dateString: 'Select dates...', start: today, end: today };
-    default:
-      return { label: 'Yesterday', dateString: formatDate(yesterday), start: yesterday, end: yesterday };
-  }
-};
 
 const DatePicker: React.FC<{
   onRangeChange: (range: string, start?: Date, end?: Date) => void;
@@ -292,13 +198,6 @@ const DailyReport: React.FC<DailyReportProps> = ({
   const spendInputRef = React.useRef<HTMLInputElement>(null);
 
   const rangeInfo = useMemo(() => getRangeInfo(selectedRange, customDateStart, customDateEnd), [selectedRange, customDateStart, customDateEnd]);
-
-  const formatDateForApi = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
 
   const loadHierarchy = async (startDate: string, endDate: string) => {
     const token = localStorage.getItem('addata_access_token');

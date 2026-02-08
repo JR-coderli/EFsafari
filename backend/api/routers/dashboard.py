@@ -25,6 +25,7 @@ from api.models.schemas import (
     DateRangeFilter
 )
 from api.cache import cache_key, get_cache, set_cache
+from api.shared.permissions import build_permission_filter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -34,44 +35,6 @@ def _build_group_by_clause(dimensions: List[DimensionType]) -> str:
     """Build GROUP BY clause from dimension types."""
     columns = [DIMENSION_COLUMN_MAP.get(d, d) for d in dimensions]
     return ", ".join(columns)
-
-
-def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Optional[str]:
-    """Build permission filter SQL based on user role and keywords.
-
-    Args:
-        user_role: User role (admin, ops, ops02, business)
-        user_keywords: User's keywords list
-
-    Returns:
-        SQL WHERE clause fragment, or None if no filtering needed
-    """
-    # Admin or empty keywords = no restriction
-    if user_role == 'admin' or not user_keywords:
-        logger.debug(f"[Permission] No filtering: role={user_role}, keywords={user_keywords}")
-        return None
-
-    # Build keyword filter based on role (use actual ClickHouse column names)
-    if user_role == 'ops':
-        # Filter by Adset column
-        keyword_conditions = [f"lower(Adset) LIKE lower('%{k}%')" for k in user_keywords]
-        filter_sql = f"({' OR '.join(keyword_conditions)})"
-        logger.debug(f"[Permission] ops role filter: {filter_sql}")
-        return filter_sql
-    elif user_role == 'ops02':
-        # Filter by Media column (platform dimension)
-        keyword_conditions = [f"lower(Media) LIKE lower('%{k}%')" for k in user_keywords]
-        filter_sql = f"({' OR '.join(keyword_conditions)})"
-        logger.debug(f"[Permission] ops02 role filter: {filter_sql}")
-        return filter_sql
-    elif user_role == 'business':
-        # Filter by offer column
-        keyword_conditions = [f"lower(offer) LIKE lower('%{k}%')" for k in user_keywords]
-        filter_sql = f"({' OR '.join(keyword_conditions)})"
-        logger.debug(f"[Permission] business role filter: {filter_sql}")
-        return filter_sql
-
-    return None
 
 
 def _build_where_clause(start_date: str, end_date: str, filters: List[dict], permission_filter: Optional[str] = None) -> str:
@@ -146,7 +109,7 @@ async def get_platforms(current_user: dict = Depends(get_current_user)):
         # Build permission filter
         user_role = current_user.get("role")
         user_keywords = current_user.get("keywords", [])
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
 
         base_query = f"""
             SELECT DISTINCT Media as name
@@ -224,7 +187,7 @@ async def get_aggregated_data(
         user_keywords = current_user.get("keywords", [])
         # IMPORTANT: Log user info for debugging
         logger.info(f"[DATA API] User: id={current_user.get('id')}, role={user_role}, keywords={user_keywords}, group_by={dimensions}")
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
 
         # Build WHERE clause with permission filter
         where_clause = _build_where_clause(start_date, end_date, filter_list, permission_filter)
@@ -389,7 +352,7 @@ async def get_daily_breakdown(
         user_keywords = current_user.get("keywords", [])
         # IMPORTANT: Log user info for debugging
         logger.info(f"[DAILY API] User: id={current_user.get('id')}, role={user_role}, keywords={user_keywords}, filters={filter_list}")
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
 
         # Build WHERE clause with permission filter
         where_clause = _build_where_clause(start_date, end_date, filter_list, permission_filter)
@@ -488,7 +451,7 @@ async def get_aggregate_summary(
         # Build permission filter based on user role
         user_role = current_user.get("role")
         user_keywords = current_user.get("keywords", [])
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
 
         # Build WHERE clause with permission filter
         where_clause = _build_where_clause(start_date, end_date, filter_list, permission_filter)
@@ -572,7 +535,7 @@ async def get_data_hierarchy(
         user_keywords = current_user.get("keywords", [])
         # IMPORTANT: Log user info for debugging
         logger.info(f"[HIERARCHY API] User: id={current_user.get('id')}, role={user_role}, keywords={user_keywords}, dimensions={dim_list}")
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
 
         db = get_db()
         client = db.connect()

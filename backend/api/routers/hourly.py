@@ -11,6 +11,7 @@ import logging
 from api.database import get_db
 from api.auth import get_current_user
 from api.cache import cache_key, get_cache, set_cache
+from api.shared.permissions import build_permission_filter
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -85,25 +86,6 @@ def _build_group_by_clause(dimensions: List[str]) -> str:
     """构建 GROUP BY 子句"""
     columns = [DIMENSION_COLUMN_MAP.get(d, d) for d in dimensions]
     return ", ".join(columns)
-
-
-def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Optional[str]:
-    """构建权限过滤 SQL"""
-    if user_role == 'admin' or not user_keywords:
-        return None
-
-    if user_role == 'ops':
-        keyword_conditions = [f"lower(Adset) LIKE lower('%{k}%')" for k in user_keywords]
-        return f"({' OR '.join(keyword_conditions)})"
-    elif user_role == 'ops02':
-        keyword_conditions = [f"lower(Media) LIKE lower('%{k}%')" for k in user_keywords]
-        return f"({' OR '.join(keyword_conditions)})"
-    # business 角色按 offer 筛选
-    elif user_role == 'business':
-        keyword_conditions = [f"lower(offer) LIKE lower('%{k}%')" for k in user_keywords]
-        return f"({' OR '.join(keyword_conditions)})"
-
-    return None
 
 
 def _build_where_clause(start_date: str, end_date: str, filters: List[dict],
@@ -342,7 +324,7 @@ async def get_hourly_data(
 
         logger.info(f"[HOURLY API] {timezone} date {start_date}: UTC {utc_start_ts} to {utc_end_ts} (is_today={is_today})")
 
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
 
         # 构建基础 WHERE 条件
         # 使用完整时间戳比较：>= start, < end（不包含 end）

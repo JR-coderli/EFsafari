@@ -12,6 +12,7 @@ import logging
 from api.database import get_db
 from api.auth import get_current_user
 from api.cache import set_cache, get_cache
+from api.shared.permissions import build_permission_filter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/daily-report", tags=["daily-report"])
@@ -155,18 +156,6 @@ class LockDateRequest(BaseModel):
 
 # ==================== Helper Functions ====================
 
-def _build_permission_filter(user_role: str, user_keywords: List[str]) -> Optional[str]:
-    """构建权限过滤 SQL（复用 dashboard 逻辑）"""
-    if user_role == 'admin' or not user_keywords:
-        return None
-
-    if user_role == 'ops':
-        keyword_conditions = [f"lower(Media) LIKE lower('%{k}%')" for k in user_keywords]
-        return f"({' OR '.join(keyword_conditions)})"
-
-    return None
-
-
 def _calculate_metrics(row: Dict[str, Any]) -> Dict[str, float]:
     """计算衍生指标"""
     impressions = int(row.get("impressions", 0) or 0)
@@ -234,7 +223,7 @@ async def get_hierarchy(
         # 构建权限过滤
         user_role = current_user.get("role", "")
         user_keywords = current_user.get("keywords", [])
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
 
         conditions = [
             f"reportDate >= '{start_date}'",
@@ -399,7 +388,7 @@ async def get_daily_report(
         # 权限过滤
         user_role = current_user.get("role", "")
         user_keywords = current_user.get("keywords", [])
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
         if permission_filter:
             conditions.append(permission_filter)
 
@@ -639,7 +628,7 @@ async def get_daily_report_summary(
         # 权限过滤
         user_role = current_user.get("role", "")
         user_keywords = current_user.get("keywords", [])
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
         if permission_filter:
             conditions.append(permission_filter)
 
@@ -720,7 +709,7 @@ async def get_media_list(current_user: dict = Depends(get_current_user)):
         # 权限过滤
         user_role = current_user.get("role", "")
         user_keywords = current_user.get("keywords", [])
-        permission_filter = _build_permission_filter(user_role, user_keywords)
+        permission_filter = build_permission_filter(user_role, user_keywords)
 
         base_query = """
             SELECT DISTINCT Media as name

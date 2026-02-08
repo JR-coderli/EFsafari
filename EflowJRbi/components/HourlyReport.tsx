@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { UserPermission } from '../types';
+import MetricValue from './MetricValue';
 
 interface HourlyDataRow {
   id: string;
@@ -78,16 +79,6 @@ const TIMEZONES = [
   { value: 'PST', label: 'PST/UTC-8' },
 ];
 
-const MetricValue: React.FC<{ value: number; type: 'money' | 'percent' | 'number' | 'profit' }> = ({ value, type }) => {
-  const displayValue = isFinite(value) ? value : 0;
-  if (type === 'profit') {
-    const colorClass = displayValue > 0 ? 'text-emerald-600' : displayValue < 0 ? 'text-rose-600' : 'text-slate-800';
-    return <span className={`font-mono tracking-tight leading-none font-bold ${colorClass} text-[14px]`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
-  }
-  if (type === 'money') return <span className="font-mono tracking-tight leading-none font-bold text-[14px] text-slate-700">${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
-  if (type === 'percent') return <span className="font-mono tracking-tight leading-none font-bold text-[14px] text-slate-700">{(displayValue * 100).toFixed(2)}%</span>;
-  return <span className="font-mono tracking-tight leading-none font-bold text-[14px] text-slate-700">{Math.floor(displayValue).toLocaleString()}</span>;
-};
 
 interface Props {
   currentUser: UserPermission;
