@@ -246,7 +246,6 @@ const DateBadge: React.FC<{
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        console.log('Date badge clicked:', dateValue, 'locked:', isLocked);
         onClick(dateValue);
       }}
       className={`text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors ${

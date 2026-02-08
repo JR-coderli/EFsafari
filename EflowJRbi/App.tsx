@@ -409,9 +409,6 @@ const LoginPage: React.FC<{ onLogin: (user: UserPermission) => void }> = ({ onLo
 };
 
 const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }> = ({ currentUser, onLogout }) => {
-  // Debug: Log currentUser on mount
-  console.log('Dashboard mounted with currentUser:', JSON.stringify(currentUser, null, 2));
-  console.log('currentUser.showRevenue:', currentUser.showRevenue, 'type:', typeof currentUser.showRevenue);
   const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);  // 专门用于刷新按钮的状态
   const [data, setData] = useState<AdRow[]>([]);
@@ -1434,7 +1431,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       keywords: keywords,
       showRevenue: showRevenue
     };
-    console.log('Saving user:', { id: editingUser?.id, showRevenue, editingUserShowRevenue: editingUser?.showRevenue });
 
     try {
       if (useLocalUsers) {
@@ -1450,15 +1446,11 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
         localStorage.setItem('ad_tech_users', JSON.stringify(updated));
       } else {
         // Use API
-        console.log('Calling API with userData:', userData);
         if (editingUser) {
           const updatedUser = await usersApi.updateUser(editingUser.id, userData);
-          console.log('API returned updatedUser:', JSON.stringify(updatedUser, null, 2));
-          console.log('updatedUser.showRevenue:', updatedUser.showRevenue, 'type:', typeof updatedUser.showRevenue);
           setUsers(users.map(u => u.id === editingUser.id ? updatedUser : u));
         } else {
           const newUser = await usersApi.createUser(userData);
-          console.log('API returned newUser:', JSON.stringify(newUser, null, 2));
           setUsers([...users, newUser]);
         }
       }
@@ -2038,10 +2030,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                                   {(() => {
                                     if (row.dimensionType === 'offer') {
                                       // Debug: log offer data
-                                      console.log('[Offer Debug] row.name:', row.name, 'row.offerId:', row.offerId, 'offerDetailsMap keys:', Object.keys(offerDetailsMap).slice(0, 5));
                                       if (row.offerId) {
                                         const offerDetail = offerDetailsMap[row.offerId];
-                                        console.log('[Offer Debug] offerDetail:', offerDetail);
                                         const isCopied = copiedOfferUrl === row.offerId;
                                         if (offerDetail?.url || offerDetail?.notes) {
                                           return (
@@ -2323,7 +2313,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                         </div>
                         <div className="flex items-center gap-2">
                           <button onClick={() => {
-                            console.log('Editing user:', u);
                             setEditingUser(u);
                             setShowUserModal(true);
                           }} className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center hover:bg-indigo-100 transition-colors"><i className="fas fa-edit text-xs"></i></button>
@@ -2386,7 +2375,6 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                   id="showRevenue"
                   checked={editingUser?.showRevenue !== false}
                   onChange={(e) => {
-                    console.log('Checkbox changed:', e.target.checked, 'editingUser.showRevenue:', editingUser?.showRevenue);
                     // 更新 editingUser 的 showRevenue 值
                     if (editingUser) {
                       setEditingUser({ ...editingUser, showRevenue: e.target.checked });
