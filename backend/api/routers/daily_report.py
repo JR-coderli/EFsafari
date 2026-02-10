@@ -51,6 +51,8 @@ class HierarchyNodeMetrics(BaseModel):
     epv: float = 0.0
     m_epc: float = 0.0
     m_epv: float = 0.0
+    cpc: float = 0.0
+    cpv: float = 0.0
     m_cpc: float = 0.0
     m_cpv: float = 0.0
 
@@ -100,6 +102,8 @@ class DailyReportRow(BaseModel):
     epv: float = 0.0
     m_epc: float = 0.0
     m_epv: float = 0.0
+    cpc: float = 0.0
+    cpv: float = 0.0
     m_cpc: float = 0.0
     m_cpv: float = 0.0
     hasChild: bool = True
@@ -130,6 +134,15 @@ class DailyReportSummary(BaseModel):
     roi: float = 0.0
     cpa: float = 0.0
     rpa: float = 0.0
+    epa: float = 0.0
+    epc: float = 0.0
+    epv: float = 0.0
+    cpc: float = 0.0
+    cpv: float = 0.0
+    m_epc: float = 0.0
+    m_epv: float = 0.0
+    m_cpc: float = 0.0
+    m_cpv: float = 0.0
 
 
 class MediaItem(BaseModel):
@@ -174,6 +187,8 @@ def _calculate_metrics(row: Dict[str, Any]) -> Dict[str, float]:
         "rpa": revenue / (conversions or 1),
         "epc": revenue / (clicks or 1),
         "epv": revenue / (impressions or 1),
+        "cpc": spend / (clicks or 1),
+        "cpv": spend / (impressions or 1),
         "m_epc": revenue / (m_clicks or 1),
         "m_epv": revenue / (m_imp or 1),
         "m_cpc": spend / (m_clicks or 1),
@@ -283,6 +298,8 @@ async def get_hierarchy(
                         "rpa": 0.0,
                         "epc": 0.0,
                         "epv": 0.0,
+                        "cpc": 0.0,
+                        "cpv": 0.0,
                         "m_epc": 0.0,
                         "m_epv": 0.0,
                         "m_cpc": 0.0,
@@ -319,6 +336,8 @@ async def get_hierarchy(
                     "rpa": metrics["rpa"],
                     "epc": metrics["epc"],
                     "epv": metrics["epv"],
+                    "cpc": metrics["cpc"],
+                    "cpv": metrics["cpv"],
                     "m_epc": metrics["m_epc"],
                     "m_epv": metrics["m_epv"],
                     "m_cpc": metrics["m_cpc"],
@@ -340,6 +359,8 @@ async def get_hierarchy(
             m["rpa"] = m["revenue"] / (m["conversions"] or 1)
             m["epc"] = m["revenue"] / (m["clicks"] or 1)
             m["epv"] = m["revenue"] / (m["impressions"] or 1)
+            m["cpc"] = m["spend"] / (m["clicks"] or 1)
+            m["cpv"] = m["spend"] / (m["impressions"] or 1)
             m["m_epc"] = m["revenue"] / (m["m_clicks"] or 1)
             m["m_epv"] = m["revenue"] / (m["m_imp"] or 1)
             m["m_cpc"] = m["spend"] / (m["m_clicks"] or 1)
@@ -463,6 +484,8 @@ async def get_daily_report(
                     "rpa": metrics["rpa"],
                     "epc": metrics["epc"],
                     "epv": metrics["epv"],
+                    "cpc": metrics["cpc"],
+                    "cpv": metrics["cpv"],
                     "m_epc": metrics["m_epc"],
                     "m_epv": metrics["m_epv"],
                     "m_cpc": metrics["m_cpc"],
@@ -496,6 +519,8 @@ async def get_daily_report(
                     "rpa": metrics["rpa"],
                     "epc": metrics["epc"],
                     "epv": metrics["epv"],
+                    "cpc": metrics["cpc"],
+                    "cpv": metrics["cpv"],
                     "m_epc": metrics["m_epc"],
                     "m_epv": metrics["m_epv"],
                     "m_cpc": metrics["m_cpc"],
@@ -663,17 +688,27 @@ async def get_daily_report_summary(
             m_conv = int(row.get("m_conv", 0) or 0)
 
             # 计算衍生指标
+            profit = revenue - spend
             ctr = clicks / (impressions or 1)
             cvr = conversions / (clicks or 1)
-            roi = (revenue - spend) / (spend or 1) if spend > 0 else 0
+            roi = profit / (spend or 1) if spend > 0 else 0
             cpa = spend / (conversions or 1)
             rpa = revenue / (conversions or 1)
-            profit = revenue - spend
+            epa = revenue / (conversions or 1)
+            epc = revenue / (clicks or 1)
+            epv = revenue / (impressions or 1)
+            cpc = spend / (clicks or 1)
+            cpv = spend / (impressions or 1)
+            m_epc = revenue / (m_clicks or 1)
+            m_epv = revenue / (m_imp or 1)
+            m_cpc = spend / (m_clicks or 1)
+            m_cpv = spend / (m_imp or 1)
         else:
             impressions = clicks = conversions = 0
             revenue = spend = profit = 0.0
             m_imp = m_clicks = m_conv = 0
-            ctr = cvr = roi = cpa = rpa = 0.0
+            ctr = cvr = roi = cpa = rpa = epa = epc = epv = cpc = cpv = 0.0
+            m_epc = m_epv = m_cpc = m_cpv = 0.0
 
         return DailyReportSummary(
             impressions=impressions,
@@ -690,6 +725,15 @@ async def get_daily_report_summary(
             roi=roi,
             cpa=cpa,
             rpa=rpa,
+            epa=epa,
+            epc=epc,
+            epv=epv,
+            cpc=cpc,
+            cpv=cpv,
+            m_epc=m_epc,
+            m_epv=m_epv,
+            m_cpc=m_cpc,
+            m_cpv=m_cpv,
         )
 
     except Exception as e:

@@ -25,12 +25,13 @@ const MetricValue: React.FC<MetricValueProps> = ({
   isManualEdited
 }) => {
   const displayValue = isFinite(value) ? value : 0;
+  const moneyDecimals = metricKey === 'epv' || metricKey === 'm_epv' || metricKey === 'cpv' || metricKey === 'm_cpv' ? 4 : 2;
 
   // 手动编辑的值使用琥珀色（Daily Report 特有功能）
   if (isManualEdited) {
     const sizeClass = isSub ? 'text-[13px]' : 'text-[14px]';
     if (type === 'money' || type === 'profit') {
-      return <span className={`font-mono tracking-tight leading-none font-bold text-amber-600 ${sizeClass}`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+      return <span className={`font-mono tracking-tight leading-none font-bold text-amber-600 ${sizeClass}`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: moneyDecimals, maximumFractionDigits: moneyDecimals })}</span>;
     }
     if (type === 'percent') {
       return <span className={`font-mono tracking-tight leading-none font-bold text-amber-600 ${sizeClass}`}>{(displayValue * 100).toFixed(2)}%</span>;
@@ -42,7 +43,7 @@ const MetricValue: React.FC<MetricValueProps> = ({
   if (type === 'profit') {
     const colorClass = displayValue > 0 ? 'text-emerald-600' : displayValue < 0 ? 'text-rose-600' : 'text-slate-800';
     const sizeClass = isSub ? 'text-[13px]' : 'text-[14px]';
-    return <span className={`font-mono tracking-tight leading-none font-bold ${colorClass} ${sizeClass}`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+    return <span className={`font-mono tracking-tight leading-none font-bold ${colorClass} ${sizeClass}`}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: moneyDecimals, maximumFractionDigits: moneyDecimals })}</span>;
   }
 
   // ROI 总是有颜色（正数=绿色，负数=红色）
@@ -66,7 +67,7 @@ const MetricValue: React.FC<MetricValueProps> = ({
   const baseClasses = `font-mono tracking-tight leading-none ${isSub ? 'text-[13px] text-slate-500 font-medium' : `text-[14px] ${colorClasses} font-bold`}`;
 
   if (type === 'money' || type === 'profit') {
-    return <span className={baseClasses}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+    return <span className={baseClasses}>${displayValue.toLocaleString(undefined, { minimumFractionDigits: moneyDecimals, maximumFractionDigits: moneyDecimals })}</span>;
   }
   if (type === 'percent') {
     return <span className={baseClasses}>{(displayValue * 100).toFixed(2)}%</span>;

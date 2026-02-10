@@ -26,6 +26,8 @@ interface HourlyDataRow {
   epc: number;
   epv: number;
   epa: number;
+  cpc: number;
+  cpv: number;
   hasChild: boolean;
 }
 
@@ -61,6 +63,9 @@ const DEFAULT_METRICS: MetricConfig[] = [
   { key: 'ctr', label: 'CTR', visible: true, type: 'percent', group: 'Calculated' },
   { key: 'cvr', label: 'CVR', visible: true, type: 'percent', group: 'Calculated' },
   { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'epv', label: 'EPV', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'cpc', label: 'CPC', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'cpv', label: 'CPV', visible: true, type: 'money', group: 'Calculated' },
   { key: 'impressions', label: 'Impressions', visible: true, type: 'number', group: 'Basic' },
   { key: 'clicks', label: 'Clicks', visible: true, type: 'number', group: 'Basic' },
 ];
@@ -93,7 +98,7 @@ interface Props {
   initialTimezone?: string;
 }
 
-type SortField = 'name' | 'impressions' | 'clicks' | 'conversions' | 'spend' | 'revenue' | 'profit' | 'ctr' | 'cvr' | 'roi' | 'cpa' | 'rpa' | 'epc' | 'epv';
+type SortField = 'name' | 'impressions' | 'clicks' | 'conversions' | 'spend' | 'revenue' | 'profit' | 'ctr' | 'cvr' | 'roi' | 'cpa' | 'rpa' | 'epc' | 'epv' | 'cpc' | 'cpv';
 
 export default function HourlyReport({ currentUser, dateStr, onDateChange, onTimezoneChange, initialTimezone }: Props) {
   const [loading, setLoading] = useState(false);
@@ -115,6 +120,14 @@ export default function HourlyReport({ currentUser, dateStr, onDateChange, onTim
   const loadDataRef = useRef<(() => Promise<void>) | null>(null);
   // 请求序列号，防止旧请求覆盖新请求
   const requestIdRef = useRef(0);
+  // Tooltip state for metric info icons
+  const [metricInfoTooltip, setMetricInfoTooltip] = useState<{ content: string; x: number; y: number } | null>(null);
+
+  // Metric info hints
+  const METRIC_INFO: Record<string, string> = {
+    impressions: 'Unique Visits',
+    clicks: 'Unique Clicks',
+  };
 
   // 列宽拖动功能
   const { columnWidths, setColumnWidths, resizingColumn, handleResizeStart } = useColumnResize({
@@ -569,8 +582,11 @@ export default function HourlyReport({ currentUser, dateStr, onDateChange, onTim
     const roi = (totals.revenue - totals.spend) / (totals.spend || 1);
     const cpa = totals.spend / (totals.conversions || 1);
     const epc = totals.revenue / (totals.clicks || 1);
+    const epv = totals.revenue / (totals.impressions || 1);
+    const cpc = totals.spend / (totals.clicks || 1);
+    const cpv = totals.spend / (totals.impressions || 1);
     const epa = totals.revenue / (totals.conversions || 1);  // EPA = revenue / conversions
-    return { ...totals, profit, ctr, cvr, roi, cpa, epc, epa };
+    return { ...totals, profit, ctr, cvr, roi, cpa, epc, epv, cpc, cpv, epa };
   }, [filteredData]);
 
   const visibleMetrics = metrics.filter(m => m.visible);
@@ -855,7 +871,7 @@ export default function HourlyReport({ currentUser, dateStr, onDateChange, onTim
                     const value = summary[m.key as keyof typeof summary] || 0;
                     return (
                       <td key={m.key} className="px-4 py-3 text-right relative" style={{ width: columnWidths[m.key] || 120 }}>
-                        <MetricValue value={value} type={m.type} />
+                        <MetricValue value={value} type={m.type} metricKey={m.key as string} />
                       </td>
                     );
                   })}
@@ -906,6 +922,16 @@ export default function HourlyReport({ currentUser, dateStr, onDateChange, onTim
                       <div className="flex items-center gap-1 justify-end">
                         <i className="fas fa-grip-vertical text-slate-300 cursor-move hover:text-slate-500"></i>
                         {m.label}
+                        {METRIC_INFO[m.key] && (
+                          <span
+                            className="fas fa-info-circle text-[10px] text-slate-400 hover:text-indigo-500 cursor-help"
+                            onMouseEnter={(e) => {
+                              const rect = (e.target as HTMLElement).getBoundingClientRect();
+                              setMetricInfoTooltip({ content: METRIC_INFO[m.key]!, x: rect.right + 8, y: rect.top });
+                            }}
+                            onMouseLeave={() => setMetricInfoTooltip(null)}
+                          ></span>
+                        )}
                         {sortBy === m.key && (
                           <i className={`fas fa-sort-${sortOrder === 'asc' ? 'up' : 'down'} text-indigo-500`}></i>
                         )}
@@ -947,7 +973,7 @@ export default function HourlyReport({ currentUser, dateStr, onDateChange, onTim
                   </td>
                   {visibleMetrics.map(m => (
                     <td key={m.key} className="px-4 py-3 text-right group-hover:bg-violet-50" style={{ width: columnWidths[m.key] || 120 }}>
-                      <MetricValue value={row[m.key as keyof HourlyDataRow] as number} type={m.type} />
+                      <MetricValue value={row[m.key as keyof HourlyDataRow] as number} type={m.type} metricKey={m.key as string} />
                     </td>
                   ))}
                 </tr>
@@ -962,6 +988,17 @@ export default function HourlyReport({ currentUser, dateStr, onDateChange, onTim
           </div>
         )}
       </div>
+
+      {/* Metric Info Tooltip */}
+      {metricInfoTooltip && createPortal(
+        <div
+          className="fixed z-[10000] bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg pointer-events-none"
+          style={{ left: `${metricInfoTooltip.x}px`, top: `${metricInfoTooltip.y}px` }}
+        >
+          {metricInfoTooltip.content}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

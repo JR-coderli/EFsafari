@@ -7,13 +7,18 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { AdRow, MetricConfig, UserPermission } from '../types';
 import MetricValue from './MetricValue';
 import { getRangeInfo, formatDateForApi } from '../utils/dateHelpers';
 import { useColumnResize } from '../hooks/useColumnResize';
 
-// Metric configuration
-const DAILY_METRICS: MetricConfig[] = [
+// Metric configuration with info hints
+interface MetricConfigWithInfo extends MetricConfig {
+  info?: string;
+}
+
+const DAILY_METRICS: MetricConfigWithInfo[] = [
   { key: 'spend', label: 'Spend', visible: true, type: 'money', group: 'Basic' },
   { key: 'revenue', label: 'Revenue', visible: true, type: 'money', group: 'Basic' },
   { key: 'profit', label: 'Profit', visible: true, type: 'profit' as const, group: 'Basic' },
@@ -23,13 +28,17 @@ const DAILY_METRICS: MetricConfig[] = [
   { key: 'epa', label: 'EPA', visible: true, type: 'money', group: 'Calculated' },
   { key: 'epc', label: 'EPC', visible: true, type: 'money', group: 'Calculated' },
   { key: 'epv', label: 'EPV', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'cpc', label: 'CPC', visible: true, type: 'money', group: 'Calculated' },
+  { key: 'cpv', label: 'CPV', visible: true, type: 'money', group: 'Calculated' },
   { key: 'ctr', label: 'CTR', visible: true, type: 'percent', group: 'Calculated' },
   { key: 'cvr', label: 'CVR', visible: true, type: 'percent', group: 'Calculated' },
-  { key: 'impressions', label: 'Impressions', visible: true, type: 'number', group: 'Basic' },
-  { key: 'clicks', label: 'Clicks', visible: true, type: 'number', group: 'Basic' },
+  { key: 'impressions', label: 'Impressions', visible: true, type: 'number', group: 'Basic', info: 'Unique Visits' },
+  { key: 'clicks', label: 'Clicks', visible: true, type: 'number', group: 'Basic', info: 'Unique Clicks' },
   { key: 'm_imp', label: 'm_imp', visible: true, type: 'number', group: 'Basic' },
   { key: 'm_clicks', label: 'm_clicks', visible: true, type: 'number', group: 'Basic' },
   { key: 'm_conv', label: 'm_conv', visible: true, type: 'number', group: 'Basic' },
+  { key: 'm_cpc', label: 'm_CPC', visible: false, type: 'money', group: 'Calculated' },
+  { key: 'm_cpv', label: 'm_CPV', visible: false, type: 'money', group: 'Calculated' },
 ];
 
 const DatePicker: React.FC<{
@@ -112,6 +121,8 @@ interface DailyDataNode {
     rpa: number;
     epc: number;
     epv: number;
+    cpc: number;
+    cpv: number;
     m_epc: number;
     m_epv: number;
     m_cpc: number;
@@ -197,6 +208,8 @@ const DailyReport: React.FC<DailyReportProps> = ({
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<{ last_update: string | null }>({ last_update: null });
   const spendInputRef = React.useRef<HTMLInputElement>(null);
+  // Tooltip state for metric info icons
+  const [metricInfoTooltip, setMetricInfoTooltip] = useState<{ content: string; x: number; y: number } | null>(null);
 
   // 列宽拖动功能
   const { columnWidths, setColumnWidths, resizingColumn, handleResizeStart } = useColumnResize({
@@ -423,6 +436,8 @@ const DailyReport: React.FC<DailyReportProps> = ({
         epa: 0,
         epc: 0,
         epv: 0,
+        cpc: 0,
+        cpv: 0,
         m_epc: 0,
         m_epv: 0,
         m_cpc: 0,
@@ -459,6 +474,8 @@ const DailyReport: React.FC<DailyReportProps> = ({
       epa: metrics.rpa,
       epc: metrics.epc,
       epv: metrics.epv,
+      cpc: metrics.cpc ?? 0,
+      cpv: metrics.cpv ?? 0,
       m_epc: metrics.m_epc,
       m_epv: metrics.m_epv,
       m_cpc: metrics.m_cpc,
@@ -537,6 +554,8 @@ const DailyReport: React.FC<DailyReportProps> = ({
                 rpa: 0,
                 epc: 0,
                 epv: 0,
+                cpc: 0,
+                cpv: 0,
                 m_epc: 0,
                 m_epv: 0,
                 m_cpc: 0,
@@ -579,6 +598,8 @@ const DailyReport: React.FC<DailyReportProps> = ({
         m.epa = m.conversions > 0 ? m.profit / m.conversions : 0;
         m.epc = m.clicks > 0 ? m.revenue / m.clicks : 0;
         m.epv = m.impressions > 0 ? m.revenue / m.impressions : 0;
+        m.cpc = m.clicks > 0 ? m.spend / m.clicks : 0;
+        m.cpv = m.impressions > 0 ? m.spend / m.impressions : 0;
         m.m_epc = m.m_clicks > 0 ? m.revenue / m.m_clicks : 0;
         m.m_epv = m.m_imp > 0 ? m.revenue / m.m_imp : 0;
         m.m_cpc = m.m_clicks > 0 ? m.spend / m.m_clicks : 0;
@@ -708,6 +729,8 @@ const DailyReport: React.FC<DailyReportProps> = ({
           m.roi = newValue > 0 ? (m.revenue - newValue) / newValue : 0;
           m.cpa = m.conversions > 0 ? newValue / m.conversions : 0;
           m.epa = m.conversions > 0 ? m.profit / m.conversions : 0;
+          m.cpc = m.clicks > 0 ? newValue / m.clicks : 0;
+          m.cpv = m.impressions > 0 ? newValue / m.impressions : 0;
           m.m_cpc = m.m_clicks > 0 ? newValue / m.m_clicks : 0;
           m.m_cpv = m.m_imp > 0 ? newValue / m.m_imp : 0;
 
@@ -721,19 +744,22 @@ const DailyReport: React.FC<DailyReportProps> = ({
           dm.roi = dm.spend > 0 ? (dm.revenue - dm.spend) / dm.spend : 0;
           dm.cpa = dm.conversions > 0 ? dm.spend / dm.conversions : 0;
           dm.epa = dm.conversions > 0 ? dm.profit / dm.conversions : 0;
+          dm.cpc = dm.clicks > 0 ? dm.spend / dm.clicks : 0;
+          dm.cpv = dm.impressions > 0 ? dm.spend / dm.impressions : 0;
           dm.m_cpc = dm.m_clicks > 0 ? dm.spend / dm.m_clicks : 0;
           dm.m_cpv = dm.m_imp > 0 ? dm.spend / dm.m_imp : 0;
 
           // Update summary
           setSummary(prevSummary => {
             if (!prevSummary) return prevSummary;
+            const newSpend = (prevSummary.spend || 0) + spendDiff;
             return {
               ...prevSummary,
-              spend: (prevSummary.spend || 0) + spendDiff,
+              spend: newSpend,
               profit: (prevSummary.profit || 0) - spendDiff,
-              roi: (prevSummary.spend || 0) + spendDiff > 0
-                ? ((prevSummary.revenue || 0) - ((prevSummary.spend || 0) + spendDiff)) / ((prevSummary.spend || 0) + spendDiff)
-                : 0,
+              roi: newSpend > 0 ? ((prevSummary.revenue || 0) - newSpend) / newSpend : 0,
+              cpc: prevSummary.clicks > 0 ? newSpend / prevSummary.clicks : 0,
+              cpv: prevSummary.impressions > 0 ? newSpend / prevSummary.impressions : 0,
             };
           });
         }
@@ -866,17 +892,30 @@ const DailyReport: React.FC<DailyReportProps> = ({
                     ></div>
                   </div>
                 </th>
-                {visibleMetrics.map(metric => (
-                  <th key={metric.key} className="px-3 py-2 text-right text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 relative group" style={{ width: columnWidths[metric.key] || 120 }}>
-                    <div className="flex items-center justify-end gap-1">
-                      <span>{metric.label}</span>
-                    </div>
-                    <div
-                      className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500 opacity-0 group-hover:opacity-100 ${resizingColumn === metric.key ? 'bg-indigo-500 opacity-100' : ''}`}
-                      onMouseDown={(e) => handleResizeStart(metric.key, e)}
-                    ></div>
-                  </th>
-                ))}
+                {visibleMetrics.map(metric => {
+                  const config = DAILY_METRICS.find(m => m.key === metric.key) as MetricConfigWithInfo | undefined;
+                  return (
+                    <th key={metric.key} className="px-3 py-2 text-right text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-200 relative group" style={{ width: columnWidths[metric.key] || 120 }}>
+                      <div className="flex items-center justify-end gap-1">
+                        <span>{metric.label}</span>
+                        {config?.info && (
+                          <span
+                            className="fas fa-info-circle text-[10px] text-slate-400 hover:text-indigo-500 cursor-help"
+                            onMouseEnter={(e) => {
+                              const rect = (e.target as HTMLElement).getBoundingClientRect();
+                              setMetricInfoTooltip({ content: config.info!, x: rect.right + 8, y: rect.top });
+                            }}
+                            onMouseLeave={() => setMetricInfoTooltip(null)}
+                          ></span>
+                        )}
+                      </div>
+                      <div
+                        className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500 opacity-0 group-hover:opacity-100 ${resizingColumn === metric.key ? 'bg-indigo-500 opacity-100' : ''}`}
+                        onMouseDown={(e) => handleResizeStart(metric.key, e)}
+                      ></div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -1145,6 +1184,17 @@ const DailyReport: React.FC<DailyReportProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Metric Info Tooltip */}
+      {metricInfoTooltip && createPortal(
+        <div
+          className="fixed z-[10000] bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg pointer-events-none"
+          style={{ left: `${metricInfoTooltip.x}px`, top: `${metricInfoTooltip.y}px` }}
+        >
+          {metricInfoTooltip.content}
+        </div>,
+        document.body
       )}
     </div>
   );

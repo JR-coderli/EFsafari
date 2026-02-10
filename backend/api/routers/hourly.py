@@ -52,6 +52,8 @@ class HourlyDataRow(BaseModel):
     epc: float = 0.0
     epv: float = 0.0
     epa: float = 0.0
+    cpc: float = 0.0
+    cpv: float = 0.0
     hasChild: bool = False
 
 
@@ -159,6 +161,8 @@ def _format_row_for_frontend(row: dict, dimension_type: str, level: int,
     epc = revenue / (clicks or 1)
     epv = revenue / (impressions or 1)
     epa = revenue / (conversions or 1)  # EPA = revenue / conversions
+    cpc = spend / (clicks or 1)  # CPC = spend / clicks
+    cpv = spend / (impressions or 1)  # CPV = spend / impressions (visits)
 
     # 是否有子级
     has_child = len(all_dimensions) > 1
@@ -184,6 +188,8 @@ def _format_row_for_frontend(row: dict, dimension_type: str, level: int,
         "epc": round(epc, 2),
         "epv": round(epv, 4),
         "epa": round(epa, 2),
+        "cpc": round(cpc, 2),
+        "cpv": round(cpv, 4),
         "hasChild": has_child
     }
 

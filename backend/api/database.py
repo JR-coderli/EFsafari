@@ -288,17 +288,23 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
     m_conv = row.get("m_conv", 0) or 0
 
     # Calculate computed metrics
+    profit = revenue - spend
     ctr = clicks / (impressions or 1)
     cvr = conversions / (clicks or 1)
-    roi = (revenue - spend) / (spend or 1)
+    roi = profit / (spend or 1)
     cpa = spend / (conversions or 1)
     rpa = revenue / (conversions or 1)
+    epa = revenue / (conversions or 1)
     epc = revenue / (clicks or 1)
     epv = revenue / (impressions or 1)
+    cpc = spend / (clicks or 1)
+    cpv = spend / (impressions or 1)
     m_epc = revenue / (m_clicks or 1)
     m_epv = revenue / (m_imp or 1)
     m_cpc = spend / (m_clicks or 1)
     m_cpv = spend / (m_imp or 1)
+    m_cpa = spend / (m_conv or 1)
+    m_epa = revenue / (m_conv or 1)
 
     # Build filterPath for frontend hierarchy navigation
     # filterPath is an array of {dimension, value} objects representing the full path to this row
@@ -319,6 +325,7 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
         "conversions": conversions,
         "spend": spend,
         "revenue": revenue,
+        "profit": profit,
         "m_imp": m_imp,
         "m_clicks": m_clicks,
         "m_conv": m_conv,
@@ -327,12 +334,17 @@ def format_row_for_frontend(row: Dict[str, Any], dimension_type: str, level: int
         "roi": roi,
         "cpa": cpa,
         "rpa": rpa,
+        "epa": epa,
         "epc": epc,
         "epv": epv,
+        "cpc": cpc,
+        "cpv": cpv,
         "m_epc": m_epc,
         "m_epv": m_epv,
         "m_cpc": m_cpc,
         "m_cpv": m_cpv,
+        "m_cpa": m_cpa,
+        "m_epa": m_epa,
         "hasChild": True,  # Will be determined by query logic
         "filterPath": filter_path,  # Add filterPath for frontend
     }

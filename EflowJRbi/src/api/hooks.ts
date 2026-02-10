@@ -252,6 +252,8 @@ function hierarchyNodeToAdRow(
     epa: revenue / (conversions || 1),  // Earnings Per Action
     epc: revenue / (clicks || 1),
     epv: revenue / (impressions || 1),
+    cpc: spend / (clicks || 1),
+    cpv: spend / (impressions || 1),
     m_epc: (revenue * 0.4) / (m_clicks || 1),
     m_epv: (revenue * 0.4) / (m_imp || 1),
     m_cpc: (spend * 0.4) / (m_clicks || 1),
@@ -435,6 +437,8 @@ export async function loadDailyData(
         epa: revenue / (conversions || 1),  // Earnings Per Action
         epc: revenue / (clicks || 1),       // Earnings Per Click
         epv: revenue / (impressions || 1),  // Earnings Per View
+        cpc: spend / (clicks || 1),        // Cost Per Click
+        cpv: spend / (impressions || 1),    // Cost Per View
         m_epc: revenue / (m_clicks || 1),
         m_epv: revenue / (m_imp || 1),
         m_cpc: spend / (m_clicks || 1),

@@ -875,6 +875,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
       rpa: summary.revenue / (summary.conversions || 1),
       epc: summary.revenue / (summary.clicks || 1),
       epv: summary.revenue / (summary.impressions || 1),
+      cpc: summary.spend / (summary.clicks || 1),
+      cpv: summary.spend / (summary.impressions || 1),
       m_epc: summary.revenue / (summary.m_clicks || 1),
       m_epv: summary.revenue / (summary.m_imp || 1),
       m_cpc: summary.spend / (summary.m_clicks || 1),
@@ -1630,6 +1632,8 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
                             rpa: summaryData.rpa,
                             epc: summaryData.epc,
                             epv: summaryData.epv,
+                            cpc: summaryData.cpc,
+                            cpv: summaryData.cpv,
                             m_epc: summaryData.m_epc,
                             m_epv: summaryData.m_epv,
                             m_cpc: summaryData.m_cpc,
@@ -1644,8 +1648,9 @@ const Dashboard: React.FC<{ currentUser: UserPermission; onLogout: () => void }>
 
                           let displayValue: React.ReactNode;
                           if (m.type === 'money' || m.type === 'profit') {
+                            const moneyDecimals = m.key === 'epv' || m.key === 'm_epv' || m.key === 'cpv' || m.key === 'm_cpv' ? 4 : 2;
                             const colorClass = m.key === 'profit' || m.type === 'profit' ? (value > 0 ? 'text-emerald-600' : value < 0 ? 'text-rose-600' : '') : m.key === 'spend' ? 'text-rose-600' : m.key === 'revenue' ? 'text-amber-600' : '';
-                            displayValue = <span className={`font-mono tracking-tight leading-none text-[14px] font-bold ${colorClass}`}>${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+                            displayValue = <span className={`font-mono tracking-tight leading-none text-[14px] font-bold ${colorClass}`}>${value.toLocaleString(undefined, { minimumFractionDigits: moneyDecimals, maximumFractionDigits: moneyDecimals })}</span>;
                           } else if (m.type === 'percent') {
                             const colorClass = m.key === 'roi' ? (value > 0 ? 'text-emerald-600' : value < 0 ? 'text-rose-600' : '') : '';
                             displayValue = <span className={`font-mono tracking-tight leading-none text-[14px] font-bold ${colorClass}`}>{value.toFixed(2)}%</span>;

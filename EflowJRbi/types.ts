@@ -30,6 +30,8 @@ export interface DailyBreakdown {
   epa: number;  // Revenue per action (conversion)
   epc: number;  // Earnings per click
   epv: number;  // Earnings per view
+  cpc: number;  // Cost per click
+  cpv: number;  // Cost per view (visit)
   m_epc: number;
   m_epv: number;
   m_cpc: number;
@@ -61,6 +63,8 @@ export interface AdRow {
   epa: number;  // Revenue per action (same as rpa)
   epc: number;
   epv: number;
+  cpc: number;  // Cost per click
+  cpv: number;  // Cost per view (visit)
   m_epc: number;
   m_epv: number;
   m_cpc: number;

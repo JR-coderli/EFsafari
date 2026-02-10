@@ -89,6 +89,7 @@ class AdRow(BaseModel):
     conversions: int
     spend: float
     revenue: float
+    profit: float = 0.0
     m_imp: int
     m_clicks: int
     m_conv: int
@@ -98,12 +99,17 @@ class AdRow(BaseModel):
     roi: float
     cpa: float
     rpa: float
+    epa: float = 0.0
     epc: float
     epv: float
+    cpc: float = 0.0
+    cpv: float = 0.0
     m_epc: float
     m_epv: float
     m_cpc: float
     m_cpv: float
+    m_cpa: float = 0.0
+    m_epa: float = 0.0
     hasChild: bool
     isExpanded: Optional[bool] = None
     # Optional fields for specific dimensions
