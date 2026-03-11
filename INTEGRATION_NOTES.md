@@ -130,7 +130,7 @@ ClickHouse → FastAPI → React Frontend
 ## 默认登录凭据
 
 - 用户名: `admin`
-- 密码: `admin123`
+- 密码: `password`
 
 ## 已修复的问题
 

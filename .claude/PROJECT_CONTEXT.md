@@ -100,7 +100,7 @@ npm run dev
 ## 默认登录
 
 - 用户名: `admin`
-- 密码: `admin123`
+- 密码: `password`
 
 ## 重要约定
 
