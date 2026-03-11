@@ -239,7 +239,8 @@ def build_filters(filters: Dict[str, Any]) -> tuple[str, List[str]]:
 
     # Map frontend dimension names to ClickHouse columns
     column_mapping = {
-        "platform": "Media",
+        "media": "Media",
+        "platform": "platform",
         "advertiser": "advertiser",
         "offer": "offer",
         "campaign_name": "Campaign",

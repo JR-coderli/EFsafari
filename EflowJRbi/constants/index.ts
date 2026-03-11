@@ -1,7 +1,8 @@
 import { Dimension, MetricConfig, AdRow } from '../types';
 
 export const ALL_DIMENSIONS: { value: Dimension; label: string }[] = [
-  { value: 'platform', label: 'Media' },
+  { value: 'media', label: 'Media' },
+  { value: 'platform', label: 'Platform' },
   { value: 'advertiser', label: 'Advertiser' },
   { value: 'offer', label: 'Offer' },
   { value: 'lander', label: 'Lander' },

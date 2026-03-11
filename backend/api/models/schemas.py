@@ -8,6 +8,7 @@ from datetime import date
 
 # Dimension types matching frontend
 DimensionType = Literal[
+    "media",
     "platform",
     "advertiser",
     "offer",
@@ -20,7 +21,8 @@ DimensionType = Literal[
 
 # Frontend dimension name to ClickHouse column mapping
 DIMENSION_COLUMN_MAP = {
-    "platform": "Media",
+    "media": "Media",
+    "platform": "platform",
     "advertiser": "advertiser",
     "offer": "offer",
     "lander": "lander",

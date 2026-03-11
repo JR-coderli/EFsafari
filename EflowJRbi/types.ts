@@ -2,6 +2,7 @@
 export type UserRole = 'admin' | 'ops' | 'ops02' | 'business';
 
 export type Dimension =
+  | 'media'
   | 'platform'
   | 'advertiser'
   | 'offer'
